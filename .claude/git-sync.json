@@ -1,0 +1,14 @@
+{
+  "version": "0.1",
+  "autoSync": true,
+  "syncOnFileChange": true,
+  "branch": "main",
+  "remote": "origin",
+  "rules": {
+    "excludePatterns": [".env", "*.db", "node_modules", ".next", "dist", "build"],
+    "commitPrefix": "chore: ",
+    "autoCommit": true,
+    "autoPush": true
+  },
+  "instructions": "After every code change, automatically commit and push to GitHub with the format: 'chore: [description]' for minor changes or 'feat/fix/refactor:' for major changes"
+}
