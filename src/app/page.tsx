@@ -2,24 +2,34 @@ import { prisma } from '@/lib/db';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 
-export default async function HomePage() {
-  const brands = await prisma.brand.findMany({
-    orderBy: { createdAt: 'desc' },
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      shopifyStoreUrl: true,
-      ga4PropertyId: true,
-      metaAccessToken: true,
-      googleAdsCustomerId: true,
-      geminiApiKey: true,
-    },
-  });
+// Force dynamic rendering to avoid database errors during build
+export const dynamic = 'force-dynamic';
 
-  // If exactly one brand exists, redirect to it
-  if (brands.length === 1) {
-    redirect(`/dashboard/${brands[0].slug}`);
+export default async function HomePage() {
+  let brands: any[] = [];
+
+  try {
+    brands = await prisma.brand.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        shopifyStoreUrl: true,
+        ga4PropertyId: true,
+        metaAccessToken: true,
+        googleAdsCustomerId: true,
+        geminiApiKey: true,
+      },
+    });
+
+    // If exactly one brand exists, redirect to it
+    if (brands.length === 1) {
+      redirect(`/dashboard/${brands[0].slug}`);
+    }
+  } catch (error) {
+    console.error('Database connection error:', error);
+    // Continue to render the page even if DB is unavailable
   }
 
   return (
@@ -34,14 +44,14 @@ export default async function HomePage() {
               borderRadius: '12px', display: 'flex', alignItems: 'center',
               justifyContent: 'center', fontSize: '20px', fontWeight: '700',
               color: 'white', boxShadow: '0 0 20px rgba(59, 130, 246, 0.15)'
-            }}>A</div>
+            }}>B</div>
             <div>
               <h1 style={{ fontSize: '24px', fontWeight: '700', letterSpacing: '-0.02em',
                 background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent'
-              }}>Antigravity Analytics</h1>
+              }}>Brand Analytics</h1>
               <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                E-Commerce Intelligence & CRO Dashboard
+                Multi-Platform E-Commerce Analytics & CRO Dashboard
               </p>
             </div>
           </div>
