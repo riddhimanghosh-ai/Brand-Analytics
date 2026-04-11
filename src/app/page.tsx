@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 
 // Force dynamic rendering to avoid database errors during build
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export default async function HomePage() {
   let brands: any[] = [];
