@@ -1,0 +1,58 @@
+import { prisma } from '@/lib/db';
+import { NextResponse } from 'next/server';
+import * as ga4 from '@/lib/services/ga4';
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const slug = searchParams.get('slug');
+    const action = searchParams.get('action') ?? 'kpis';
+    const dateRange = searchParams.get('range') ?? '30d';
+
+    if (!slug) {
+      return NextResponse.json({ error: 'Brand slug required' }, { status: 400 });
+    }
+
+    const brand = await prisma.brand.findUnique({ where: { slug } });
+    if (!brand) {
+      return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
+    }
+
+    if (!brand.ga4PropertyId || !brand.ga4ServiceAccountJson) {
+      return NextResponse.json({ error: 'Google Analytics not connected' }, { status: 400 });
+    }
+
+    const config: ga4.GA4Config = {
+      propertyId: brand.ga4PropertyId,
+      serviceAccountJson: brand.ga4ServiceAccountJson,
+    };
+
+    switch (action) {
+      case 'kpis':
+        return NextResponse.json(await ga4.getKPIs(config, dateRange));
+      case 'sessions':
+        return NextResponse.json(await ga4.getSessionsOverTime(config, dateRange));
+      case 'channels':
+        return NextResponse.json(await ga4.getTrafficChannels(config, dateRange));
+      case 'devices':
+        return NextResponse.json(await ga4.getDeviceBreakdown(config, dateRange));
+      case 'pages':
+        return NextResponse.json(await ga4.getTopPages(config, dateRange));
+      case 'countries':
+        return NextResponse.json(await ga4.getTopCountries(config, dateRange));
+      case 'landing-pages':
+        return NextResponse.json(await ga4.getLandingPages(config, dateRange));
+      case 'events':
+        return NextResponse.json(await ga4.getKeyEvents(config, dateRange));
+      case 'conversion-funnel':
+        return NextResponse.json(await ga4.getConversionFunnel(config, dateRange));
+      case 'product-funnel':
+        return NextResponse.json(await ga4.getProductConversionFunnel(config, dateRange));
+      default:
+        return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+    }
+  } catch (error) {
+    console.error('Analytics API error:', error);
+    return NextResponse.json({ error: (error as Error).message }, { status: 500 });
+  }
+}

@@ -1,0 +1,71 @@
+// Prisma schema for Analytics Dashboard (Prisma v6)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Brand {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Shopify
+  shopifyStoreUrl    String?
+  shopifyAccessToken String?
+
+  // Google Analytics
+  ga4PropertyId         String?
+  ga4ServiceAccountJson String? // stored as JSON string
+
+  // Meta Ads
+  metaAppId       String?
+  metaAppSecret   String?
+  metaAccessToken String?
+  metaAdAccountId String?
+
+  // Google Ads
+  googleAdsDevToken     String?
+  googleAdsClientId     String?
+  googleAdsClientSecret String?
+  googleAdsRefreshToken String?
+  googleAdsCustomerId   String?
+
+  // AI
+  geminiApiKey String?
+
+  cachedMetrics CachedMetric[]
+  chatSessions  ChatSession[]
+}
+
+model CachedMetric {
+  id         String   @id @default(cuid())
+  brandId    String
+  source     String   // shopify, ga4, meta_ads, google_ads
+  metricType String   // kpi, chart, table
+  metricKey  String   // e.g. "revenue_over_time", "top_products"
+  value      String   // JSON stringified
+  dateRange  String   // e.g. "7d", "30d", "90d"
+  fetchedAt  DateTime @default(now())
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, source, metricKey, dateRange])
+}
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  brandId   String
+  messages  String   // JSON stringified array
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+}
