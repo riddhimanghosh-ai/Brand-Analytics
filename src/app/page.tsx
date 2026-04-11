@@ -1,4 +1,4 @@
-import { getCurrentUser, getUserBrands } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { BrandCard } from '@/components/BrandCard';
@@ -8,17 +8,12 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function HomePage() {
-  const user = await getCurrentUser();
-
-  // Redirect to login if not authenticated
-  if (!user) {
-    redirect('/login');
-  }
-
   let brands: any[] = [];
 
   try {
-    const allBrands = await getUserBrands(user.id);
+    const allBrands = await prisma.brand.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
     brands = allBrands.map((brand) => ({
       id: brand.id,
       name: brand.name,
@@ -61,25 +56,6 @@ export default async function HomePage() {
                 Multi-Platform E-Commerce Analytics & CRO Dashboard
               </p>
             </div>
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
-              Logged in as: <strong>{user.username}</strong>
-            </p>
-            <form action="/api/auth/logout" method="POST" style={{ display: 'inline' }}>
-              <button type="submit" style={{
-                padding: '8px 16px',
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-color)',
-                borderRadius: '6px',
-                color: 'var(--text-primary)',
-                fontSize: '12px',
-                fontWeight: '500',
-                cursor: 'pointer',
-              }}>
-                Logout
-              </button>
-            </form>
           </div>
         </div>
 

@@ -1,8 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
-import { DeleteBrandButton } from './DeleteBrandButton';
 
 interface BrandCardProps {
   id: string;
@@ -23,62 +21,28 @@ export function BrandCard({
   metaAccessToken,
   googleAdsCustomerId,
 }: BrandCardProps) {
-  const [showDelete, setShowDelete] = useState(false);
-
   return (
-    <>
-      <div style={{
-        position: 'relative',
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border-color)',
-        borderRadius: '8px',
-        padding: '20px',
-        cursor: 'pointer',
-        transition: 'all 0.2s ease',
+    <div style={{
+      position: 'relative',
+      background: 'var(--bg-secondary)',
+      border: '1px solid var(--border-color)',
+      borderRadius: '8px',
+      padding: '20px',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+    }}
+      onMouseEnter={(e) => {
+        const el = e.currentTarget as HTMLDivElement;
+        el.style.borderColor = 'var(--accent-blue)';
+        el.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.1)';
       }}
-        onMouseEnter={(e) => {
-          const el = e.currentTarget as HTMLDivElement;
-          el.style.borderColor = 'var(--accent-blue)';
-          el.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.1)';
-        }}
-        onMouseLeave={(e) => {
-          const el = e.currentTarget as HTMLDivElement;
-          el.style.borderColor = 'var(--border-color)';
-          el.style.boxShadow = 'none';
-        }}
-      >
-        {/* Delete button in top right */}
-        <button
-          onClick={(e) => {
-            e.preventDefault();
-            setShowDelete(true);
-          }}
-          style={{
-            position: 'absolute',
-            top: '12px',
-            right: '12px',
-            padding: '4px 8px',
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid rgba(239, 68, 68, 0.3)',
-            borderRadius: '4px',
-            color: '#ef4444',
-            fontSize: '11px',
-            fontWeight: '500',
-            cursor: 'pointer',
-            opacity: 0.7,
-            transition: 'opacity 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.opacity = '1';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.opacity = '0.7';
-          }}
-        >
-          ✕
-        </button>
-
-        <Link
+      onMouseLeave={(e) => {
+        const el = e.currentTarget as HTMLDivElement;
+        el.style.borderColor = 'var(--border-color)';
+        el.style.boxShadow = 'none';
+      }}
+    >
+      <Link
           href={`/dashboard/${slug}`}
           style={{
             display: 'block',
@@ -116,9 +80,6 @@ export function BrandCard({
             </div>
           </div>
         </Link>
-      </div>
-
-      {showDelete && <DeleteBrandButton brandId={id} brandName={name} />}
-    </>
+    </div>
   );
 }
