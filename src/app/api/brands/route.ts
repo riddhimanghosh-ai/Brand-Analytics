@@ -1,6 +1,21 @@
 import { prisma } from '@/lib/db';
-import { getCurrentUser } from '@/lib/auth';
 import { NextResponse } from 'next/server';
+
+// Get or create default system user
+async function getDefaultUser() {
+  const defaultUser = await prisma.user.findFirst({
+    where: { username: '__system__' },
+  });
+
+  if (defaultUser) return defaultUser;
+
+  return await prisma.user.create({
+    data: {
+      username: '__system__',
+      password: '__system__',
+    },
+  });
+}
 
 export async function GET() {
   try {
@@ -39,13 +54,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
-    if (!user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const user = await getDefaultUser();
 
     const body = await request.json();
 
