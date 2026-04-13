@@ -56,6 +56,7 @@ model Brand {
 
   cachedMetrics CachedMetric[]
   chatSessions  ChatSession[]
+  alerts        Alert[]
 }
 
 model CachedMetric {
@@ -81,4 +82,21 @@ model ChatSession {
   updatedAt DateTime @updatedAt
 
   brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+}
+
+model Alert {
+  id             String   @id @default(cuid())
+  brandId        String
+  metric         String
+  previousValue  Float
+  currentValue   Float
+  changePercent  Float
+  severity       String   // "warning" | "critical"
+  detectedAt     DateTime @default(now())
+  dismissed      Boolean  @default(false)
+  dismissedAt    DateTime?
+
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+
+  @@index([brandId, detectedAt])
 }

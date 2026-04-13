@@ -74,6 +74,11 @@ export default async function DashboardLayout({
             {connections.shopify && <span className="nav-badge">Live</span>}
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/cro`} disabled={!connections.shopify}>
+            <span className="nav-icon">🎯</span>
+            CRO Optimization
+          </NavLink>
+
           <NavLink href={`/dashboard/${slug}/analytics`} disabled={!connections.ga4}>
             <span className="nav-icon">📈</span>
             Google Analytics
