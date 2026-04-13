@@ -41,7 +41,7 @@ export function ConversionFunnel({ stages, title = 'Conversion Funnel' }: Conver
           <YAxis dataKey="name" type="category" stroke="var(--text-secondary)" width={100} />
           <Tooltip
             contentStyle={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)' }}
-            formatter={(value) => value.toLocaleString()}
+            formatter={(value) => (value as number).toLocaleString()}
           />
           <Bar dataKey="count" fill="#3b82f6">
             {funnelData.map((entry, idx) => (
