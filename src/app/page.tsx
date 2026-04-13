@@ -1,9 +1,9 @@
-import { prisma } from '@/lib/db';
+import { getBrands } from '@/lib/github-store';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { BrandCard } from '@/components/BrandCard';
 
-// Force dynamic rendering to avoid database errors during build
+// Force dynamic rendering
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
@@ -11,9 +11,7 @@ export default async function HomePage() {
   let brands: any[] = [];
 
   try {
-    const allBrands = await prisma.brand.findMany({
-      orderBy: { createdAt: 'desc' },
-    });
+    const allBrands = await getBrands();
     brands = allBrands.map((brand) => ({
       id: brand.id,
       name: brand.name,
@@ -30,8 +28,8 @@ export default async function HomePage() {
       redirect(`/dashboard/${brands[0].slug}`);
     }
   } catch (error) {
-    console.error('Database connection error:', error);
-    // Continue to render the page even if DB is unavailable
+    console.error('Error fetching brands from GitHub:', error);
+    // Continue to render the page even if GitHub is unavailable
   }
 
   return (

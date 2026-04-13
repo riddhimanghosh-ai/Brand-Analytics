@@ -1,41 +1,10 @@
-import { prisma } from '@/lib/db';
+import { getBrands, createBrand } from '@/lib/github-store';
 import { NextResponse } from 'next/server';
-
-// Get or create default system user
-async function getDefaultUser() {
-  const defaultUser = await prisma.user.findFirst({
-    where: { username: '__system__' },
-  });
-
-  if (defaultUser) return defaultUser;
-
-  return await prisma.user.create({
-    data: {
-      username: '__system__',
-      password: '__system__',
-    },
-  });
-}
+import { randomUUID } from 'crypto';
 
 export async function GET() {
   try {
-    const brands = await prisma.brand.findMany({
-      orderBy: { createdAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        slug: true,
-        logoUrl: true,
-        shopifyStoreUrl: true,
-        shopifyAccessToken: true,
-        ga4PropertyId: true,
-        metaAccessToken: true,
-        googleAdsCustomerId: true,
-        geminiApiKey: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    const brands = await getBrands();
 
     // Mask sensitive tokens in response
     const maskedBrands = brands.map((b) => ({
@@ -54,8 +23,6 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const user = await getDefaultUser();
-
     const body = await request.json();
 
     const slug =
@@ -65,27 +32,25 @@ export async function POST(request: Request) {
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/(^-|-$)/g, '');
 
-    const brand = await prisma.brand.create({
-      data: {
-        userId: user.id,
-        name: body.name,
-        slug,
-        logoUrl: body.logoUrl || null,
-        shopifyStoreUrl: body.shopifyStoreUrl || null,
-        shopifyAccessToken: body.shopifyAccessToken || null,
-        ga4PropertyId: body.ga4PropertyId || null,
-        ga4ServiceAccountJson: body.ga4ServiceAccountJson || null,
-        metaAppId: body.metaAppId || null,
-        metaAppSecret: body.metaAppSecret || null,
-        metaAccessToken: body.metaAccessToken || null,
-        metaAdAccountId: body.metaAdAccountId || null,
-        googleAdsDevToken: body.googleAdsDevToken || null,
-        googleAdsClientId: body.googleAdsClientId || null,
-        googleAdsClientSecret: body.googleAdsClientSecret || null,
-        googleAdsRefreshToken: body.googleAdsRefreshToken || null,
-        googleAdsCustomerId: body.googleAdsCustomerId || null,
-        geminiApiKey: body.geminiApiKey || null,
-      },
+    const brand = await createBrand({
+      id: randomUUID(),
+      name: body.name,
+      slug,
+      logoUrl: body.logoUrl || null,
+      shopifyStoreUrl: body.shopifyStoreUrl || null,
+      shopifyAccessToken: body.shopifyAccessToken || null,
+      ga4PropertyId: body.ga4PropertyId || null,
+      ga4ServiceAccountJson: body.ga4ServiceAccountJson || null,
+      metaAppId: body.metaAppId || null,
+      metaAppSecret: body.metaAppSecret || null,
+      metaAccessToken: body.metaAccessToken || null,
+      metaAdAccountId: body.metaAdAccountId || null,
+      googleAdsDevToken: body.googleAdsDevToken || null,
+      googleAdsClientId: body.googleAdsClientId || null,
+      googleAdsClientSecret: body.googleAdsClientSecret || null,
+      googleAdsRefreshToken: body.googleAdsRefreshToken || null,
+      googleAdsCustomerId: body.googleAdsCustomerId || null,
+      geminiApiKey: body.geminiApiKey || null,
     });
 
     return NextResponse.json(brand, { status: 201 });

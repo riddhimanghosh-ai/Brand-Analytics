@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+import { getBrand, getBrands } from '@/lib/github-store';
 import { redirect } from 'next/navigation';
 import { ChatPanel } from '@/components/ChatPanel';
 import { NavLink } from '@/components/NavLink';
@@ -11,16 +11,14 @@ export default async function DashboardLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const brand = await prisma.brand.findUnique({ where: { slug } });
+  const brand = await getBrand(slug);
 
   if (!brand) {
     redirect('/');
   }
 
-  const allBrands = await prisma.brand.findMany({
-    select: { name: true, slug: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  const allBrandsData = await getBrands();
+  const allBrands = allBrandsData.map((b) => ({ name: b.name, slug: b.slug }));
 
   const connections = {
     shopify: !!(brand.shopifyStoreUrl && brand.shopifyAccessToken),

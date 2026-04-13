@@ -1,26 +1,13 @@
 import { ConversionFunnel } from '@/components/ConversionFunnel';
 import { AlertPanel } from '@/components/AlertPanel';
 import { CROCharts } from '@/components/CROCharts';
-import { prisma } from '@/lib/db';
+import { getBrand } from '@/lib/github-store';
 
 export const dynamic = 'force-dynamic';
 
-async function getCROData(brandId: string) {
-  try {
-    const brand = await prisma.brand.findUnique({
-      where: { id: brandId },
-    });
-    return brand;
-  } catch {
-    return null;
-  }
-}
-
 export default async function CROPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const brand = await prisma.brand.findUnique({
-    where: { slug },
-  });
+  const brand = await getBrand(slug);
 
   if (!brand) {
     return <div>Brand not found</div>;

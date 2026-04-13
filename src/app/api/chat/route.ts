@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+import { getBrand } from '@/lib/github-store';
 import { NextResponse } from 'next/server';
 import { streamChat } from '@/lib/services/chat';
 import * as shopify from '@/lib/services/shopify';
@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing slug or messages' }, { status: 400 });
     }
 
-    const brand = await prisma.brand.findUnique({ where: { slug } });
+    const brand = await getBrand(slug);
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }

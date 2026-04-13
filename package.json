@@ -5,28 +5,22 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "postbuild": "prisma migrate deploy || true",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@prisma/adapter-better-sqlite3": "^7.7.0",
-    "@prisma/client": "^6.19.3",
-    "better-sqlite3": "^12.8.0",
     "next": "16.2.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "recharts": "^3.8.1"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
-    "prisma": "^6.19.3",
     "typescript": "^5"
   }
 }

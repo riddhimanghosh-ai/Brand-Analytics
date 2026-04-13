@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+import { getBrand, updateBrand, deleteBrand, getBrands } from '@/lib/github-store';
 import { NextResponse } from 'next/server';
 
 export async function GET(
@@ -7,7 +7,8 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const brand = await prisma.brand.findUnique({ where: { id } });
+    // The [id] param is actually the slug in our case
+    const brand = await getBrand(id);
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
@@ -26,26 +27,23 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const brand = await prisma.brand.update({
-      where: { id },
-      data: {
-        name: body.name,
-        logoUrl: body.logoUrl,
-        shopifyStoreUrl: body.shopifyStoreUrl,
-        shopifyAccessToken: body.shopifyAccessToken,
-        ga4PropertyId: body.ga4PropertyId,
-        ga4ServiceAccountJson: body.ga4ServiceAccountJson,
-        metaAppId: body.metaAppId,
-        metaAppSecret: body.metaAppSecret,
-        metaAccessToken: body.metaAccessToken,
-        metaAdAccountId: body.metaAdAccountId,
-        googleAdsDevToken: body.googleAdsDevToken,
-        googleAdsClientId: body.googleAdsClientId,
-        googleAdsClientSecret: body.googleAdsClientSecret,
-        googleAdsRefreshToken: body.googleAdsRefreshToken,
-        googleAdsCustomerId: body.googleAdsCustomerId,
-        geminiApiKey: body.geminiApiKey,
-      },
+    const brand = await updateBrand(id, {
+      name: body.name,
+      logoUrl: body.logoUrl,
+      shopifyStoreUrl: body.shopifyStoreUrl,
+      shopifyAccessToken: body.shopifyAccessToken,
+      ga4PropertyId: body.ga4PropertyId,
+      ga4ServiceAccountJson: body.ga4ServiceAccountJson,
+      metaAppId: body.metaAppId,
+      metaAppSecret: body.metaAppSecret,
+      metaAccessToken: body.metaAccessToken,
+      metaAdAccountId: body.metaAdAccountId,
+      googleAdsDevToken: body.googleAdsDevToken,
+      googleAdsClientId: body.googleAdsClientId,
+      googleAdsClientSecret: body.googleAdsClientSecret,
+      googleAdsRefreshToken: body.googleAdsRefreshToken,
+      googleAdsCustomerId: body.googleAdsCustomerId,
+      geminiApiKey: body.geminiApiKey,
     });
 
     return NextResponse.json(brand);
@@ -61,7 +59,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    await prisma.brand.delete({ where: { id } });
+    await deleteBrand(id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting brand:', error);

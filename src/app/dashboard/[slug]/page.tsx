@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+import { getBrand } from '@/lib/github-store';
 import { formatCurrency, formatNumber, percentChange, formatPercent } from '@/lib/utils';
 import * as shopifyService from '@/lib/services/shopify';
 import Link from 'next/link';
@@ -9,7 +9,7 @@ export default async function OverviewPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const brand = await prisma.brand.findUnique({ where: { slug } });
+  const brand = await getBrand(slug);
 
   if (!brand) return null;
 

@@ -1,4 +1,4 @@
-import { prisma } from '@/lib/db';
+import { getBrand } from '@/lib/github-store';
 import { NextResponse } from 'next/server';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
@@ -15,7 +15,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Brand slug required' }, { status: 400 });
     }
 
-    const brand = await prisma.brand.findUnique({ where: { slug } });
+    const brand = await getBrand(slug);
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
