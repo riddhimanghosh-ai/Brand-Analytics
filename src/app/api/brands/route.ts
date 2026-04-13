@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db';
+import { getCurrentUser } from '@/lib/auth';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
@@ -38,6 +39,14 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+
     const body = await request.json();
 
     const slug =
@@ -49,6 +58,7 @@ export async function POST(request: Request) {
 
     const brand = await prisma.brand.create({
       data: {
+        userId: user.id,
         name: body.name,
         slug,
         logoUrl: body.logoUrl || null,

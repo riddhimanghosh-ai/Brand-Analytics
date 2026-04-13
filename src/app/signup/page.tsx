@@ -4,20 +4,20 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-export default function LoginPage() {
+export default function SignupPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleSignup(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
@@ -27,10 +27,11 @@ export default function LoginPage() {
         router.push('/');
         router.refresh();
       } else {
-        setError('Invalid credentials');
+        const data = await res.json();
+        setError(data.error || 'Signup failed');
       }
     } catch (err) {
-      setError('Login failed. Please try again.');
+      setError('Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -44,7 +45,7 @@ export default function LoginPage() {
       minHeight: '100vh',
       background: 'var(--bg-primary)',
     }}>
-      <form onSubmit={handleLogin} style={{
+      <form onSubmit={handleSignup} style={{
         background: 'var(--bg-secondary)',
         border: '1px solid var(--border-color)',
         borderRadius: '8px',
@@ -55,11 +56,18 @@ export default function LoginPage() {
         <h1 style={{
           fontSize: '24px',
           fontWeight: '600',
-          marginBottom: '30px',
+          marginBottom: '10px',
           color: 'var(--text-primary)',
         }}>
           Brand Analytics
         </h1>
+        <p style={{
+          fontSize: '13px',
+          color: 'var(--text-secondary)',
+          marginBottom: '30px',
+        }}>
+          Create your account
+        </p>
 
         {error && (
           <div style={{
@@ -89,7 +97,7 @@ export default function LoginPage() {
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Enter username"
+            placeholder="Choose a username"
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -119,7 +127,7 @@ export default function LoginPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Enter password"
+            placeholder="Create a password"
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -152,7 +160,7 @@ export default function LoginPage() {
             marginBottom: '16px',
           }}
         >
-          {loading ? 'Logging in...' : 'Login'}
+          {loading ? 'Creating account...' : 'Sign Up'}
         </button>
 
         <p style={{
@@ -160,13 +168,13 @@ export default function LoginPage() {
           color: 'var(--text-secondary)',
           textAlign: 'center',
         }}>
-          Don't have an account?{' '}
-          <Link href="/signup" style={{
+          Already have an account?{' '}
+          <Link href="/login" style={{
             color: 'var(--accent-blue)',
             textDecoration: 'none',
             fontWeight: '500',
           }}>
-            Sign up
+            Log in
           </Link>
         </p>
       </form>

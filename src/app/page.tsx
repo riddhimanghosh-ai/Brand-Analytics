@@ -20,6 +20,7 @@ export default async function HomePage() {
 
   try {
     const allBrands = await prisma.brand.findMany({
+      where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
     });
     brands = allBrands.map((brand) => ({

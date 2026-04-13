@@ -1,60 +1,28 @@
 import { cookies } from 'next/headers';
-import fs from 'fs';
-import path from 'path';
-
-const CREDENTIALS_FILE = path.join(process.cwd(), 'data/credentials.json');
-
-interface Credentials {
-  teamMembers: Array<{ username: string; password: string }>;
-  brands: any[];
-}
-
-let cachedCredentials: Credentials | null = null;
-
-function loadCredentials(): Credentials {
-  if (cachedCredentials) return cachedCredentials;
-
-  try {
-    const data = fs.readFileSync(CREDENTIALS_FILE, 'utf-8');
-    const parsed = JSON.parse(data);
-    cachedCredentials = parsed;
-    return parsed;
-  } catch (error) {
-    console.error('Failed to load credentials:', error);
-    return { teamMembers: [], brands: [] };
-  }
-}
+import { prisma } from '@/lib/db';
 
 export async function getCurrentUser() {
   const cookieStore = await cookies();
-  const username = cookieStore.get('auth_user')?.value;
+  const userId = cookieStore.get('auth_user_id')?.value;
 
-  if (!username) {
+  if (!userId) {
     return null;
   }
 
-  return { username };
+  return await prisma.user.findUnique({ where: { id: userId } });
 }
 
-export async function validateCredentials(username: string, password: string) {
-  const creds = loadCredentials();
-  const member = creds.teamMembers.find(
-    (m) => m.username === username && m.password === password
-  );
-  return !!member;
-}
-
-export async function loginUser(username: string) {
+export async function loginUser(userId: string) {
   const cookieStore = await cookies();
-  cookieStore.set('auth_user', username, {
+  cookieStore.set('auth_user_id', userId, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
-    maxAge: 60 * 60 * 24 * 7, // 7 days
+    // No maxAge = session cookie (clears when browser closes)
   });
 }
 
 export async function logoutUser() {
   const cookieStore = await cookies();
-  cookieStore.delete('auth_user');
+  cookieStore.delete('auth_user_id');
 }
