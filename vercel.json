@@ -1,11 +1,4 @@
 {
-  "buildCommand": "cd analytics-dashboard && npm run build",
-  "installCommand": "cd analytics-dashboard && npm install",
-  "devCommand": "cd analytics-dashboard && npm run dev",
-  "roots": [
-    {
-      "src": "analytics-dashboard",
-      "path": "/"
-    }
-  ]
+  "buildCommand": "npm run build",
+  "installCommand": "npm install"
 }
