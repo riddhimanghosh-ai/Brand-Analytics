@@ -83,10 +83,10 @@ export function MetricChart({ columns, rows, chartType }: MetricChartProps) {
     return (
       <ResponsiveContainer width="100%" height={320}>
         <PieChart>
-          <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+          <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
             {pieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
           </Pie>
-          <Tooltip formatter={(v: number) => v.toLocaleString()} />
+          <Tooltip formatter={(v) => (v as number).toLocaleString()} />
         </PieChart>
       </ResponsiveContainer>
     );
@@ -99,7 +99,7 @@ export function MetricChart({ columns, rows, chartType }: MetricChartProps) {
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
           <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} angle={-30} textAnchor="end" />
           <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
-          <Tooltip formatter={(v: number) => v.toLocaleString()} />
+          <Tooltip formatter={(v) => (v as number).toLocaleString()} />
           {valueKeys.length > 1 && <Legend />}
           {valueKeys.map((key, i) => (
             <Bar key={key} dataKey={key} fill={COLORS[i % COLORS.length]} radius={[3, 3, 0, 0]} />
@@ -116,7 +116,7 @@ export function MetricChart({ columns, rows, chartType }: MetricChartProps) {
         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
         <XAxis dataKey="label" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} angle={-30} textAnchor="end" />
         <YAxis tick={{ fontSize: 11, fill: 'var(--text-muted)' }} tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v} />
-        <Tooltip formatter={(v: number) => v.toLocaleString()} />
+        <Tooltip formatter={(v) => (v as number).toLocaleString()} />
         {valueKeys.length > 1 && <Legend />}
         {valueKeys.map((key, i) => (
           <Line key={key} type="monotone" dataKey={key} stroke={COLORS[i % COLORS.length]} strokeWidth={2} dot={false} />
