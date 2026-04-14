@@ -32,6 +32,8 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   const [saved, setSaved] = useState(false);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
   const [testing, setTesting] = useState<Record<string, boolean>>({});
+  const [deleting, setDeleting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
 
   useEffect(() => {
     paramsPromise.then(setParams);
@@ -108,6 +110,26 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
       }));
     } finally {
       setTesting(p => ({ ...p, shopify: false }));
+    }
+  };
+
+  const deleteBrand = async () => {
+    if (!brand || deleteConfirm !== brand.name) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/brands/${brand.id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        router.push('/');
+      } else {
+        alert('Failed to delete brand');
+      }
+    } catch {
+      alert('Failed to delete brand');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -357,6 +379,71 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             {saving ? '⏳ Saving...' : saved ? '✅ Saved!' : '💾 Save All Changes'}
           </button>
           {saved && <span style={{ color: 'var(--accent-emerald)', fontSize: '13px' }}>Changes saved successfully</span>}
+        </div>
+
+        {/* ── DANGER ZONE ── */}
+        <div className="form-card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.05)' }}>
+          <div className="form-card-title" style={{ color: 'var(--text-danger)' }}>⚠️ Danger Zone</div>
+          <div className="form-card-desc">Permanently delete this brand and all associated data</div>
+
+          {deleteConfirm === '' ? (
+            <div>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
+                This action cannot be undone. All analytics data, settings, and configurations for <strong>{brand.name}</strong> will be permanently deleted.
+              </p>
+              <button
+                onClick={() => setDeleteConfirm('confirm')}
+                className="btn"
+                style={{
+                  background: '#ef4444',
+                  color: 'white',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                🗑️ Delete Brand
+              </button>
+            </div>
+          ) : (
+            <div>
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                Type the brand name <strong>"{brand.name}"</strong> to confirm deletion:
+              </p>
+              <input
+                type="text"
+                className="form-input"
+                placeholder={brand.name}
+                value={deleteConfirm === 'confirm' ? '' : deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                autoFocus
+                style={{ marginBottom: '12px' }}
+              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  onClick={deleteBrand}
+                  disabled={deleteConfirm !== brand.name || deleting}
+                  className="btn"
+                  style={{
+                    background: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    cursor: deleteConfirm === brand.name && !deleting ? 'pointer' : 'not-allowed',
+                    opacity: deleteConfirm === brand.name && !deleting ? 1 : 0.5,
+                  }}
+                >
+                  {deleting ? '⏳ Deleting...' : '✓ Confirm Delete'}
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm('')}
+                  disabled={deleting}
+                  className="btn btn-secondary"
+                  style={{ cursor: 'pointer' }}
+                >
+                  ✕ Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </>

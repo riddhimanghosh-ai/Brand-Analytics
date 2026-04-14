@@ -143,9 +143,15 @@ export default function NewBrandPage() {
               className="form-input"
               placeholder="e.g. The Wandering Bean"
               value={form.name}
-              onChange={(e) => updateField('name', e.target.value)}
+              onChange={(e) => {
+                updateField('name', e.target.value);
+                console.log('Brand name updated to:', e.target.value);
+              }}
               autoFocus
             />
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '8px' }}>
+              Current value: {form.name ? `"${form.name}"` : '(empty)'}
+            </div>
           </div>
         </div>
       )}
@@ -296,6 +302,10 @@ export default function NewBrandPage() {
                 Google AI Studio
               </a>
             </div>
+          </div>
+          <div style={{ marginTop: '16px', padding: '12px', background: 'var(--bg-elevated)', borderRadius: '8px', fontSize: '12px', fontFamily: 'monospace' }}>
+            <div>Brand name in form: {form.name ? `"${form.name}"` : '(empty)'}</div>
+            <div>Button disabled: {loading || !form.name ? 'YES' : 'NO'}</div>
           </div>
         </div>
       )}
