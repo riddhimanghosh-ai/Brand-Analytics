@@ -41,16 +41,9 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
 
   useEffect(() => {
     if (!params) return;
-    // Fetch brands list to find the id, then fetch the full brand by id
-    fetch(`/api/brands`)
+    // Fetch the brand by slug
+    fetch(`/api/brands/${params.slug}`)
       .then(r => r.json())
-      .then((brands: { slug: string; id: string }[]) => {
-        const found = brands.find((b) => b.slug === params.slug);
-        if (found) {
-          return fetch(`/api/brands/${found.id}`).then(r => r.json());
-        }
-        throw new Error('Brand not found');
-      })
       .then(setBrand)
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -63,7 +56,7 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   };
 
   const save = async () => {
-    if (!brand) return;
+    if (!brand || !params) return;
     setSaving(true);
     setSaved(false);
     try {
@@ -75,7 +68,7 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           (payload as Record<string, string | null>)[key] = null; // Don't overwrite with masked value
         }
       }
-      const res = await fetch(`/api/brands/${brand.id}`, {
+      const res = await fetch(`/api/brands/${params.slug}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -114,10 +107,10 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   };
 
   const deleteBrand = async () => {
-    if (!brand || deleteConfirm !== brand.name) return;
+    if (!brand || !params || deleteConfirm !== brand.name) return;
     setDeleting(true);
     try {
-      const res = await fetch(`/api/brands/${brand.id}`, {
+      const res = await fetch(`/api/brands/${params.slug}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });

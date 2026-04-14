@@ -39,7 +39,7 @@ export function BrandCard({
 
     setDeleting(true);
     try {
-      const res = await fetch(`/api/brands/${id}`, {
+      const res = await fetch(`/api/brands/${slug}`, {
         method: 'DELETE',
       });
       if (res.ok) {
