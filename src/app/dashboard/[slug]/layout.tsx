@@ -77,6 +77,11 @@ export default async function DashboardLayout({
             CRO Optimization
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/metrics`} disabled={!connections.shopify}>
+            <span className="nav-icon">📐</span>
+            Custom Metrics
+          </NavLink>
+
           <NavLink href={`/dashboard/${slug}/analytics`} disabled={!connections.ga4}>
             <span className="nav-icon">📈</span>
             Google Analytics

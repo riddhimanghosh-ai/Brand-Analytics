@@ -141,13 +141,24 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
     ai: !!(brand.geminiApiKey),
   };
 
+  const Step = ({ n, text }: { n: number; text: string }) => (
+    <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'flex-start' }}>
+      <span style={{ minWidth: '22px', height: '22px', borderRadius: '50%', background: 'var(--accent-blue)', color: '#fff', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>{n}</span>
+      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }} dangerouslySetInnerHTML={{ __html: text }} />
+    </div>
+  );
+
+  const Code = ({ children }: { children: string }) => (
+    <code style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '1px 6px', fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)' }}>{children}</code>
+  );
+
   return (
     <>
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2>⚙️ Connection Settings</h2>
-            <p>Manage API connections for <strong>{brand.name}</strong></p>
+            <h2>⚙️ Connection Setup</h2>
+            <p>Step-by-step guides to connect all platforms for <strong>{brand.name}</strong></p>
           </div>
           <button className="btn btn-primary" onClick={save} disabled={saving}>
             {saving ? '⏳ Saving...' : saved ? '✅ Saved!' : '💾 Save Changes'}
@@ -156,7 +167,8 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
       </div>
 
       <div className="page-body">
-        {/* Shopify */}
+
+        {/* ── SHOPIFY ── */}
         <div className="form-card">
           <div className="form-card-title">
             🛒 Shopify
@@ -164,83 +176,70 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
               {isConnected.shopify ? 'Connected' : 'Not Connected'}
             </span>
           </div>
-          <div className="form-card-desc">Order, product, and customer analytics from your Shopify Admin API</div>
+          <div className="form-card-desc">Enables orders, products, customers, revenue analytics, and Custom Metrics (ShopifyQL)</div>
+
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
+            <Step n={1} text="Go to <strong>Shopify Admin</strong> → Settings → Apps and sales channels" />
+            <Step n={2} text='Click <strong>"Develop apps"</strong> → Allow custom app development' />
+            <Step n={3} text='Create a new app → Configure <strong>Admin API access scopes</strong>: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">read_orders, read_products, read_customers, read_analytics, read_inventory, read_fulfillments</code>' />
+            <Step n={4} text='Click <strong>Install app</strong> → copy the <strong>Admin API access token</strong> (shown once, starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">shpat_</code>)' />
+            <Step n={5} text='Enter your store URL as <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">your-store.myshopify.com</code> (no https://)' />
+          </div>
+
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Store URL</label>
-              <input
-                className="form-input mono"
-                value={brand.shopifyStoreUrl || ''}
-                onChange={(e) => updateField('shopifyStoreUrl', e.target.value)}
-                placeholder="your-store.myshopify.com"
-              />
-              <div className="form-hint">Your .myshopify.com domain (without https://)</div>
+              <input className="form-input mono" value={brand.shopifyStoreUrl || ''} onChange={(e) => updateField('shopifyStoreUrl', e.target.value)} placeholder="your-store.myshopify.com" />
             </div>
             <div className="form-group">
               <label className="form-label">Admin API Access Token</label>
-              <input
-                className="form-input mono"
-                type="password"
-                value={brand.shopifyAccessToken || ''}
-                onChange={(e) => updateField('shopifyAccessToken', e.target.value)}
-                placeholder="shpat_..."
-              />
-              <div className="form-hint">
-                Shopify Admin → Settings → Apps → Develop apps
-              </div>
+              <input className="form-input mono" type="password" value={brand.shopifyAccessToken || ''} onChange={(e) => updateField('shopifyAccessToken', e.target.value)} placeholder="shpat_..." />
             </div>
           </div>
           {brand.shopifyStoreUrl && (
             <div>
-              <button
-                onClick={testShopify}
-                className="test-connection-btn"
-                disabled={testing.shopify}
-              >
+              <button onClick={testShopify} className="test-connection-btn" disabled={testing.shopify}>
                 {testing.shopify ? '⏳ Testing...' : '🔌 Test Connection'}
               </button>
               {testResults.shopify && (
-                <div className={`test-result ${testResults.shopify.success ? 'success' : 'error'}`}>
-                  {testResults.shopify.message}
-                </div>
+                <div className={`test-result ${testResults.shopify.success ? 'success' : 'error'}`}>{testResults.shopify.message}</div>
               )}
             </div>
           )}
         </div>
 
-        {/* Google Analytics */}
+        {/* ── GOOGLE ANALYTICS 4 ── */}
         <div className="form-card">
           <div className="form-card-title">
-            📈 Google Analytics (GA4)
+            📈 Google Analytics 4 (GA4)
             <span className={`badge ${isConnected.ga4 ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
               {isConnected.ga4 ? 'Connected' : 'Not Connected'}
             </span>
           </div>
           <div className="form-card-desc">Traffic sources, sessions, bounce rates, and conversion funnel data</div>
+
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
+            <Step n={1} text='Go to <a href="https://console.cloud.google.com" target="_blank" style="color:var(--accent-blue)">Google Cloud Console</a> → Create or select a project' />
+            <Step n={2} text='Enable the <strong>Google Analytics Data API</strong> (APIs & Services → Library → search "Analytics Data API")' />
+            <Step n={3} text='Go to <strong>IAM & Admin → Service Accounts</strong> → Create Service Account → Download the <strong>JSON key</strong>' />
+            <Step n={4} text='In <strong>Google Analytics Admin</strong> → Property → Property Access Management → Add the service account email as <strong>Viewer</strong>' />
+            <Step n={5} text='Copy your <strong>GA4 Property ID</strong> from Analytics Admin → Property Settings (numeric ID, e.g. 123456789)' />
+            <Step n={6} text='Paste the full JSON key content and Property ID below' />
+          </div>
+
           <div className="form-group">
             <label className="form-label">GA4 Property ID</label>
-            <input
-              className="form-input mono"
-              value={brand.ga4PropertyId || ''}
-              onChange={(e) => updateField('ga4PropertyId', e.target.value)}
-              placeholder="123456789"
-            />
-            <div className="form-hint">Found in Google Analytics Admin → Property Settings</div>
+            <input className="form-input mono" value={brand.ga4PropertyId || ''} onChange={(e) => updateField('ga4PropertyId', e.target.value)} placeholder="123456789" />
           </div>
           <div className="form-group">
             <label className="form-label">Service Account JSON</label>
-            <textarea
-              className="form-input mono"
-              rows={5}
-              value={brand.ga4ServiceAccountJson || ''}
-              onChange={(e) => updateField('ga4ServiceAccountJson', e.target.value)}
-              placeholder={'{\n  "type": "service_account",\n  "project_id": "...",\n  ...\n}'}
-            />
-            <div className="form-hint">Create a service account in Google Cloud Console with GA4 Viewer role</div>
+            <textarea className="form-input mono" rows={5} value={brand.ga4ServiceAccountJson || ''} onChange={(e) => updateField('ga4ServiceAccountJson', e.target.value)} placeholder={'{\n  "type": "service_account",\n  "project_id": "...",\n  "private_key": "-----BEGIN RSA PRIVATE KEY-----\\n..."\n}'} />
           </div>
         </div>
 
-        {/* Meta Ads */}
+        {/* ── META ADS ── */}
         <div className="form-card">
           <div className="form-card-title">
             📱 Meta Ads (Facebook & Instagram)
@@ -249,51 +248,39 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             </span>
           </div>
           <div className="form-card-desc">Facebook and Instagram ad campaign performance, ROAS and spend analytics</div>
+
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
+            <Step n={1} text='Go to <a href="https://developers.facebook.com" target="_blank" style="color:var(--accent-blue)">developers.facebook.com</a> → My Apps → Create App → Select <strong>Business</strong> type' />
+            <Step n={2} text='In your app dashboard, click <strong>Add Product</strong> → Add <strong>Marketing API</strong>' />
+            <Step n={3} text='Go to <strong>Tools → Graph API Explorer</strong> → Generate Access Token with permissions: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">ads_read, ads_management, business_management</code>' />
+            <Step n={4} text='Extend token lifetime: use <strong>Access Token Debugger</strong> → Extend to get a long-lived token (60 days)' />
+            <Step n={5} text='Find your <strong>Ad Account ID</strong> in Meta Ads Manager → top left account selector (format: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">act_XXXXXXXXXX</code>)' />
+          </div>
+
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">App ID</label>
-              <input
-                className="form-input mono"
-                value={brand.metaAppId || ''}
-                onChange={(e) => updateField('metaAppId', e.target.value)}
-                placeholder="App ID from Meta Developer Console"
-              />
+              <input className="form-input mono" value={brand.metaAppId || ''} onChange={(e) => updateField('metaAppId', e.target.value)} placeholder="App ID from Meta Developer Console" />
             </div>
             <div className="form-group">
               <label className="form-label">App Secret</label>
-              <input
-                className="form-input mono"
-                type="password"
-                value={brand.metaAppSecret || ''}
-                onChange={(e) => updateField('metaAppSecret', e.target.value)}
-                placeholder="App Secret"
-              />
+              <input className="form-input mono" type="password" value={brand.metaAppSecret || ''} onChange={(e) => updateField('metaAppSecret', e.target.value)} placeholder="App Secret" />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Access Token</label>
-              <input
-                className="form-input mono"
-                type="password"
-                value={brand.metaAccessToken || ''}
-                onChange={(e) => updateField('metaAccessToken', e.target.value)}
-                placeholder="Long-lived page access token"
-              />
+              <input className="form-input mono" type="password" value={brand.metaAccessToken || ''} onChange={(e) => updateField('metaAccessToken', e.target.value)} placeholder="Long-lived access token" />
             </div>
             <div className="form-group">
               <label className="form-label">Ad Account ID</label>
-              <input
-                className="form-input mono"
-                value={brand.metaAdAccountId || ''}
-                onChange={(e) => updateField('metaAdAccountId', e.target.value)}
-                placeholder="act_123456789"
-              />
+              <input className="form-input mono" value={brand.metaAdAccountId || ''} onChange={(e) => updateField('metaAdAccountId', e.target.value)} placeholder="act_123456789" />
             </div>
           </div>
         </div>
 
-        {/* Google Ads */}
+        {/* ── GOOGLE ADS ── */}
         <div className="form-card">
           <div className="form-card-title">
             🎯 Google Ads
@@ -302,60 +289,43 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             </span>
           </div>
           <div className="form-card-desc">Search, Shopping and Display campaign performance and ROAS</div>
+
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
+            <Step n={1} text='Apply for <strong>Google Ads API access</strong> at <a href="https://developers.google.com/google-ads/api/docs/first-call/dev-token" target="_blank" style="color:var(--accent-blue)">developers.google.com</a> → Your Developer Token will be emailed' />
+            <Step n={2} text='In <a href="https://console.cloud.google.com" target="_blank" style="color:var(--accent-blue)">Google Cloud Console</a> → APIs & Services → Credentials → Create <strong>OAuth 2.0 Client ID</strong> (Web application type)' />
+            <Step n={3} text='Enable <strong>Google Ads API</strong> in APIs & Services → Library' />
+            <Step n={4} text='Use <a href="https://developers.google.com/oauthplayground" target="_blank" style="color:var(--accent-blue)">OAuth 2.0 Playground</a> to generate a <strong>Refresh Token</strong> with scope: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">https://www.googleapis.com/auth/adwords</code>' />
+            <Step n={5} text='Find your <strong>Customer ID</strong> in Google Ads top-right (format: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">XXX-XXX-XXXX</code>, enter without dashes)' />
+          </div>
+
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Developer Token</label>
-              <input
-                className="form-input mono"
-                type="password"
-                value={brand.googleAdsDevToken || ''}
-                onChange={(e) => updateField('googleAdsDevToken', e.target.value)}
-                placeholder="Developer token from Google Ads API Center"
-              />
+              <input className="form-input mono" type="password" value={brand.googleAdsDevToken || ''} onChange={(e) => updateField('googleAdsDevToken', e.target.value)} placeholder="Developer token" />
             </div>
             <div className="form-group">
               <label className="form-label">Customer ID</label>
-              <input
-                className="form-input mono"
-                value={brand.googleAdsCustomerId || ''}
-                onChange={(e) => updateField('googleAdsCustomerId', e.target.value)}
-                placeholder="123-456-7890"
-              />
+              <input className="form-input mono" value={brand.googleAdsCustomerId || ''} onChange={(e) => updateField('googleAdsCustomerId', e.target.value)} placeholder="1234567890" />
             </div>
           </div>
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">OAuth Client ID</label>
-              <input
-                className="form-input mono"
-                value={brand.googleAdsClientId || ''}
-                onChange={(e) => updateField('googleAdsClientId', e.target.value)}
-                placeholder="xxx.apps.googleusercontent.com"
-              />
+              <input className="form-input mono" value={brand.googleAdsClientId || ''} onChange={(e) => updateField('googleAdsClientId', e.target.value)} placeholder="xxx.apps.googleusercontent.com" />
             </div>
             <div className="form-group">
               <label className="form-label">OAuth Client Secret</label>
-              <input
-                className="form-input mono"
-                type="password"
-                value={brand.googleAdsClientSecret || ''}
-                onChange={(e) => updateField('googleAdsClientSecret', e.target.value)}
-              />
+              <input className="form-input mono" type="password" value={brand.googleAdsClientSecret || ''} onChange={(e) => updateField('googleAdsClientSecret', e.target.value)} />
             </div>
           </div>
           <div className="form-group">
             <label className="form-label">Refresh Token</label>
-            <input
-              className="form-input mono"
-              type="password"
-              value={brand.googleAdsRefreshToken || ''}
-              onChange={(e) => updateField('googleAdsRefreshToken', e.target.value)}
-              placeholder="OAuth refresh token"
-            />
+            <input className="form-input mono" type="password" value={brand.googleAdsRefreshToken || ''} onChange={(e) => updateField('googleAdsRefreshToken', e.target.value)} placeholder="1//0g..." />
           </div>
         </div>
 
-        {/* AI Assistant */}
+        {/* ── GEMINI AI ── */}
         <div className="form-card">
           <div className="form-card-title">
             🤖 AI Consultant (Gemini)
@@ -363,38 +333,27 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
               {isConnected.ai ? 'Custom Key' : 'Using Global Key'}
             </span>
           </div>
-          <div className="form-card-desc">
-            Gemini-powered AI chatbot with real-time Shopify data context for CRO consulting
+          <div className="form-card-desc">Powers the AI chat assistant with real-time Shopify data for CRO consulting</div>
+
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
+            <Step n={1} text='Go to <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent-blue)">aistudio.google.com</a> → Sign in with Google' />
+            <Step n={2} text='Click <strong>"Get API Key"</strong> → Create API Key in new project (free tier: 15 RPM, 1M tokens/day)' />
+            <Step n={3} text='Copy the key (starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">AIza</code>) and paste below — or set <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">GEMINI_API_KEY</code> in your <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">.env.local</code> to share across all brands' />
           </div>
+
           <div className="form-group">
-            <label className="form-label">Gemini API Key (optional)</label>
-            <input
-              className="form-input mono"
-              type="password"
-              value={brand.geminiApiKey || ''}
-              onChange={(e) => updateField('geminiApiKey', e.target.value)}
-              placeholder="AIza... (leave blank to use global key from .env)"
-            />
-            <div className="form-hint">
-              Get a free key at{' '}
-              <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">
-                Google AI Studio →
-              </a>
-              {' '}| Or set GEMINI_API_KEY in your .env file to share across all brands
-            </div>
+            <label className="form-label">Gemini API Key (optional if .env is set)</label>
+            <input className="form-input mono" type="password" value={brand.geminiApiKey || ''} onChange={(e) => updateField('geminiApiKey', e.target.value)} placeholder="AIza..." />
           </div>
         </div>
 
-        {/* Save Button */}
+        {/* Save */}
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button className="btn btn-primary" onClick={save} disabled={saving}>
             {saving ? '⏳ Saving...' : saved ? '✅ Saved!' : '💾 Save All Changes'}
           </button>
-          {saved && (
-            <span style={{ color: 'var(--accent-emerald)', fontSize: '13px' }}>
-              Changes saved successfully
-            </span>
-          )}
+          {saved && <span style={{ color: 'var(--accent-emerald)', fontSize: '13px' }}>Changes saved successfully</span>}
         </div>
       </div>
     </>
