@@ -182,9 +182,12 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
             <Step n={1} text="Go to <strong>Shopify Admin</strong> → Settings → Apps and sales channels" />
             <Step n={2} text='Click <strong>"Develop apps"</strong> → Allow custom app development' />
-            <Step n={3} text='Create a new app → Configure <strong>Admin API access scopes</strong>: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">read_orders, read_products, read_customers, read_analytics, read_inventory, read_fulfillments</code>' />
+            <Step n={3} text='Create a new app → Configure <strong>Admin API access scopes</strong>. <strong>REQUIRED for Custom Metrics:</strong> Include <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">read_analytics</code>. Also add: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">read_orders, read_products, read_customers, read_inventory, read_fulfillments</code>' />
             <Step n={4} text='Click <strong>Install app</strong> → copy the <strong>Admin API access token</strong> (shown once, starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">shpat_</code>)' />
             <Step n={5} text='Enter your store URL as <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">your-store.myshopify.com</code> (no https://)' />
+            <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '6px', padding: '10px 12px', marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <strong>Note:</strong> Custom Metrics feature requires the <Code>read_analytics</Code> scope. If you're seeing "ShopifyQL is not available" error, regenerate your access token with this scope included. Not all Shopify plans include Analytics API access.
+            </div>
           </div>
 
           <div className="form-row">

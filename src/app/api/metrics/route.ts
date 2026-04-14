@@ -43,14 +43,36 @@ export async function POST(request: Request) {
     }
 
     const data = await res.json();
+
+    // Log the full response for debugging
+    console.log('Shopify API response:', JSON.stringify(data, null, 2));
+
+    // Check for GraphQL errors first
+    if (data.errors && data.errors.length > 0) {
+      console.error('GraphQL errors:', data.errors);
+      const errorMsg = data.errors[0]?.message || 'Unknown error';
+      let friendlyError = errorMsg;
+
+      // Provide helpful error messages
+      if (errorMsg.includes("doesn't exist on type 'Mutation'")) {
+        friendlyError = 'ShopifyQL is not available with this token. Please check: (1) Token has "read_analytics" permission (2) Store plan includes Analytics API access (3) Try regenerating the access token with proper scopes.';
+      }
+
+      return NextResponse.json({
+        error: friendlyError
+      }, { status: 400 });
+    }
+
     const result = data?.data?.queryShopifyql;
 
     if (!result) {
-      return NextResponse.json({ error: 'No data returned from Shopify' }, { status: 500 });
+      console.error('No queryShopifyql in response:', data);
+      return NextResponse.json({ error: 'ShopifyQL query not supported or invalid. Check that the Shopify store has access to the Analytics API.' }, { status: 400 });
     }
 
     if (result.parseErrors?.length > 0) {
-      return NextResponse.json({ error: result.parseErrors[0].message }, { status: 400 });
+      console.error('ShopifyQL parse errors:', result.parseErrors);
+      return NextResponse.json({ error: `Query syntax error: ${result.parseErrors[0].message}` }, { status: 400 });
     }
 
     return NextResponse.json({
