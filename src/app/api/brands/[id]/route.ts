@@ -1,4 +1,4 @@
-import { getBrand, updateBrand, deleteBrand, getBrands } from '@/lib/github-store';
+import { getBrand, updateBrand, deleteBrand, getBrands } from '@/lib/google-sheets-store';
 import { NextResponse } from 'next/server';
 
 export async function GET(

@@ -11,11 +11,11 @@ A CRO (Conversion Rate Optimization) consulting dashboard for e-commerce brands.
 - Advanced CRO opportunities and recommendations
 - Custom metric builder (ShopifyQL queries)
 
-🔐 **Secure Local-First Architecture**
-- Credentials stored locally (`/data/`) - NOT in GitHub
-- Optional GitHub sync for data backup
-- Amplify dashboard fetches from local API via ngrok tunnel
-- Zero credential exposure to cloud
+🔐 **Secure Cloud Database with Encryption**
+- Credentials stored in Google Sheet with AES-256 encryption
+- No credentials in GitHub, local files, or Amplify
+- Easy multi-user access and backups
+- Encrypted at rest, decrypted only on server
 
 📈 **Multi-Platform Support**
 - Shopify analytics (orders, revenue, products, customers)
@@ -62,35 +62,37 @@ npm run dev
 
 Just run `npm run dev` and access via http://localhost:3000
 
-### For Cloud + Local (Amplify with ngrok tunnel)
+### For Cloud Deployment (Amplify with Google Sheets)
 
-See **[AMPLIFY_SETUP.md](./AMPLIFY_SETUP.md)** for complete setup instructions.
+See **[docs/GOOGLE_SHEETS_SETUP.md](./docs/GOOGLE_SHEETS_SETUP.md)** for complete setup instructions.
 
-Quick start:
-```bash
-./start-with-tunnel.sh
-```
+Quick steps:
+1. Create Google Sheet + Apps Script (manual setup in Google console)
+2. Get `GOOGLE_SHEETS_API_URL` from Apps Script deployment
+3. Generate `ENCRYPTION_KEY`
+4. Set both in Amplify Environment Variables
+5. Redeploy Amplify
 
-This script will:
-1. Start your local Next.js server
-2. Launch ngrok tunnel to expose it publicly
-3. Display the public URL for Amplify configuration
-
-Then set the ngrok URL as `NEXT_PUBLIC_API_URL` environment variable in Amplify.
+Your data is now accessible from Amplify with encrypted credentials!
 
 ## Architecture
 
+**Data Storage:**
+```
+Next.js App ↔ Google Apps Script ↔ Google Sheet (encrypted credentials)
+```
+
 **Local Development:**
 ```
-Browser → localhost:3000 → /data/brands/ (local credentials)
+Browser → localhost:3000 → Google Apps Script API → Google Sheet
 ```
 
-**Cloud Deployment (Amplify + ngrok):**
+**Cloud Deployment (Amplify):**
 ```
-Browser → Amplify Dashboard → ngrok tunnel → localhost:3000 → /data/brands/
+Browser → Amplify → Google Apps Script API → Google Sheet
 ```
 
-Credentials never leave your machine. Amplify only sees the public ngrok URL.
+Credentials encrypted at rest in Google Sheet. Server decrypts only when needed.
 
 ## Project Structure
 
@@ -123,47 +125,46 @@ src/
 ## Environment Variables
 
 ```bash
-# GitHub (optional - for automatic sync)
-GITHUB_TOKEN=your_token
-GITHUB_REPO=your_username/repo
-GITHUB_BRANCH=main
+# Google Sheets Database (required)
+GOOGLE_SHEETS_API_URL=https://script.google.com/macros/d/{SCRIPT_ID}/usercallback
+ENCRYPTION_KEY=your-secret-key-min-32-characters
 
-# AI
+# AI (optional)
 GEMINI_API_KEY=your_gemini_key
-
-# Cloud Deployment (Amplify only)
-NEXT_PUBLIC_API_URL=https://your-ngrok-url.ngrok.io
 ```
 
-See `.env.example` for details.
+See `.env.example` and `docs/GOOGLE_SHEETS_SETUP.md` for setup instructions.
 
 ## Data Storage
 
-### Local (`/data/brands/`)
-- One JSON file per brand: `demo.json`, `client-1.json`, etc.
-- Contains all credentials (Shopify tokens, GA4 JSON keys, etc.)
-- **In .gitignore - never committed to GitHub**
-- Encrypted at rest on your machine
+### Google Sheet (Encrypted Database)
+- All brands stored in a single Google Sheet
+- Credentials encrypted with AES-256 before storage
+- Accessible from any machine with your Google account
+- Easy to share and backup
+- **Zero credentials in git or local files**
 
-### Optional GitHub Sync
-- Set `GITHUB_TOKEN` to automatically sync brand data to private repo
-- Secrets are synced (use a private GitHub repo!)
-- Can be pulled down on another machine with same token
+### Encryption
+- Encryption key stored in environment variables (NOT in git)
+- Only the server can decrypt credentials
+- Client-side responses still mask tokens for safety
 
 ## Security Notes
 
 ✅ **What's Secure**
-- Credentials stored locally only
-- GitHub never sees `/data/` folder
-- Amplify never handles credentials
-- API calls go through your machine's ngrok tunnel
+- Credentials encrypted at rest in Google Sheet
+- GitHub never sees credential files
+- Amplify never stores credentials locally
+- Only server can decrypt credentials
+- Encryption key stored separately from data
 - No third-party analytics collection
 
 ⚠️ **Keep in Mind**
-- ngrok tunnel URL is public (anyone with URL can call your API)
-- Don't share ngrok URL publicly
-- Restart ngrok periodically to get new URLs
-- Consider ngrok Pro for production use
+- Don't share your Google Sheet with untrusted people
+- Never commit `ENCRYPTION_KEY` to git
+- Keep `ENCRYPTION_KEY` safe and private
+- Use strong randomly-generated `ENCRYPTION_KEY` (32+ characters)
+- Keep backups of your Google Sheet
 
 ## Troubleshooting
 

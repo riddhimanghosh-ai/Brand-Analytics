@@ -1,4 +1,4 @@
-import { getBrand, getBrands } from '@/lib/github-store';
+import { getBrand, getBrands } from '@/lib/google-sheets-store';
 import { redirect } from 'next/navigation';
 import { ChatPanel } from '@/components/ChatPanel';
 import { NavLink } from '@/components/NavLink';

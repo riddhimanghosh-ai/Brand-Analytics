@@ -1,4 +1,4 @@
-import { getBrands, createBrand } from '@/lib/github-store';
+import { getBrands, createBrand } from '@/lib/google-sheets-store';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 
