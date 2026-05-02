@@ -127,11 +127,53 @@ async function syncToGitHub(slug: string, brand: BrandData | null, deleted = fal
 // ── Public API ──────────────────────────────────────────────────────────────
 
 async function getBrands(): Promise<BrandData[]> {
-  return listLocalBrands();
+  // Try local filesystem first
+  try {
+    const local = listLocalBrands();
+    if (local.length > 0) return local;
+  } catch (e) {
+    console.warn(`Failed to list local brands: ${(e as Error).message}`);
+  }
+
+  // Fallback to API endpoint (for Amplify deployment with ngrok tunnel)
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (apiUrl) {
+    try {
+      const response = await fetch(`${apiUrl}/api/brands`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch brands from API: ${(e as Error).message}`);
+    }
+  }
+
+  return [];
 }
 
 async function getBrand(slug: string): Promise<BrandData | null> {
-  return readLocalBrand(slug);
+  // Try local filesystem first
+  const local = readLocalBrand(slug);
+  if (local) return local;
+
+  // Fallback to API endpoint (for Amplify deployment with ngrok tunnel)
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (apiUrl) {
+    try {
+      const response = await fetch(`${apiUrl}/api/brands/${slug}`, {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (e) {
+      console.warn(`Failed to fetch brand from API: ${(e as Error).message}`);
+    }
+  }
+
+  return null;
 }
 
 async function createBrand(brandData: Omit<BrandData, 'createdAt' | 'updatedAt'>): Promise<BrandData> {
