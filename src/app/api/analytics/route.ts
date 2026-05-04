@@ -1,4 +1,4 @@
-import { getBrand } from '@/lib/github-store';
+import { getBrand } from '@/lib/google-sheets-store';
 import { NextResponse } from 'next/server';
 import * as ga4 from '@/lib/services/ga4';
 

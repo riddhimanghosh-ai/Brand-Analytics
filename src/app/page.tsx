@@ -1,4 +1,4 @@
-import { getBrands } from '@/lib/github-store';
+import { getBrands } from '@/lib/google-sheets-store';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { BrandCard } from '@/components/BrandCard';
@@ -10,26 +10,26 @@ export const revalidate = 0;
 export default async function HomePage() {
   let brands: any[] = [];
 
-  try {
-    const allBrands = await getBrands();
-    brands = allBrands.map((brand) => ({
-      id: brand.id,
-      name: brand.name,
-      slug: brand.slug,
-      shopifyStoreUrl: brand.shopifyStoreUrl,
-      ga4PropertyId: brand.ga4PropertyId,
-      metaAccessToken: brand.metaAccessToken,
-      googleAdsCustomerId: brand.googleAdsCustomerId,
-      geminiApiKey: brand.geminiApiKey,
-    }));
+  // Fetch brands — redirect() throws a special error that must NOT be caught
+  const allBrands = await getBrands().catch((error) => {
+    console.error('Error fetching brands:', error);
+    return [] as typeof brands;
+  });
 
-    // If exactly one brand exists, redirect to it
-    if (brands.length === 1) {
-      redirect(`/dashboard/${brands[0].slug}`);
-    }
-  } catch (error) {
-    console.error('Error fetching brands from GitHub:', error);
-    // Continue to render the page even if GitHub is unavailable
+  brands = allBrands.map((brand) => ({
+    id: brand.id,
+    name: brand.name,
+    slug: brand.slug,
+    shopifyStoreUrl: brand.shopifyStoreUrl,
+    ga4PropertyId: brand.ga4PropertyId,
+    metaAccessToken: brand.metaAccessToken,
+    googleAdsCustomerId: brand.googleAdsCustomerId,
+    geminiApiKey: brand.geminiApiKey,
+  }));
+
+  // If exactly one brand exists, redirect to it (must be outside try/catch)
+  if (brands.length === 1) {
+    redirect(`/dashboard/${brands[0].slug}`);
   }
 
   return (

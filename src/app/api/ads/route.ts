@@ -1,4 +1,4 @@
-import { getBrand } from '@/lib/github-store';
+import { getBrand } from '@/lib/google-sheets-store';
 import { NextResponse } from 'next/server';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';

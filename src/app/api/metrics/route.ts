@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getBrand } from '@/lib/github-store';
+import { getBrand } from '@/lib/google-sheets-store';
 
 export async function POST(request: Request) {
   try {

@@ -1,13 +1,17 @@
 /**
  * Google Sheets Brand Store
  *
- * Uses Google Apps Script as a backend to store/retrieve encrypted brand data
- * from a Google Sheet. Provides the same interface as github-store.ts.
+ * Primary store: Google Apps Script / Google Sheets (when GOOGLE_SHEETS_API_URL is set)
+ * Fallback store: Local filesystem via github-store (when env var is NOT set)
  *
- * Environment variables required:
- * - GOOGLE_SHEETS_API_URL: Apps Script web app deployment URL
- * - ENCRYPTION_KEY: Secret key for encrypting/decrypting credentials
+ * This means the app works out-of-the-box locally without any setup,
+ * and automatically switches to Google Sheets once configured.
  */
+
+// Lazy-load the local filesystem fallback to avoid fs errors in edge environments
+async function getLocalStore() {
+  return await import('./github-store');
+}
 
 export interface BrandData {
   id: string;
@@ -128,16 +132,22 @@ function setCache(key: string, data: any) {
  * Get all brands
  */
 export async function getBrands(): Promise<BrandData[]> {
+  if (!API_URL) {
+    const local = await getLocalStore();
+    return local.getBrands();
+  }
+
   const cached = getFromCache('brands:all');
-  if (cached) return cached;
+  if (cached) return cached as BrandData[];
 
   try {
     const brands = await callApi('list');
     setCache('brands:all', brands);
     return brands || [];
   } catch (error) {
-    console.warn('Failed to fetch brands from Google Sheets:', error);
-    return [];
+    console.warn('Failed to fetch brands from Google Sheets, falling back to local:', error);
+    const local = await getLocalStore();
+    return local.getBrands();
   }
 }
 
@@ -145,16 +155,22 @@ export async function getBrands(): Promise<BrandData[]> {
  * Get single brand by slug
  */
 export async function getBrand(slug: string): Promise<BrandData | null> {
+  if (!API_URL) {
+    const local = await getLocalStore();
+    return local.getBrand(slug);
+  }
+
   const cached = getFromCache(`brand:${slug}`);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) return cached as BrandData | null;
 
   try {
     const brand = await callApi('get', 'GET', slug);
     setCache(`brand:${slug}`, brand);
     return brand || null;
   } catch (error) {
-    console.warn(`Failed to fetch brand ${slug} from Google Sheets:`, error);
-    return null;
+    console.warn(`Failed to fetch brand ${slug} from Google Sheets, falling back to local:`, error);
+    const local = await getLocalStore();
+    return local.getBrand(slug);
   }
 }
 
@@ -164,16 +180,17 @@ export async function getBrand(slug: string): Promise<BrandData | null> {
 export async function createBrand(
   brandData: Omit<BrandData, 'createdAt' | 'updatedAt'>
 ): Promise<BrandData> {
+  if (!API_URL) {
+    const local = await getLocalStore();
+    return local.createBrand(brandData);
+  }
+
   const now = new Date().toISOString();
-  const brand: BrandData = {
-    ...brandData,
-    createdAt: now,
-    updatedAt: now,
-  };
+  const brand: BrandData = { ...brandData, createdAt: now, updatedAt: now };
 
   try {
     const created = await callApi('create', 'POST', undefined, brand);
-    clearAllCache(); // Invalidate all cache
+    clearAllCache();
     return created;
   } catch (error) {
     console.error('Failed to create brand in Google Sheets:', error);
@@ -188,15 +205,17 @@ export async function updateBrand(
   slug: string,
   updates: Partial<BrandData>
 ): Promise<BrandData> {
-  const updated = {
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  };
+  if (!API_URL) {
+    const local = await getLocalStore();
+    return local.updateBrand(slug, updates);
+  }
+
+  const updated = { ...updates, updatedAt: new Date().toISOString() };
 
   try {
     const result = await callApi('update', 'POST', slug, updated);
-    clearCache(`brand:${slug}`); // Invalidate specific cache
-    clearCache('brands:all'); // Invalidate list cache
+    clearCache(`brand:${slug}`);
+    clearCache('brands:all');
     return result;
   } catch (error) {
     console.error(`Failed to update brand ${slug} in Google Sheets:`, error);
@@ -208,10 +227,15 @@ export async function updateBrand(
  * Delete brand
  */
 export async function deleteBrand(slug: string): Promise<void> {
+  if (!API_URL) {
+    const local = await getLocalStore();
+    return local.deleteBrand(slug);
+  }
+
   try {
     await callApi('delete', 'POST', slug);
-    clearCache(`brand:${slug}`); // Invalidate specific cache
-    clearCache('brands:all'); // Invalidate list cache
+    clearCache(`brand:${slug}`);
+    clearCache('brands:all');
   } catch (error) {
     console.error(`Failed to delete brand ${slug} from Google Sheets:`, error);
     throw error;
