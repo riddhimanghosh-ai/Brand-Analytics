@@ -68,6 +68,8 @@ async function callApi(
   if (slug) url += `&slug=${encodeURIComponent(slug)}`;
   // Pass the shared secret so Apps Script can reject calls from unknown callers
   if (API_SECRET) url += `&secret=${encodeURIComponent(API_SECRET)}`;
+  // Pass encryption key so Apps Script can encrypt/decrypt credentials
+  if (ENCRYPTION_KEY) url += `&encKey=${encodeURIComponent(ENCRYPTION_KEY)}`;
 
   const options: RequestInit = {
     method,
