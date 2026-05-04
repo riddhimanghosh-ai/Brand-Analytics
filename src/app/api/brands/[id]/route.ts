@@ -1,18 +1,19 @@
-import { getBrand, updateBrand, deleteBrand, getBrands } from '@/lib/google-sheets-store';
+import { getBrand, updateBrand, deleteBrand } from '@/lib/google-sheets-store';
+import { maskBrand } from '@/lib/mask-brand';
 import { NextResponse } from 'next/server';
 
 export async function GET(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
-    // The [id] param is actually the slug in our case
     const brand = await getBrand(id);
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
-    return NextResponse.json(brand);
+    // Never return raw secrets to the client
+    return NextResponse.json(maskBrand(brand));
   } catch (error) {
     console.error('Error fetching brand:', error);
     return NextResponse.json({ error: 'Failed to fetch brand' }, { status: 500 });
@@ -46,7 +47,8 @@ export async function PUT(
       geminiApiKey: body.geminiApiKey,
     });
 
-    return NextResponse.json(brand);
+    // Never return raw secrets to the client
+    return NextResponse.json(maskBrand(brand));
   } catch (error) {
     console.error('Error updating brand:', error);
     return NextResponse.json({ error: 'Failed to update brand' }, { status: 500 });
@@ -54,7 +56,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  request: Request,
+  _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {

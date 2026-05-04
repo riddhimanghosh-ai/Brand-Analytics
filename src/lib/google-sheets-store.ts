@@ -39,6 +39,8 @@ export interface BrandData {
 
 const API_URL = process.env.GOOGLE_SHEETS_API_URL;
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || '';
+// Shared secret between Next.js server and Apps Script — never sent to the browser
+const API_SECRET = process.env.GOOGLE_SHEETS_API_SECRET || '';
 
 // Cache for 5 minutes
 interface CacheEntry {
@@ -64,6 +66,8 @@ async function callApi(
 
   let url = `${API_URL}?action=${action}`;
   if (slug) url += `&slug=${encodeURIComponent(slug)}`;
+  // Pass the shared secret so Apps Script can reject calls from unknown callers
+  if (API_SECRET) url += `&secret=${encodeURIComponent(API_SECRET)}`;
 
   const options: RequestInit = {
     method,

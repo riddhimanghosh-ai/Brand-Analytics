@@ -1,20 +1,12 @@
 import { getBrands, createBrand } from '@/lib/google-sheets-store';
+import { maskBrand, maskBrands } from '@/lib/mask-brand';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 
 export async function GET() {
   try {
     const brands = await getBrands();
-
-    // Mask sensitive tokens in response
-    const maskedBrands = brands.map((b) => ({
-      ...b,
-      shopifyAccessToken: b.shopifyAccessToken ? '••••' + b.shopifyAccessToken.slice(-4) : null,
-      metaAccessToken: b.metaAccessToken ? '••••' + b.metaAccessToken.slice(-4) : null,
-      geminiApiKey: b.geminiApiKey ? '••••' + b.geminiApiKey.slice(-4) : null,
-    }));
-
-    return NextResponse.json(maskedBrands);
+    return NextResponse.json(maskBrands(brands));
   } catch (error) {
     console.error('Error fetching brands:', error);
     return NextResponse.json({ error: 'Failed to fetch brands' }, { status: 500 });
@@ -24,6 +16,10 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
+
+    if (!body.name) {
+      return NextResponse.json({ error: 'Brand name is required' }, { status: 400 });
+    }
 
     const slug =
       body.slug ||
@@ -53,7 +49,8 @@ export async function POST(request: Request) {
       geminiApiKey: body.geminiApiKey || null,
     });
 
-    return NextResponse.json(brand, { status: 201 });
+    // Never return raw secrets — return the masked brand
+    return NextResponse.json(maskBrand(brand), { status: 201 });
   } catch (error) {
     console.error('Error creating brand:', error);
     return NextResponse.json({ error: 'Failed to create brand' }, { status: 500 });
