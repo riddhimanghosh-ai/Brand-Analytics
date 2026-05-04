@@ -253,4 +253,3 @@ export function invalidateCache() {
   clearAllCache();
 }
 
-export type { BrandData };
