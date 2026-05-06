@@ -6,7 +6,7 @@ frontend:
         - npm ci
     build:
       commands:
-        - env | grep -e MONGODB_URI -e ENCRYPTION_KEY -e GITHUB_TOKEN -e GITHUB_REPO -e GITHUB_BRANCH >> .env.production
+        - env | grep -e MONGODB_URI -e ENCRYPTION_KEY -e GITHUB_TOKEN -e GITHUB_REPO -e GITHUB_BRANCH -e SHOPIFY_CLIENT_ID -e SHOPIFY_CLIENT_SECRET -e GEMINI_API_KEY >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
