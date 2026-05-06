@@ -6,6 +6,57 @@ import * as ga4 from '@/lib/services/ga4';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
 
+// Detect which platforms are relevant to the user's question.
+// Returns a set of platform keys. Falls back to all connected platforms if unclear.
+function detectIntent(messages: { role: string; content: string }[]): Set<string> {
+  // Look at last 2 user messages for context
+  const recentText = messages
+    .filter((m) => m.role === 'user')
+    .slice(-2)
+    .map((m) => m.content.toLowerCase())
+    .join(' ');
+
+  const platforms = new Set<string>();
+
+  // Shopify signals
+  if (/shopify|order|revenue|sale|product|customer|aov|average order|refund|cart|checkout|inventory|fulfil|ltv|repeat|returning|new customer|top product|item/.test(recentText)) {
+    platforms.add('shopify');
+  }
+
+  // GA4 / traffic signals
+  if (/google analytics|ga4|traffic|session|bounce|visitor|pageview|landing page|source|channel|organic|referral|direct|duration|engagement/.test(recentText)) {
+    platforms.add('ga4');
+  }
+
+  // Meta / Facebook / Instagram signals
+  if (/meta|facebook|instagram|fb|ig|roas|cpm|ctr|cpc|ad spend|campaign|impression|reach|purchase value|cost per/.test(recentText)) {
+    platforms.add('meta');
+  }
+
+  // Google Ads signals
+  if (/google ads|adwords|search ad|ppc|keyword|google campaign|cost per conversion|conversion value/.test(recentText)) {
+    platforms.add('googleAds');
+  }
+
+  // Multi-platform questions — fetch all
+  if (/all platform|every platform|overall|blended|total spend|compare|which channel|best channel|where should i/.test(recentText)) {
+    platforms.add('shopify');
+    platforms.add('ga4');
+    platforms.add('meta');
+    platforms.add('googleAds');
+  }
+
+  // If still nothing matched, fall back to all (generic question)
+  if (platforms.size === 0) {
+    platforms.add('shopify');
+    platforms.add('ga4');
+    platforms.add('meta');
+    platforms.add('googleAds');
+  }
+
+  return platforms;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -25,139 +76,108 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No AI API key configured' }, { status: 400 });
     }
 
-    // Fetch all available platform data in parallel
-    const [shopifyKPIs, ga4KPIs, metaKPIs, googleKPIs] = await Promise.allSettled([
-      brand.shopifyStoreUrl && brand.shopifyAccessToken
-        ? shopify.getKPIs(
-            { storeUrl: brand.shopifyStoreUrl, accessToken: brand.shopifyAccessToken },
-            '30d'
-          )
-        : Promise.reject('not connected'),
+    // Detect intent — only fetch what's relevant
+    const intent = detectIntent(messages);
 
-      brand.ga4PropertyId && brand.ga4ServiceAccountJson
-        ? ga4.getKPIs(
-            { propertyId: brand.ga4PropertyId, serviceAccountJson: brand.ga4ServiceAccountJson },
-            '30d'
-          )
-        : Promise.reject('not connected'),
+    const shouldFetch = {
+      shopify: intent.has('shopify') && !!(brand.shopifyStoreUrl && brand.shopifyAccessToken),
+      ga4: intent.has('ga4') && !!(brand.ga4PropertyId && brand.ga4ServiceAccountJson),
+      meta: intent.has('meta') && !!(brand.metaAccessToken && brand.metaAdAccountId),
+      googleAds:
+        intent.has('googleAds') &&
+        !!(
+          brand.googleAdsDevToken &&
+          brand.googleAdsCustomerId &&
+          brand.googleAdsRefreshToken &&
+          brand.googleAdsClientId &&
+          brand.googleAdsClientSecret
+        ),
+    };
 
-      brand.metaAccessToken && brand.metaAdAccountId
-        ? meta.getKPIs(
-            { accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId },
-            '30d'
-          )
-        : Promise.reject('not connected'),
+    // Fetch only the platforms we need, in parallel
+    const [shopifyResult, ga4Result, metaResult, googleAdsResult] = await Promise.allSettled([
+      shouldFetch.shopify
+        ? shopify.getKPIs({ storeUrl: brand.shopifyStoreUrl!, accessToken: brand.shopifyAccessToken! }, '30d')
+        : Promise.reject('not requested'),
 
-      brand.googleAdsDevToken &&
-      brand.googleAdsCustomerId &&
-      brand.googleAdsRefreshToken &&
-      brand.googleAdsClientId &&
-      brand.googleAdsClientSecret
+      shouldFetch.ga4
+        ? ga4.getKPIs({ propertyId: brand.ga4PropertyId!, serviceAccountJson: brand.ga4ServiceAccountJson! }, '30d')
+        : Promise.reject('not requested'),
+
+      shouldFetch.meta
+        ? meta.getKPIs({ accessToken: brand.metaAccessToken!, adAccountId: brand.metaAdAccountId! }, '30d')
+        : Promise.reject('not requested'),
+
+      shouldFetch.googleAds
         ? googleAds.getKPIs(
             {
-              devToken: brand.googleAdsDevToken,
-              clientId: brand.googleAdsClientId,
-              clientSecret: brand.googleAdsClientSecret,
-              refreshToken: brand.googleAdsRefreshToken,
-              customerId: brand.googleAdsCustomerId,
+              devToken: brand.googleAdsDevToken!,
+              clientId: brand.googleAdsClientId!,
+              clientSecret: brand.googleAdsClientSecret!,
+              refreshToken: brand.googleAdsRefreshToken!,
+              customerId: brand.googleAdsCustomerId!,
             },
             '30d'
           )
-        : Promise.reject('not connected'),
+        : Promise.reject('not requested'),
     ]);
 
-    // Build brand context with available metrics
-    let brandContext = `**Brand:** ${brand.name}\n`;
+    // Build compact brand context — only what's available and relevant
+    const sections: string[] = [`Brand: ${brand.name}`];
 
-    // Shopify context
-    if (shopifyKPIs.status === 'fulfilled') {
-      const k = shopifyKPIs.value;
-      const revChange = (((k.totalRevenue - k.prevTotalRevenue) / (k.prevTotalRevenue || 1)) * 100).toFixed(1);
-      const ordChange = (((k.totalOrders - k.prevTotalOrders) / (k.prevTotalOrders || 1)) * 100).toFixed(1);
-      brandContext += `
-**Shopify Data (Last 30 Days):**
-- Total Revenue: ₹${k.totalRevenue.toLocaleString()}
-- Total Orders: ${k.totalOrders}
-- Average Order Value: ₹${k.averageOrderValue.toFixed(0)}
-- Unique Customers: ${k.totalCustomers}
-- Repeat Customer Rate: ${k.repeatCustomerRate.toFixed(1)}%
-- Refund Rate: ${k.refundRate.toFixed(1)}%
-- Avg Items per Order: ${k.averageItemsPerOrder.toFixed(1)}
-- New Customer Revenue: ₹${k.newCustomerRevenue.toLocaleString()}
-- Returning Customer Revenue: ₹${k.returningCustomerRevenue.toLocaleString()}
-- Top Product: ${k.topSellingProduct}
-- Revenue Change vs Previous Period: ${revChange}%
-- Orders Change vs Previous Period: ${ordChange}%
-`;
+    if (shopifyResult.status === 'fulfilled') {
+      const k = shopifyResult.value;
+      const revChg = (((k.totalRevenue - k.prevTotalRevenue) / (k.prevTotalRevenue || 1)) * 100).toFixed(1);
+      sections.push(
+        `Shopify (last 30d): revenue ₹${k.totalRevenue.toLocaleString()} (${revChg}% vs prev), orders ${k.totalOrders}, AOV ₹${k.averageOrderValue.toFixed(0)}, customers ${k.totalCustomers}, repeat rate ${k.repeatCustomerRate.toFixed(1)}%, refund rate ${k.refundRate.toFixed(1)}%, avg items/order ${k.averageItemsPerOrder.toFixed(1)}, new customer rev ₹${k.newCustomerRevenue.toLocaleString()}, returning rev ₹${k.returningCustomerRevenue.toLocaleString()}, top product: ${k.topSellingProduct}`
+      );
+    } else if (shouldFetch.shopify === false && intent.has('shopify')) {
+      sections.push('Shopify: not connected');
     }
 
-    // GA4 context
-    if (ga4KPIs.status === 'fulfilled') {
-      const k = ga4KPIs.value;
-      brandContext += `
-**Google Analytics Data (Last 30 Days):**
-- Sessions: ${k.sessions.toLocaleString()}
-- Users: ${k.users.toLocaleString()}
-- New Users: ${k.newUsers.toLocaleString()}
-- Bounce Rate: ${k.bounceRate.toFixed(1)}%
-- Avg Session Duration: ${Math.floor(k.avgSessionDuration / 60)}m ${Math.round(k.avgSessionDuration % 60)}s
-- Pageviews: ${k.pageviews.toLocaleString()}
-- Pages per Session: ${k.pagesPerSession.toFixed(1)}
-${k.transactions > 0 ? `- Transactions: ${k.transactions}
-- E-commerce Revenue: ₹${k.revenue.toLocaleString()}
-- Conversion Rate: ${k.conversionRate.toFixed(2)}%
-- Add to Carts: ${k.addToCarts}
-- Checkouts Initiated: ${k.checkouts}` : ''}
-`;
+    if (ga4Result.status === 'fulfilled') {
+      const k = ga4Result.value;
+      const crPart = k.transactions > 0 ? `, conversion rate ${k.conversionRate.toFixed(2)}%, add to carts ${k.addToCarts}, checkouts ${k.checkouts}` : '';
+      sections.push(
+        `GA4 (last 30d): sessions ${k.sessions.toLocaleString()}, users ${k.users.toLocaleString()}, new users ${k.newUsers.toLocaleString()}, bounce rate ${k.bounceRate.toFixed(1)}%, avg session ${Math.floor(k.avgSessionDuration / 60)}m${Math.round(k.avgSessionDuration % 60)}s, pages/session ${k.pagesPerSession.toFixed(1)}${crPart}`
+      );
+    } else if (shouldFetch.ga4 === false && intent.has('ga4')) {
+      sections.push('Google Analytics: not connected');
     }
 
-    // Meta Ads context
-    if (metaKPIs.status === 'fulfilled') {
-      const k = metaKPIs.value;
-      brandContext += `
-**Meta Ads Data (Last 30 Days):**
-- Ad Spend: $${k.spend.toFixed(2)}
-- Impressions: ${k.impressions.toLocaleString()}
-- Clicks: ${k.clicks.toLocaleString()}
-- CTR: ${k.ctr.toFixed(2)}%
-- CPC: $${k.cpc.toFixed(2)}
-- CPM: $${k.cpm.toFixed(2)}
-- Reach: ${k.reach.toLocaleString()}
-- Purchases: ${k.purchases}
-- Purchase Value: $${k.purchaseValue.toFixed(2)}
-- ROAS: ${k.roas.toFixed(2)}x
-- Add to Carts: ${k.addToCarts}
-- Cost per Purchase: $${k.costPerPurchase.toFixed(2)}
-`;
+    if (metaResult.status === 'fulfilled') {
+      const k = metaResult.value;
+      sections.push(
+        `Meta Ads (last 30d): spend $${k.spend.toFixed(2)}, ROAS ${k.roas.toFixed(2)}x, purchases ${k.purchases}, purchase value $${k.purchaseValue.toFixed(2)}, CTR ${k.ctr.toFixed(2)}%, CPC $${k.cpc.toFixed(2)}, CPM $${k.cpm.toFixed(2)}, reach ${k.reach.toLocaleString()}, add to carts ${k.addToCarts}, cost/purchase $${k.costPerPurchase.toFixed(2)}`
+      );
+    } else if (shouldFetch.meta === false && intent.has('meta')) {
+      sections.push('Meta Ads: not connected');
     }
 
-    // Google Ads context
-    if (googleKPIs.status === 'fulfilled') {
-      const k = googleKPIs.value;
-      brandContext += `
-**Google Ads Data (Last 30 Days):**
-- Ad Spend: $${k.spend.toFixed(2)}
-- Impressions: ${k.impressions.toLocaleString()}
-- Clicks: ${k.clicks.toLocaleString()}
-- CTR: ${k.ctr.toFixed(2)}%
-- Avg CPC: $${k.avgCpc.toFixed(2)}
-- Conversions: ${k.conversions.toFixed(1)}
-- Conversion Value: $${k.conversionValue.toFixed(2)}
-- ROAS: ${k.roas.toFixed(2)}x
-- Cost per Conversion: $${k.costPerConversion.toFixed(2)}
-`;
+    if (googleAdsResult.status === 'fulfilled') {
+      const k = googleAdsResult.value;
+      sections.push(
+        `Google Ads (last 30d): spend $${k.spend.toFixed(2)}, ROAS ${k.roas.toFixed(2)}x, conversions ${k.conversions.toFixed(1)}, conversion value $${k.conversionValue.toFixed(2)}, CTR ${k.ctr.toFixed(2)}%, CPC $${k.avgCpc.toFixed(2)}, cost/conversion $${k.costPerConversion.toFixed(2)}`
+      );
+    } else if (shouldFetch.googleAds === false && intent.has('googleAds')) {
+      sections.push('Google Ads: not connected');
     }
 
-    // Connected platforms summary
-    brandContext += `
-**Connected Platforms:** ${[
-      brand.shopifyStoreUrl ? 'Shopify' : null,
-      brand.ga4PropertyId ? 'Google Analytics' : null,
-      brand.metaAccessToken ? 'Meta Ads' : null,
+    // Always append connected platforms list so AI knows what's available
+    const connectedList = [
+      brand.shopifyStoreUrl && brand.shopifyAccessToken ? 'Shopify' : null,
+      brand.ga4PropertyId && brand.ga4ServiceAccountJson ? 'GA4' : null,
+      brand.metaAccessToken && brand.metaAdAccountId ? 'Meta Ads' : null,
       brand.googleAdsCustomerId ? 'Google Ads' : null,
+      brand.tiktokAccessToken && brand.tiktokAdvertiserId ? 'TikTok Ads' : null,
+      brand.klaviyoApiKey ? 'Klaviyo' : null,
     ]
       .filter(Boolean)
-      .join(', ') || 'None'}`;
+      .join(', ');
+
+    sections.push(`Connected platforms: ${connectedList || 'none'}`);
+
+    const brandContext = sections.join('\n');
 
     const stream = await streamChat(apiKey, messages, brandContext);
 

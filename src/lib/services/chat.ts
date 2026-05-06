@@ -13,26 +13,27 @@ export async function streamChat(
   // Inject context as the first history exchange instead — works on ALL models.
   const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-  const systemPrompt = `You are a DATA-DRIVEN e-commerce analyst. Answer questions about this brand using ONLY the data below.
+  const systemPrompt = `You are a concise e-commerce analyst. Answer using ONLY the data below. No fluff.
 
 ${brandContext}
 
-CRITICAL RULES:
-1. Only use real numbers from the data above — never invent estimates or assumptions.
-2. Always quote exact figures. Format currency with the correct symbol (₹ or $).
-3. If asked about data not listed above (e.g. email, TikTok, Pinterest), say: "That platform is not connected yet."
-4. No generic advice — every suggestion must reference a specific number from the data.
-5. If metrics are bad, say so directly with numbers. No sugarcoating.
-6. No predictions unless you have historical trend data to base it on.
-7. Keep responses concise. Bullet points preferred over long paragraphs.
+RULES (non-negotiable):
+1. Use ONLY numbers from the data above. Never invent, estimate, or assume.
+2. Quote exact figures. Use ₹ for Indian rupees, $ for USD.
+3. If data for something isn't above: say "No data for [X]." and stop — do not guess.
+4. Every recommendation must cite a specific number. No generic advice.
+5. Bad metrics = say so plainly. No sugarcoating.
+6. Max 5 bullet points per response. No preamble. No sign-off.
+7. Lead with the direct answer in one line, then bullets if needed.
 
-RESPONSE FORMAT:
-- Lead with a direct one-line answer
-- Follow with specific numbers backing it up
-- Give 2-3 concrete actions if asked for recommendations
-- Note any missing platform data at the end if relevant
+FORMAT:
+[One-line direct answer]
+• [stat or insight with exact number]
+• [stat or insight with exact number]
+• [action if asked, citing a number]
 
-When in doubt: "I don't have that data. Here's what I do know: [relevant metrics]"`;
+If you don't have the data: "No data for that. I have: [list what's available]."`;
+
 
   // Inject system context as the first user/model exchange in history.
   // This approach avoids system_instruction API compatibility issues entirely
@@ -45,7 +46,7 @@ When in doubt: "I don't have that data. Here's what I do know: [relevant metrics
     {
       role: 'model' as const,
       parts: [{
-        text: `Got it. I have the brand data and will only give answers backed by the exact metrics provided. I won't invent numbers or give generic advice. Ask me anything about this brand.`,
+        text: `Understood. I'll answer with exact numbers from the data, keep responses under 5 bullets, and say "No data" if something isn't available. Ready.`,
       }],
     },
   ];
