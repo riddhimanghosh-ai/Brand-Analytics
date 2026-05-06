@@ -24,7 +24,6 @@ export default async function HomePage() {
     ga4PropertyId: brand.ga4PropertyId,
     metaAccessToken: brand.metaAccessToken,
     googleAdsCustomerId: brand.googleAdsCustomerId,
-    geminiApiKey: brand.geminiApiKey,
   }));
 
   // If exactly one brand exists, redirect to it (must be outside try/catch)
