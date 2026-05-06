@@ -7,22 +7,22 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContai
 // ─── Widget Catalog ──────────────────────────────────────────────────────────
 const WIDGET_CATALOG = [
   // Shopify
-  { id: 'shopify_revenue', source: 'Shopify', metric: 'revenue', label: '💰 Revenue', unit: '₹', chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'revenue' },
-  { id: 'shopify_orders', source: 'Shopify', metric: 'orders', label: '📦 Orders', unit: '', chartType: 'bar', endpoint: '/api/shopify?action=kpis', path: 'orders' },
-  { id: 'shopify_aov', source: 'Shopify', metric: 'aov', label: '🛒 AOV', unit: '₹', chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'aov' },
-  { id: 'shopify_customers', source: 'Shopify', metric: 'customers', label: '👥 Customers', unit: '', chartType: 'bar', endpoint: '/api/shopify?action=kpis', path: 'uniqueCustomers' },
+  { id: 'shopify_revenue', source: 'Shopify', metric: 'revenue', label: '💰 Revenue', unit: '₹', chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'totalRevenue' },
+  { id: 'shopify_orders', source: 'Shopify', metric: 'orders', label: '📦 Orders', unit: '', chartType: 'bar', endpoint: '/api/shopify?action=kpis', path: 'totalOrders' },
+  { id: 'shopify_aov', source: 'Shopify', metric: 'aov', label: '🛒 AOV', unit: '₹', chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'averageOrderValue' },
+  { id: 'shopify_customers', source: 'Shopify', metric: 'customers', label: '👥 Customers', unit: '', chartType: 'bar', endpoint: '/api/shopify?action=kpis', path: 'totalCustomers' },
   { id: 'shopify_repeat_rate', source: 'Shopify', metric: 'repeat_rate', label: '🔄 Repeat Rate', unit: '%', chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'repeatCustomerRate' },
   { id: 'shopify_refund_rate', source: 'Shopify', metric: 'refund_rate', label: '↩️ Refund Rate', unit: '%', chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'refundRate' },
   // GA4
   { id: 'ga4_sessions', source: 'GA4', metric: 'sessions', label: '📊 Sessions', unit: '', chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'sessions' },
-  { id: 'ga4_users', source: 'GA4', metric: 'users', label: '👤 Users', unit: '', chartType: 'bar', endpoint: '/api/analytics?action=kpis', path: 'totalUsers' },
+  { id: 'ga4_users', source: 'GA4', metric: 'users', label: '👤 Users', unit: '', chartType: 'bar', endpoint: '/api/analytics?action=kpis', path: 'users' },
   { id: 'ga4_bounce', source: 'GA4', metric: 'bounce_rate', label: '📉 Bounce Rate', unit: '%', chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'bounceRate' },
   // Meta
-  { id: 'meta_spend', source: 'Meta', metric: 'spend', label: '💸 Meta Spend', unit: '₹', chartType: 'bar', endpoint: '/api/ads?platform=meta', path: 'kpis.spend' },
-  { id: 'meta_roas', source: 'Meta', metric: 'roas', label: '📈 Meta ROAS', unit: 'x', chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'kpis.roas' },
+  { id: 'meta_spend', source: 'Meta', metric: 'spend', label: '💸 Meta Spend', unit: '₹', chartType: 'bar', endpoint: '/api/ads?platform=meta', path: 'spend' },
+  { id: 'meta_roas', source: 'Meta', metric: 'roas', label: '📈 Meta ROAS', unit: 'x', chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'roas' },
   // Google Ads
-  { id: 'gads_spend', source: 'Google Ads', metric: 'spend', label: '💸 GAds Spend', unit: '₹', chartType: 'bar', endpoint: '/api/ads?platform=google', path: 'kpis.spend' },
-  { id: 'gads_roas', source: 'Google Ads', metric: 'roas', label: '📈 GAds ROAS', unit: 'x', chartType: 'line', endpoint: '/api/ads?platform=google', path: 'kpis.roas' },
+  { id: 'gads_spend', source: 'Google Ads', metric: 'spend', label: '💸 GAds Spend', unit: '₹', chartType: 'bar', endpoint: '/api/ads?platform=google', path: 'spend' },
+  { id: 'gads_roas', source: 'Google Ads', metric: 'roas', label: '📈 GAds ROAS', unit: 'x', chartType: 'line', endpoint: '/api/ads?platform=google', path: 'roas' },
 ];
 
 const SOURCE_COLOR: Record<string, string> = {
