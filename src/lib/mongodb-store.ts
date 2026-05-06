@@ -1,6 +1,36 @@
 import { MongoClient, Db, Collection } from 'mongodb';
 import { randomUUID } from 'crypto';
 
+export interface BrandData {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl?: string | null;
+  shopifyStoreUrl?: string | null;
+  shopifyAccessToken?: string | null;
+  ga4PropertyId?: string | null;
+  ga4ServiceAccountJson?: string | null;
+  metaAppId?: string | null;
+  metaAppSecret?: string | null;
+  metaAccessToken?: string | null;
+  metaAdAccountId?: string | null;
+  googleAdsDevToken?: string | null;
+  googleAdsClientId?: string | null;
+  googleAdsClientSecret?: string | null;
+  googleAdsRefreshToken?: string | null;
+  googleAdsCustomerId?: string | null;
+  geminiApiKey?: string | null;
+  tiktokAccessToken?: string | null;
+  tiktokAdvertiserId?: string | null;
+  klaviyoApiKey?: string | null;
+  pinterestAccessToken?: string | null;
+  pinterestAdAccountId?: string | null;
+  customDashboard?: string | null;
+  savedMetrics?: { name: string; query: string; chartType: string }[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 let cachedDb: Db;
 let cachedClient: MongoClient;
 
@@ -77,17 +107,14 @@ export async function createBrand(data: any) {
       pinterestAccessToken: data.pinterestAccessToken || null,
       pinterestAdAccountId: data.pinterestAdAccountId || null,
       customDashboard: data.customDashboard || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
     const collection = await getBrandsCollection();
-    const result = await collection.insertOne(brandData);
+    await collection.insertOne(brandData);
 
-    return {
-      ...brandData,
-      _id: result.insertedId,
-    };
+    return brandData;
   } catch (error) {
     console.error('Error creating brand:', error);
     throw error;
@@ -102,13 +129,13 @@ export async function updateBrand(slug: string, data: any) {
       {
         $set: {
           ...data,
-          updatedAt: new Date(),
+          updatedAt: new Date().toISOString(),
         },
       },
       { returnDocument: 'after' }
     );
 
-    if (!result.value) return null;
+    if (!result || !result.value) return null;
     const { _id, ...rest } = result.value as any;
     return rest;
   } catch (error) {
