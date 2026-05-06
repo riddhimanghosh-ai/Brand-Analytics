@@ -74,6 +74,9 @@ async function callApi(
   const options: RequestInit = {
     method,
     headers: { 'Content-Type': 'application/json' },
+    // Google Apps Script /exec redirects POST requests — we handle it manually
+    // so the POST body is not dropped when following the redirect
+    redirect: 'manual',
   };
 
   if (body) {
@@ -81,8 +84,25 @@ async function callApi(
   }
 
   try {
-    const response = await fetch(url, options);
-    const json = await response.json();
+    let response = await fetch(url, options);
+
+    // Google Apps Script returns a 302 redirect for POST requests.
+    // Node.js fetch drops the body when following a redirect, so we
+    // catch the redirect and re-issue the full request to the new URL.
+    if (response.status === 301 || response.status === 302) {
+      const redirectUrl = response.headers.get('location');
+      if (redirectUrl) {
+        response = await fetch(redirectUrl, { ...options, redirect: 'follow' });
+      }
+    }
+
+    const text = await response.text();
+    let json: any;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      throw new Error(`Non-JSON response from Apps Script: ${text.slice(0, 200)}`);
+    }
 
     if (!json.success) {
       throw new Error(json.error || 'Unknown error from API');
