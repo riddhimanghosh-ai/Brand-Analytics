@@ -177,8 +177,8 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
     googleAds: !!(brand.googleAdsConnected || brand.googleAdsCustomerId),
     // geminiConnected comes from masked API; geminiApiKey is only set when user types a new one
     ai: !!(brand.geminiConnected || brand.geminiApiKey),
-    tiktok: !!(brand.tiktokConnected || (brand as Record<string, unknown>).tiktokAdvertiserId),
-    klaviyo: !!(brand.klaviyoConnected || (brand as Record<string, unknown>).klaviyoApiKey),
+    tiktok: !!(brand.tiktokConnected || brand.tiktokAdvertiserId),
+    klaviyo: !!(brand.klaviyoConnected || brand.klaviyoApiKey),
   };
 
   const Step = ({ n, text }: { n: number; text: string }) => (
