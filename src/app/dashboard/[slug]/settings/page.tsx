@@ -36,6 +36,149 @@ interface BrandData {
   klaviyoConnected?: boolean;
 }
 
+// ── Shopify dual-connect component ──────────────────────────────────────────
+function ShopifyConnect({
+  slug,
+  brand,
+  isConnected,
+  testing,
+  testResult,
+  onTest,
+  onUpdateField,
+}: {
+  slug: string;
+  brand: BrandData;
+  isConnected: boolean;
+  testing: boolean;
+  testResult?: { success: boolean; message: string };
+  onTest: () => void;
+  onUpdateField: (field: string, value: string) => void;
+}) {
+  const [method, setMethod] = useState<'oauth' | 'manual'>('oauth');
+  const [oauthShop, setOauthShop] = useState('');
+
+  const APP_URL = 'https://main.d1rrlzi8cyg90j.amplifyapp.com';
+
+  const handleOAuthConnect = () => {
+    const shop = oauthShop.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    if (!shop) return;
+    window.location.href = `${APP_URL}/api/shopify/install?shop=${encodeURIComponent(shop)}&slug=${encodeURIComponent(slug)}`;
+  };
+
+  const tabStyle = (active: boolean) => ({
+    flex: 1, padding: '8px 12px', borderRadius: '8px', border: 'none', cursor: 'pointer',
+    fontSize: '13px', fontWeight: active ? '600' : '400',
+    background: active ? 'var(--accent-blue)' : 'transparent',
+    color: active ? '#fff' : 'var(--text-muted)',
+    transition: 'all 0.15s',
+  });
+
+  const Code = ({ children }: { children: string }) => (
+    <code style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '1px 6px', fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)' }}>{children}</code>
+  );
+
+  const Step = ({ n, text }: { n: number; text: string }) => (
+    <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'flex-start' }}>
+      <span style={{ minWidth: '22px', height: '22px', borderRadius: '50%', background: 'var(--accent-blue)', color: '#fff', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>{n}</span>
+      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }} dangerouslySetInnerHTML={{ __html: text }} />
+    </div>
+  );
+
+  return (
+    <>
+      {/* Tab switcher */}
+      <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-primary)', borderRadius: '10px', padding: '4px', marginBottom: '16px' }}>
+        <button style={tabStyle(method === 'oauth')} onClick={() => setMethod('oauth')}>
+          ⚡ One-Click Connect <span style={{ fontSize: '10px', background: 'rgba(34,197,94,0.2)', color: '#22c55e', padding: '1px 6px', borderRadius: '10px', marginLeft: '4px' }}>Recommended</span>
+        </button>
+        <button style={tabStyle(method === 'manual')} onClick={() => setMethod('manual')}>
+          🔑 Manual Token
+        </button>
+      </div>
+
+      {method === 'oauth' ? (
+        <div>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How it works</div>
+            <Step n={1} text="Enter your Shopify store URL below" />
+            <Step n={2} text="Click <strong>Connect via Shopify</strong> — you'll be taken to Shopify's approval screen" />
+            <Step n={3} text="Click <strong>Install</strong> on the Shopify screen — you'll be redirected back here, fully connected" />
+            <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '6px', padding: '10px 12px', marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              ✅ No token creation, no scopes setup, no copy-pasting. Shopify handles everything.
+            </div>
+          </div>
+
+          <div className="form-group" style={{ marginBottom: '12px' }}>
+            <label className="form-label">Store URL</label>
+            <input
+              className="form-input mono"
+              value={oauthShop}
+              onChange={(e) => setOauthShop(e.target.value)}
+              placeholder="your-store.myshopify.com"
+              onKeyDown={(e) => e.key === 'Enter' && handleOAuthConnect()}
+            />
+          </div>
+
+          <button
+            onClick={handleOAuthConnect}
+            disabled={!oauthShop.trim()}
+            style={{
+              padding: '10px 20px', borderRadius: '10px', border: 'none', cursor: oauthShop.trim() ? 'pointer' : 'default',
+              background: oauthShop.trim() ? 'var(--accent-blue)' : 'var(--bg-card)',
+              color: oauthShop.trim() ? '#fff' : 'var(--text-dim)',
+              fontSize: '14px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px',
+            }}
+          >
+            <span>🛍️</span> Connect via Shopify
+          </button>
+
+          {isConnected && (
+            <div style={{ marginTop: '12px', fontSize: '13px', color: '#22c55e' }}>
+              ✅ Currently connected to <strong>{brand.shopifyStoreUrl}</strong>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div>
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
+            <Step n={1} text="Go to <strong>Shopify Admin</strong> → Settings → Apps and sales channels" />
+            <Step n={2} text='Click <strong>"Develop apps"</strong> → Allow custom app development' />
+            <Step n={3} text='Create a new app → Configure <strong>Admin API access scopes</strong>: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">read_orders, read_products, read_customers, read_analytics, read_inventory</code>' />
+            <Step n={4} text='Click <strong>Install app</strong> → copy the <strong>Admin API access token</strong> (starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">shpat_</code>)' />
+            <Step n={5} text='Enter your store URL as <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">your-store.myshopify.com</code> (no https://)' />
+            <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '6px', padding: '10px 12px', marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+              <strong>Note:</strong> Custom Metrics requires the <Code>read_analytics</Code> scope. Not all Shopify plans include Analytics API access.
+            </div>
+          </div>
+
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Store URL</label>
+              <input className="form-input mono" value={brand.shopifyStoreUrl || ''} onChange={(e) => onUpdateField('shopifyStoreUrl', e.target.value)} placeholder="your-store.myshopify.com" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Admin API Access Token</label>
+              <input className="form-input mono" type="password" value={brand.shopifyAccessToken || ''} onChange={(e) => onUpdateField('shopifyAccessToken', e.target.value)} placeholder="shpat_..." />
+            </div>
+          </div>
+
+          {brand.shopifyStoreUrl && (
+            <div>
+              <button onClick={onTest} className="test-connection-btn" disabled={testing}>
+                {testing ? '⏳ Testing...' : '🔌 Test Connection'}
+              </button>
+              {testResult && (
+                <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>{testResult.message}</div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function SettingsPage({ params: paramsPromise }: { params: Promise<{ slug: string }> }) {
   const router = useRouter();
   const [params, setParams] = useState<{ slug: string } | null>(null);
@@ -218,38 +361,16 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           </div>
           <div className="form-card-desc">Enables orders, products, customers, revenue analytics, and Custom Metrics (ShopifyQL)</div>
 
-          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
-            <Step n={1} text="Go to <strong>Shopify Admin</strong> → Settings → Apps and sales channels" />
-            <Step n={2} text='Click <strong>"Develop apps"</strong> → Allow custom app development' />
-            <Step n={3} text='Create a new app → Configure <strong>Admin API access scopes</strong>. <strong>REQUIRED for Custom Metrics:</strong> Include <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">read_analytics</code>. Also add: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">read_orders, read_products, read_customers, read_inventory, read_fulfillments</code>' />
-            <Step n={4} text='Click <strong>Install app</strong> → copy the <strong>Admin API access token</strong> (shown once, starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">shpat_</code>)' />
-            <Step n={5} text='Enter your store URL as <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">your-store.myshopify.com</code> (no https://)' />
-            <div style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '6px', padding: '10px 12px', marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-              <strong>Note:</strong> Custom Metrics feature requires the <Code>read_analytics</Code> scope. If you're seeing "ShopifyQL is not available" error, regenerate your access token with this scope included. Not all Shopify plans include Analytics API access.
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Store URL</label>
-              <input className="form-input mono" value={brand.shopifyStoreUrl || ''} onChange={(e) => updateField('shopifyStoreUrl', e.target.value)} placeholder="your-store.myshopify.com" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Admin API Access Token</label>
-              <input className="form-input mono" type="password" value={brand.shopifyAccessToken || ''} onChange={(e) => updateField('shopifyAccessToken', e.target.value)} placeholder="shpat_..." />
-            </div>
-          </div>
-          {brand.shopifyStoreUrl && (
-            <div>
-              <button onClick={testShopify} className="test-connection-btn" disabled={testing.shopify}>
-                {testing.shopify ? '⏳ Testing...' : '🔌 Test Connection'}
-              </button>
-              {testResults.shopify && (
-                <div className={`test-result ${testResults.shopify.success ? 'success' : 'error'}`}>{testResults.shopify.message}</div>
-              )}
-            </div>
-          )}
+          {/* Method tabs */}
+          <ShopifyConnect
+            slug={params?.slug ?? ''}
+            brand={brand}
+            isConnected={isConnected.shopify}
+            testing={testing.shopify}
+            testResult={testResults.shopify}
+            onTest={testShopify}
+            onUpdateField={updateField}
+          />
         </div>
 
         {/* ── GOOGLE ANALYTICS 4 ── */}
