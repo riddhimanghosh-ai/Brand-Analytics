@@ -35,6 +35,7 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
   const [testing, setTesting] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState(false);
@@ -64,14 +65,17 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
     if (!brand || !params) return;
     setSaving(true);
     setSaved(false);
+    setSaveError('');
     try {
-      // Filter out masked values (don't send back masked tokens)
-      const payload = { ...brand };
-      for (const key of Object.keys(payload) as (keyof BrandData)[]) {
-        const val = payload[key] as string | null;
-        if (typeof val === 'string' && val.includes('••••')) {
-          (payload as Record<string, string | null>)[key] = null; // Don't overwrite with masked value
-        }
+      // Only send fields the user has actually set (non-empty strings)
+      // Omit fields that are undefined/empty so we don't accidentally null them out
+      const payload: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(brand)) {
+        // Skip connected booleans from masked response
+        if (key.endsWith('Connected')) continue;
+        // Skip blank/undefined — don't overwrite DB value with nothing
+        if (val === undefined || val === '' || val === null) continue;
+        payload[key] = val;
       }
       const res = await fetch(`/api/brands/${params.slug}`, {
         method: 'PUT',
@@ -82,7 +86,12 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
         setSaved(true);
         router.refresh();
         setTimeout(() => setSaved(false), 3000);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSaveError((err as { error?: string }).error || 'Failed to save. Please try again.');
       }
+    } catch {
+      setSaveError('Network error. Please check your connection and try again.');
     } finally {
       setSaving(false);
     }
@@ -423,11 +432,21 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
         </div>
 
         {/* Save */}
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>
-            {saving ? '⏳ Saving...' : saved ? '✅ Saved!' : '💾 Save All Changes'}
-          </button>
-          {saved && <span style={{ color: 'var(--accent-emerald)', fontSize: '13px' }}>Changes saved successfully</span>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+              {saving ? '⏳ Saving...' : saved ? '✅ Saved!' : '💾 Save All Changes'}
+            </button>
+            {saved && <span style={{ color: 'var(--accent-emerald)', fontSize: '13px' }}>✅ Changes saved — AI consultant will use the new key immediately</span>}
+          </div>
+          {saveError && (
+            <div style={{
+              padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
+              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444',
+            }}>
+              ❌ {saveError}
+            </div>
+          )}
         </div>
 
         {/* ── DANGER ZONE ── */}

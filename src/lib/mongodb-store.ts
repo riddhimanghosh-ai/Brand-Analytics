@@ -144,8 +144,9 @@ export async function updateBrand(slug: string, data: any) {
       { returnDocument: 'after' }
     );
 
-    if (!result || !result.value) return null;
-    const { _id, ...rest } = result.value as any;
+    // MongoDB driver v5+ returns the document directly (not { value: doc })
+    if (!result) return null;
+    const { _id, ...rest } = result as any;
     return rest;
   } catch (error) {
     console.error('Error updating brand:', error);

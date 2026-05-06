@@ -25,7 +25,7 @@ export function ChatPanel({ slug, brandName, hasAI = true }: { slug: string; bra
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
   }, [messages]);
 
   useEffect(() => {
@@ -45,13 +45,14 @@ export function ChatPanel({ slug, brandName, hasAI = true }: { slug: string; bra
     // Add empty assistant message for streaming
     setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
+    const snapshotMessages = messages;
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slug,
-          messages: [...messages, userMsg].map((m) => ({
+          messages: [...snapshotMessages, userMsg].map((m) => ({
             role: m.role,
             content: m.content,
           })),
@@ -59,12 +60,12 @@ export function ChatPanel({ slug, brandName, hasAI = true }: { slug: string; bra
       });
 
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         setMessages((prev) => {
           const updated = [...prev];
           updated[updated.length - 1] = {
             role: 'assistant',
-            content: `Error: ${err.error || 'Failed to get response'}`,
+            content: `❌ ${(err as { error?: string }).error || 'Failed to get response. Check your Gemini API key in Settings.'}`,
           };
           return updated;
         });
@@ -76,46 +77,47 @@ export function ChatPanel({ slug, brandName, hasAI = true }: { slug: string; bra
       const decoder = new TextDecoder();
 
       if (reader) {
-        let assistantContent = '';
+        let accumulated = '';
+        let rafPending = false;
+
+        const flush = () => {
+          const snapshot = accumulated;
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'assistant', content: snapshot };
+            return updated;
+          });
+          rafPending = false;
+        };
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
-          const text = decoder.decode(value);
-          const lines = text.split('\n');
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]') break;
-
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.text) {
-                  assistantContent += parsed.text;
-                  setMessages((prev) => {
-                    const updated = [...prev];
-                    updated[updated.length - 1] = {
-                      role: 'assistant',
-                      content: assistantContent,
-                    };
-                    return updated;
-                  });
+          const chunk = decoder.decode(value, { stream: true });
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            const payload = line.slice(6).trim();
+            if (payload === '[DONE]') break;
+            try {
+              const parsed = JSON.parse(payload);
+              if (parsed.text) {
+                accumulated += parsed.text;
+                if (!rafPending) {
+                  rafPending = true;
+                  requestAnimationFrame(flush);
                 }
-              } catch {
-                // Skip non-JSON lines
               }
-            }
+            } catch { /* skip */ }
           }
         }
+        if (accumulated) flush();
       }
-    } catch (error) {
+    } catch {
       setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1] = {
           role: 'assistant',
-          content: 'Sorry, I encountered an error. Please try again.',
+          content: '❌ Network error. Please try again.',
         };
         return updated;
       });

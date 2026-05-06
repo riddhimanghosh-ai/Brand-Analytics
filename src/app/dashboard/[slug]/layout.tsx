@@ -62,7 +62,20 @@ export default async function DashboardLayout({
 
         {/* Navigation */}
         <nav className="sidebar-nav">
-          <div className="nav-section-label">Dashboard</div>
+          <div className="nav-section-label">Quick Access</div>
+
+          <NavLink href={`/dashboard/${slug}/custom`}>
+            <span className="nav-icon">🎛️</span>
+            My Dashboard
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/chat`} disabled={!connections.gemini}>
+            <span className="nav-icon">🤖</span>
+            AI Consultant
+            {connections.gemini && <span className="nav-badge">AI</span>}
+          </NavLink>
+
+          <div className="nav-section-label">Analytics</div>
 
           <NavLink href={`/dashboard/${slug}`} exact>
             <span className="nav-icon">📊</span>
@@ -75,20 +88,17 @@ export default async function DashboardLayout({
             {connections.shopify && <span className="nav-badge">Live</span>}
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/cro`} disabled={!connections.shopify}>
-            <span className="nav-icon">🎯</span>
-            CRO Optimization
-          </NavLink>
-
-          <NavLink href={`/dashboard/${slug}/metrics`} disabled={!connections.shopify}>
-            <span className="nav-icon">📐</span>
-            Custom Metrics
-          </NavLink>
-
           <NavLink href={`/dashboard/${slug}/analytics`} disabled={!connections.ga4}>
             <span className="nav-icon">📈</span>
             Google Analytics
           </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/forecast`} disabled={!connections.shopify}>
+            <span className="nav-icon">📉</span>
+            Forecast
+          </NavLink>
+
+          <div className="nav-section-label">Ads & Channels</div>
 
           <NavLink
             href={`/dashboard/${slug}/ads`}
@@ -115,19 +125,16 @@ export default async function DashboardLayout({
             Social Comments
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/forecast`} disabled={!connections.shopify}>
-            <span className="nav-icon">📉</span>
-            Forecast
+          <div className="nav-section-label">Tools</div>
+
+          <NavLink href={`/dashboard/${slug}/cro`} disabled={!connections.shopify}>
+            <span className="nav-icon">🎯</span>
+            CRO Optimization
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/custom`}>
-            <span className="nav-icon">🎛️</span>
-            My Dashboard
-          </NavLink>
-
-          <NavLink href={`/dashboard/${slug}/chat`} disabled={!connections.gemini}>
-            <span className="nav-icon">🤖</span>
-            AI Consultant
+          <NavLink href={`/dashboard/${slug}/metrics`} disabled={!connections.shopify}>
+            <span className="nav-icon">📐</span>
+            Custom Metrics
           </NavLink>
 
           <div className="nav-section-label">Settings</div>

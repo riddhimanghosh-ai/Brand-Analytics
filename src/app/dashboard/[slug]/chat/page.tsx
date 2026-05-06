@@ -73,7 +73,7 @@ export default function ChatPage() {
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
   }, [messages]);
 
   useEffect(() => {
@@ -84,10 +84,12 @@ export default function ChatPage() {
     if (!text.trim() || isLoading) return;
 
     const userMsg: ChatMessage = { role: 'user', content: text.trim() };
-    setMessages((prev) => [...prev, userMsg]);
+    // Snapshot messages before state update to avoid stale closure in fetch body
+    const snapshotMessages = messages;
+
+    setMessages((prev) => [...prev, userMsg, { role: 'assistant', content: '' }]);
     setInput('');
     setIsLoading(true);
-    setMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
     try {
       const res = await fetch('/api/chat', {
@@ -95,15 +97,16 @@ export default function ChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           slug,
-          messages: [...messages, userMsg].map((m) => ({ role: m.role, content: m.content })),
+          messages: [...snapshotMessages, userMsg].map((m) => ({ role: m.role, content: m.content })),
         }),
       });
 
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
+        const errMsg = (err as { error?: string }).error || 'Failed to get response. Check that your Gemini API key is saved in Settings.';
         setMessages((prev) => {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: 'assistant', content: `Error: ${err.error || 'Failed to get response'}` };
+          updated[updated.length - 1] = { role: 'assistant', content: `❌ ${errMsg}` };
           return updated;
         });
         return;
@@ -113,34 +116,49 @@ export default function ChatPage() {
       const decoder = new TextDecoder();
 
       if (reader) {
-        let assistantContent = '';
+        let accumulated = '';
+        let rafPending = false;
+
+        const flush = () => {
+          const snapshot = accumulated;
+          setMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'assistant', content: snapshot };
+            return updated;
+          });
+          rafPending = false;
+        };
+
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          const text = decoder.decode(value);
-          for (const line of text.split('\n')) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6);
-              if (data === '[DONE]') break;
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.text) {
-                  assistantContent += parsed.text;
-                  setMessages((prev) => {
-                    const updated = [...prev];
-                    updated[updated.length - 1] = { role: 'assistant', content: assistantContent };
-                    return updated;
-                  });
+
+          const chunk = decoder.decode(value, { stream: true });
+          for (const line of chunk.split('\n')) {
+            if (!line.startsWith('data: ')) continue;
+            const payload = line.slice(6).trim();
+            if (payload === '[DONE]') break;
+            try {
+              const parsed = JSON.parse(payload);
+              if (parsed.text) {
+                accumulated += parsed.text;
+                // Batch DOM updates via rAF — prevents per-chunk re-renders that freeze UI
+                if (!rafPending) {
+                  rafPending = true;
+                  requestAnimationFrame(flush);
                 }
-              } catch { /* skip non-JSON */ }
-            }
+              }
+            } catch { /* skip partial/non-JSON lines */ }
           }
         }
+
+        // Final flush for any remaining content
+        if (accumulated) flush();
       }
     } catch {
       setMessages((prev) => {
         const updated = [...prev];
-        updated[updated.length - 1] = { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' };
+        updated[updated.length - 1] = { role: 'assistant', content: '❌ Network error. Please check your connection and try again.' };
         return updated;
       });
     } finally {
