@@ -93,6 +93,11 @@ export default async function DashboardLayout({
             Google Analytics
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/cro`} disabled={!connections.shopify}>
+            <span className="nav-icon">🎯</span>
+            CRO Optimization
+          </NavLink>
+
           <NavLink href={`/dashboard/${slug}/forecast`} disabled={!connections.shopify}>
             <span className="nav-icon">📉</span>
             Forecast
@@ -126,11 +131,6 @@ export default async function DashboardLayout({
           </NavLink>
 
           <div className="nav-section-label">Tools</div>
-
-          <NavLink href={`/dashboard/${slug}/cro`} disabled={!connections.shopify}>
-            <span className="nav-icon">🎯</span>
-            CRO Optimization
-          </NavLink>
 
           <NavLink href={`/dashboard/${slug}/metrics`} disabled={!connections.shopify}>
             <span className="nav-icon">📐</span>

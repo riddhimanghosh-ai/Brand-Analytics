@@ -255,6 +255,7 @@ export default function ChatPage() {
             width: '36px', height: '36px', borderRadius: '10px',
             background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px',
+            flexShrink: 0,
           }}>✨</div>
           <div>
             <div style={{ fontWeight: '600', fontSize: '15px' }}>AI Consultant</div>
@@ -262,10 +263,35 @@ export default function ChatPage() {
               Powered by Gemini · Analysing your brand data in real time
             </div>
           </div>
-          <div style={{
-            marginLeft: 'auto', width: '8px', height: '8px', borderRadius: '50%',
-            background: '#22c55e', boxShadow: '0 0 6px #22c55e',
-          }} />
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '8px', height: '8px', borderRadius: '50%',
+              background: '#22c55e', boxShadow: '0 0 6px #22c55e',
+            }} />
+            <a
+              href={`/dashboard/${slug}`}
+              title="Close AI Consultant"
+              style={{
+                width: '32px', height: '32px', borderRadius: '8px',
+                background: 'var(--bg-card)', border: '1px solid var(--glass-border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'var(--text-muted)', fontSize: '16px', textDecoration: 'none',
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(239,68,68,0.1)';
+                e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)';
+                e.currentTarget.style.color = '#ef4444';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--bg-card)';
+                e.currentTarget.style.borderColor = 'var(--glass-border)';
+                e.currentTarget.style.color = 'var(--text-muted)';
+              }}
+            >
+              ✕
+            </a>
+          </div>
         </div>
 
         {/* Messages */}
