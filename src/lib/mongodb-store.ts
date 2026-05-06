@@ -42,7 +42,11 @@ async function connectDb() {
     throw new Error('MONGODB_URI environment variable is not set. Please add it in Amplify → Environment variables.');
   }
 
-  const client = new MongoClient(uri);
+  const client = new MongoClient(uri, {
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 5000,
+    socketTimeoutMS: 10000,
+  });
   await client.connect();
   cachedClient = client;
   cachedDb = client.db('analytics-dashboard');
