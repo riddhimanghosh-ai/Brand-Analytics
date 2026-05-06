@@ -7,8 +7,8 @@ export async function streamChat(
   brandContext: string
 ): Promise<ReadableStream<Uint8Array>> {
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
+  // systemInstruction MUST be on getGenerativeModel (not startChat) in SDK v0.21+
   const systemPrompt = `You are a DATA-DRIVEN e-commerce analyst. Your purpose is to answer questions about this brand using ONLY the data provided below.
 
 ${brandContext}
@@ -63,15 +63,18 @@ Say: "I don't have that data. Here's what I DO know: [relevant metrics]"
 
 Remember: You're an analyst with access to real business data. Use it or admit you don't have it. No BS.`;
 
+  // Pass systemInstruction at model level — required for SDK v0.21+
+  const model = genAI.getGenerativeModel({
+    model: 'gemini-2.0-flash',
+    systemInstruction: systemPrompt,
+  });
+
   const history = messages.slice(0, -1).map((m) => ({
     role: m.role === 'user' ? 'user' as const : 'model' as const,
     parts: [{ text: m.content }],
   }));
 
-  const chat = model.startChat({
-    history,
-    systemInstruction: systemPrompt,
-  });
+  const chat = model.startChat({ history });
 
   const lastMessage = messages[messages.length - 1];
   const result = await chat.sendMessageStream(lastMessage.content);

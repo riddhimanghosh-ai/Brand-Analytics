@@ -26,6 +26,14 @@ interface BrandData {
   klaviyoApiKey?: string | null;
   pinterestAccessToken?: string | null;
   pinterestAdAccountId?: string | null;
+  // Connection booleans from masked API response
+  shopifyConnected?: boolean;
+  ga4Connected?: boolean;
+  metaConnected?: boolean;
+  googleAdsConnected?: boolean;
+  geminiConnected?: boolean;
+  tiktokConnected?: boolean;
+  klaviyoConnected?: boolean;
 }
 
 export default function SettingsPage({ params: paramsPromise }: { params: Promise<{ slug: string }> }) {
@@ -163,11 +171,14 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   if (!brand) return null;
 
   const isConnected = {
-    shopify: !!(brand.shopifyStoreUrl),
-    ga4: !!brand.ga4PropertyId,
-    meta: !!brand.metaAccessToken,
-    googleAds: !!(brand.googleAdsCustomerId),
-    ai: !!(brand.geminiApiKey),
+    shopify: !!(brand.shopifyConnected || brand.shopifyStoreUrl),
+    ga4: !!(brand.ga4Connected || brand.ga4PropertyId),
+    meta: !!(brand.metaConnected || brand.metaAccessToken),
+    googleAds: !!(brand.googleAdsConnected || brand.googleAdsCustomerId),
+    // geminiConnected comes from masked API; geminiApiKey is only set when user types a new one
+    ai: !!(brand.geminiConnected || brand.geminiApiKey),
+    tiktok: !!(brand.tiktokConnected || (brand as Record<string, unknown>).tiktokAdvertiserId),
+    klaviyo: !!(brand.klaviyoConnected || (brand as Record<string, unknown>).klaviyoApiKey),
   };
 
   const Step = ({ n, text }: { n: number; text: string }) => (
@@ -361,22 +372,47 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
         <div className="form-card">
           <div className="form-card-title">
             🤖 AI Consultant (Gemini)
-            <span className={`badge ${isConnected.ai ? 'green' : 'violet'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
-              {isConnected.ai ? 'Custom Key' : 'Using Global Key'}
+            <span className={`badge ${isConnected.ai ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
+              {isConnected.ai ? '🔑 Key Saved' : 'Not Connected'}
             </span>
           </div>
-          <div className="form-card-desc">Powers the AI chat assistant with real-time Shopify data for CRO consulting</div>
+          <div className="form-card-desc">Powers the AI chat assistant with real-time brand data for consulting</div>
 
           <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
             <Step n={1} text='Go to <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent-blue)">aistudio.google.com</a> → Sign in with Google' />
             <Step n={2} text='Click <strong>"Get API Key"</strong> → Create API Key in new project (free tier: 15 RPM, 1M tokens/day)' />
-            <Step n={3} text='Copy the key (starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">AIza</code>) and paste below — or set <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">GEMINI_API_KEY</code> in your <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">.env.local</code> to share across all brands' />
+            <Step n={3} text='Copy the key (starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">AIza</code>) and paste below' />
           </div>
 
+          {isConnected.ai && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px',
+              background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
+              borderRadius: '8px', marginBottom: '12px', fontSize: '13px',
+            }}>
+              <span style={{ fontSize: '16px' }}>✅</span>
+              <div>
+                <strong style={{ color: 'var(--text-primary)' }}>API key is saved and active</strong>
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  For security, the key is not shown. Enter a new key below only if you want to replace it.
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="form-group">
-            <label className="form-label">Gemini API Key (optional if .env is set)</label>
-            <input className="form-input mono" type="password" value={brand.geminiApiKey || ''} onChange={(e) => updateField('geminiApiKey', e.target.value)} placeholder="AIza..." />
+            <label className="form-label">
+              {isConnected.ai ? 'Replace Gemini API Key (leave blank to keep current)' : 'Gemini API Key'}
+            </label>
+            <input
+              className="form-input mono"
+              type="password"
+              value={brand.geminiApiKey || ''}
+              onChange={(e) => updateField('geminiApiKey', e.target.value)}
+              placeholder={isConnected.ai ? 'Enter new key only to replace existing…' : 'AIza...'}
+              autoComplete="new-password"
+            />
           </div>
         </div>
 
