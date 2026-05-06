@@ -98,6 +98,18 @@ export default async function DashboardLayout({
             Ads Manager
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/tiktok`} disabled={!connections.tiktok}>
+            <span className="nav-icon">🎵</span>
+            TikTok Ads
+            {connections.tiktok && <span className="nav-badge">Live</span>}
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/klaviyo`} disabled={!connections.klaviyo}>
+            <span className="nav-icon">📧</span>
+            Email Marketing
+            {connections.klaviyo && <span className="nav-badge">Live</span>}
+          </NavLink>
+
           <NavLink href={`/dashboard/${slug}/social`} disabled={!connections.metaAds}>
             <span className="nav-icon">💬</span>
             Social Comments
