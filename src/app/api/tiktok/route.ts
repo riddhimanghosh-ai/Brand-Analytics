@@ -1,4 +1,4 @@
-import { getBrand } from '@/lib/google-sheets-store';
+import { getBrand } from '@/lib/mongodb-store';
 import { getKPIs, getCampaigns } from '@/lib/services/tiktok';
 import { NextResponse } from 'next/server';
 

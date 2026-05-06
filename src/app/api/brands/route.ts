@@ -1,4 +1,4 @@
-import { getBrands, createBrand } from '@/lib/google-sheets-store';
+import { getBrands, createBrand } from '@/lib/mongodb-store';
 import { maskBrand, maskBrands } from '@/lib/mask-brand';
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';

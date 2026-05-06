@@ -1,6 +1,6 @@
 import { ConversionFunnel } from '@/components/ConversionFunnel';
 import { CROCharts } from '@/components/CROCharts';
-import { getBrand } from '@/lib/google-sheets-store';
+import { getBrand } from '@/lib/mongodb-store';
 
 export const dynamic = 'force-dynamic';
 

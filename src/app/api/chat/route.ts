@@ -1,4 +1,4 @@
-import { getBrand } from '@/lib/google-sheets-store';
+import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import { streamChat } from '@/lib/services/chat';
 import * as shopify from '@/lib/services/shopify';

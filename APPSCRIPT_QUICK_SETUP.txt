@@ -1,0 +1,122 @@
+================================================================================
+GOOGLE APPS SCRIPT - QUICK SETUP (Copy This)
+================================================================================
+
+STEP 1: Copy the Code
+─────────────────────
+File: APPSCRIPT_CODE.gs
+→ Copy ALL the code from this file
+
+
+STEP 2: Create Google Sheet
+──────────────────────────
+1. Go to sheets.google.com
+2. Click "+ New" → "Spreadsheet"
+3. Name: "Analytics Dashboard Database"
+4. Create
+
+Get Sheet ID from URL:
+https://docs.google.com/spreadsheets/d/[YOUR_SHEET_ID]/edit
+                                        ↑ Copy this
+
+
+STEP 3: Open Apps Script
+───────────────────────
+1. In Google Sheet: Tools → Script editor
+2. Delete all existing code
+3. Paste the code from APPSCRIPT_CODE.gs
+4. Replace at the top (lines 9-11):
+
+   const SHEET_ID = 'YOUR_SHEET_ID_HERE';
+   const SHEET_NAME = 'brands';
+   const ENCRYPTION_KEY = 'your-secret-encryption-key-32-chars-min';
+
+   CHANGE TO:
+
+   const SHEET_ID = '1a2b3c4d5e6f...'; // Your actual Sheet ID
+   const SHEET_NAME = 'brands';
+   const ENCRYPTION_KEY = 'my-super-secret-key-at-least-32-chars';
+
+5. Click "Save" (Ctrl+S)
+
+
+STEP 4: Deploy as Web App
+──────────────────────────
+1. Click "Deploy" → "New deployment"
+2. Click gear icon → Select "Web app"
+3. Execute as: [Your email]
+4. Who has access: "Anyone"
+5. Click "Deploy"
+6. COPY the URL shown:
+
+   https://script.google.com/macros/d/[DEPLOYMENT_ID]/usercallback
+                                       ↑ Copy this whole URL
+
+
+STEP 5: Update .env.local
+─────────────────────────
+In your project root, update .env.local:
+
+   GOOGLE_SHEETS_API_URL=https://script.google.com/macros/d/YOUR_DEPLOYMENT_ID/usercallback
+   GOOGLE_SHEETS_API_SECRET=my-super-secret-key-at-least-32-chars
+   ENCRYPTION_KEY=my-super-secret-key-at-least-32-chars
+
+⚠️  IMPORTANT: Use the SAME encryption key in all 3 places:
+   - Apps Script (line 11: ENCRYPTION_KEY)
+   - .env.local (GOOGLE_SHEETS_API_SECRET)
+   - .env.local (ENCRYPTION_KEY)
+
+
+STEP 6: Restart and Test
+────────────────────────
+1. Stop dev server (Ctrl+C)
+2. Start dev server: npm run dev
+3. Go to http://localhost:3000/brands/new
+4. Create a test brand
+5. Check Google Sheet - brand should appear!
+
+
+TROUBLESHOOTING
+═══════════════
+
+Problem: URL shows error
+→ Make sure you selected "Anyone" when deploying (not just you)
+→ Check SHEET_ID is correct (copy from sheet URL)
+→ Redeploy if needed
+
+Problem: Spreadsheet not found
+→ Verify SHEET_ID exactly matches your Google Sheet
+→ Check you have access to the sheet
+
+Problem: Still not working
+→ Check browser console (F12) for detailed error
+→ Verify encryption key is exactly the same in all 3 places
+→ Try deleting the deployment and creating a new one
+
+Problem: Previous error about "local filesystem fallback"
+→ This means Google Sheets isn't configured yet
+→ Follow these steps to fix it
+→ Once done, it will use Google Sheets instead
+
+
+QUICK TEST (After deployment)
+══════════════════════════════
+
+Open this in browser (replace YOUR_DEPLOYMENT_ID):
+https://script.google.com/macros/d/YOUR_DEPLOYMENT_ID/usercallback?method=GET
+
+Should return:
+[]
+
+(Empty array - no brands yet)
+
+Once you create a brand via the app, this should return your brand data!
+
+
+FILES REFERENCE
+════════════════
+- APPSCRIPT_CODE.gs ......... Copy this into Apps Script
+- GOOGLE_SHEETS_SETUP.md .... Full detailed setup guide
+- APPSCRIPT_QUICK_SETUP.txt . This file (quick reference)
+
+================================================================================

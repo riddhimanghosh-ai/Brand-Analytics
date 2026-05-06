@@ -1,4 +1,4 @@
-import { getBrand } from '@/lib/google-sheets-store';
+import { getBrand } from '@/lib/mongodb-store';
 import { formatCurrency, formatNumber, percentChange, formatPercent } from '@/lib/utils';
 import * as shopifyService from '@/lib/services/shopify';
 import Link from 'next/link';

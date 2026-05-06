@@ -1,4 +1,4 @@
-import { getBrand } from '@/lib/google-sheets-store';
+import { getBrand } from '@/lib/mongodb-store';
 import { getKPIs, getCampaigns, getFlows } from '@/lib/services/klaviyo';
 import { NextResponse } from 'next/server';
 

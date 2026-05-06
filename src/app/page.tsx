@@ -1,4 +1,4 @@
-import { getBrands } from '@/lib/google-sheets-store';
+import { getBrands } from '@/lib/mongodb-store';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { BrandCard } from '@/components/BrandCard';

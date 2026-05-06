@@ -1,4 +1,4 @@
-import { getBrand } from '@/lib/google-sheets-store';
+import { getBrand } from '@/lib/mongodb-store';
 import { getPageComments, analyzeSentiment } from '@/lib/services/social';
 import { NextResponse } from 'next/server';
 

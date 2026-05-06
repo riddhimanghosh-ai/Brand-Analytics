@@ -1,4 +1,4 @@
-import { getBrand, updateBrand, deleteBrand } from '@/lib/google-sheets-store';
+import { getBrand, updateBrand, deleteBrand } from '@/lib/mongodb-store';
 import { maskBrand } from '@/lib/mask-brand';
 import { NextResponse } from 'next/server';
 

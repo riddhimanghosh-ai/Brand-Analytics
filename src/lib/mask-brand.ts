@@ -9,7 +9,7 @@
  * Any new credential field added to BrandData MUST be listed here.
  */
 
-import type { BrandData } from './google-sheets-store';
+import type { BrandData } from './mongodb-store';
 
 export type MaskedBrand = Omit<
   BrandData,
