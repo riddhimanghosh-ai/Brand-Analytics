@@ -45,6 +45,12 @@ export async function PUT(
       googleAdsRefreshToken: body.googleAdsRefreshToken,
       googleAdsCustomerId: body.googleAdsCustomerId,
       geminiApiKey: body.geminiApiKey,
+      tiktokAccessToken: body.tiktokAccessToken,
+      tiktokAdvertiserId: body.tiktokAdvertiserId,
+      klaviyoApiKey: body.klaviyoApiKey,
+      pinterestAccessToken: body.pinterestAccessToken,
+      pinterestAdAccountId: body.pinterestAdAccountId,
+      customDashboard: body.customDashboard,
     });
 
     // Never return raw secrets to the client

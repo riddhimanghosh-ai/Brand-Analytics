@@ -32,6 +32,16 @@ export interface BrandData {
   googleAdsRefreshToken?: string | null;
   googleAdsCustomerId?: string | null;
   geminiApiKey?: string | null;
+  // TikTok Ads
+  tiktokAccessToken?: string | null;
+  tiktokAdvertiserId?: string | null;
+  // Klaviyo
+  klaviyoApiKey?: string | null;
+  // Pinterest Ads
+  pinterestAccessToken?: string | null;
+  pinterestAdAccountId?: string | null;
+  // Custom dashboard layout
+  customDashboard?: string | null;
   savedMetrics?: { name: string; query: string; chartType: string }[];
   createdAt: string;
   updatedAt: string;

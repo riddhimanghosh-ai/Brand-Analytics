@@ -21,6 +21,11 @@ interface BrandData {
   googleAdsRefreshToken: string | null;
   googleAdsCustomerId: string | null;
   geminiApiKey: string | null;
+  tiktokAccessToken?: string | null;
+  tiktokAdvertiserId?: string | null;
+  klaviyoApiKey?: string | null;
+  pinterestAccessToken?: string | null;
+  pinterestAdAccountId?: string | null;
 }
 
 export default function SettingsPage({ params: paramsPromise }: { params: Promise<{ slug: string }> }) {
@@ -363,6 +368,57 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           <div className="form-group">
             <label className="form-label">Gemini API Key (optional if .env is set)</label>
             <input className="form-input mono" type="password" value={brand.geminiApiKey || ''} onChange={(e) => updateField('geminiApiKey', e.target.value)} placeholder="AIza..." />
+          </div>
+        </div>
+
+        {/* ── TIKTOK ADS ── */}
+        <div className="form-card">
+          <div className="form-card-title">
+            🎵 TikTok Ads
+            <span className={`badge ${(brand as unknown as Record<string,string|null>).tiktokAdvertiserId ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
+              {(brand as unknown as Record<string,string|null>).tiktokAdvertiserId ? 'Connected' : 'Not Connected'}
+            </span>
+          </div>
+          <div className="form-card-desc">Track TikTok Ads spend, ROAS, video views, and conversions</div>
+
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
+            <Step n={1} text='Go to <a href="https://ads.tiktok.com" target="_blank" style="color:var(--accent-blue)">TikTok Ads Manager</a> → Your Account → <strong>Assets → Business Account</strong>' />
+            <Step n={2} text='Go to <strong>My Apps</strong> → Create app → Select <strong>Standard Access</strong> → Enable Marketing API' />
+            <Step n={3} text='In your app dashboard, copy the <strong>Access Token</strong>' />
+            <Step n={4} text='Your <strong>Advertiser ID</strong> is shown in the URL: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">ads.tiktok.com/i18n/dashboard?aadvid=XXXXXXXXXX</code>' />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Access Token</label>
+            <input className="form-input mono" type="password" value={(brand as unknown as Record<string,string>).tiktokAccessToken || ''} onChange={(e) => updateField('tiktokAccessToken', e.target.value)} placeholder="TikTok access token" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Advertiser ID</label>
+            <input className="form-input mono" value={(brand as unknown as Record<string,string>).tiktokAdvertiserId || ''} onChange={(e) => updateField('tiktokAdvertiserId', e.target.value)} placeholder="1234567890" />
+          </div>
+        </div>
+
+        {/* ── KLAVIYO ── */}
+        <div className="form-card">
+          <div className="form-card-title">
+            📧 Klaviyo (Email Marketing)
+            <span className={`badge ${(brand as unknown as Record<string,string|null>).klaviyoApiKey ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
+              {(brand as unknown as Record<string,string|null>).klaviyoApiKey ? 'Connected' : 'Not Connected'}
+            </span>
+          </div>
+          <div className="form-card-desc">Track email revenue, open rates, click rates, flows, and subscriber growth</div>
+
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
+            <Step n={1} text='Go to <a href="https://www.klaviyo.com/settings/account/api-keys" target="_blank" style="color:var(--accent-blue)">Klaviyo → Account → Settings → API Keys</a>' />
+            <Step n={2} text='Click <strong>"Create Private API Key"</strong> → Name it (e.g. "Brand Analytics") → Select <strong>Read-Only Access</strong>' />
+            <Step n={3} text='Copy the key (starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">pk_</code>) and paste below' />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Klaviyo Private API Key</label>
+            <input className="form-input mono" type="password" value={(brand as unknown as Record<string,string>).klaviyoApiKey || ''} onChange={(e) => updateField('klaviyoApiKey', e.target.value)} placeholder="pk_..." />
           </div>
         </div>
 

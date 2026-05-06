@@ -21,12 +21,18 @@ export type MaskedBrand = Omit<
   | 'googleAdsClientSecret'
   | 'googleAdsRefreshToken'
   | 'geminiApiKey'
+  | 'tiktokAccessToken'
+  | 'klaviyoApiKey'
+  | 'pinterestAccessToken'
 > & {
   shopifyConnected: boolean;
   ga4Connected: boolean;
   metaConnected: boolean;
   googleAdsConnected: boolean;
   geminiConnected: boolean;
+  tiktokConnected: boolean;
+  klaviyoConnected: boolean;
+  pinterestConnected: boolean;
 };
 
 export function maskBrand(brand: BrandData): MaskedBrand {
@@ -40,6 +46,9 @@ export function maskBrand(brand: BrandData): MaskedBrand {
     googleAdsClientSecret,
     googleAdsRefreshToken,
     geminiApiKey,
+    tiktokAccessToken,
+    klaviyoApiKey,
+    pinterestAccessToken,
     // ── keep everything else ────────────────────────────
     ...safe
   } = brand;
@@ -51,6 +60,9 @@ export function maskBrand(brand: BrandData): MaskedBrand {
     metaConnected: !!(brand.metaAdAccountId && metaAccessToken),
     googleAdsConnected: !!(brand.googleAdsCustomerId && googleAdsRefreshToken),
     geminiConnected: !!geminiApiKey,
+    tiktokConnected: !!(brand.tiktokAdvertiserId && tiktokAccessToken),
+    klaviyoConnected: !!klaviyoApiKey,
+    pinterestConnected: !!(brand.pinterestAdAccountId && pinterestAccessToken),
   };
 }
 

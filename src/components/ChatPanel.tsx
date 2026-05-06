@@ -133,16 +133,19 @@ export function ChatPanel({ slug, brandName, hasAI = true }: { slug: string; bra
 
   return (
     <>
-      {/* Floating Trigger Button */}
+      {/* Floating Trigger Button — links to full chat page */}
       {!isOpen && (
-        <button
+        <a
+          href={`/dashboard/${slug}/chat`}
           className="chat-trigger"
-          onClick={() => setIsOpen(true)}
-          title={hasAI ? 'Ask AI Assistant' : 'Add GEMINI_API_KEY to enable AI'}
-          style={!hasAI ? { background: 'var(--bg-elevated)', border: '1px solid var(--glass-border)', opacity: 0.7 } : undefined}
+          title={hasAI ? 'Open AI Consultant' : 'Add GEMINI_API_KEY to enable AI'}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none',
+            ...(!hasAI ? { background: 'var(--bg-elevated)', border: '1px solid var(--glass-border)', opacity: 0.7 } : {}),
+          }}
         >
           {hasAI ? '✨' : '🔑'}
-        </button>
+        </a>
       )}
 
       {/* Chat Panel */}

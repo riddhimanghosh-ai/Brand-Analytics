@@ -1,0 +1,37 @@
+import { getBrand } from '@/lib/google-sheets-store';
+import { getKPIs, getCampaigns, getFlows } from '@/lib/services/klaviyo';
+import { NextResponse } from 'next/server';
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const slug = searchParams.get('slug');
+
+    if (!slug) return NextResponse.json({ error: 'slug required' }, { status: 400 });
+
+    const brand = await getBrand(slug);
+    if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
+
+    if (!brand.klaviyoApiKey) {
+      return NextResponse.json({ error: 'Klaviyo not connected' }, { status: 400 });
+    }
+
+    const config = { apiKey: brand.klaviyoApiKey };
+
+    const [kpis, campaigns, flows] = await Promise.allSettled([
+      getKPIs(config),
+      getCampaigns(config),
+      getFlows(config),
+    ]);
+
+    return NextResponse.json({
+      kpis: kpis.status === 'fulfilled' ? kpis.value : null,
+      campaigns: campaigns.status === 'fulfilled' ? campaigns.value : [],
+      flows: flows.status === 'fulfilled' ? flows.value : [],
+      error: kpis.status === 'rejected' ? String(kpis.reason) : null,
+    });
+  } catch (err) {
+    console.error('Klaviyo route error:', err);
+    return NextResponse.json({ error: 'Failed to fetch Klaviyo data' }, { status: 500 });
+  }
+}

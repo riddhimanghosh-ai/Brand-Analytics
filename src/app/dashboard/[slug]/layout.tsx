@@ -26,9 +26,12 @@ export default async function DashboardLayout({
     metaAds: !!brand.metaAccessToken,
     googleAds: !!brand.googleAdsCustomerId,
     gemini: !!(brand.geminiApiKey || process.env.GEMINI_API_KEY),
+    tiktok: !!(brand.tiktokAccessToken && brand.tiktokAdvertiserId),
+    klaviyo: !!brand.klaviyoApiKey,
   };
 
   const connectedCount = Object.values(connections).filter(Boolean).length;
+  const totalPlatforms = Object.keys(connections).length;
 
   return (
     <div className="app-layout">
@@ -95,6 +98,26 @@ export default async function DashboardLayout({
             Ads Manager
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/social`} disabled={!connections.metaAds}>
+            <span className="nav-icon">💬</span>
+            Social Comments
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/forecast`} disabled={!connections.shopify}>
+            <span className="nav-icon">📉</span>
+            Forecast
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/custom`}>
+            <span className="nav-icon">🎛️</span>
+            My Dashboard
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/chat`} disabled={!connections.gemini}>
+            <span className="nav-icon">🤖</span>
+            AI Consultant
+          </NavLink>
+
           <div className="nav-section-label">Settings</div>
 
           <NavLink href={`/dashboard/${slug}/settings`}>
@@ -111,7 +134,7 @@ export default async function DashboardLayout({
         {/* Sidebar Footer */}
         <div className="sidebar-footer">
           <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-            {connectedCount}/5 platforms connected
+            {connectedCount}/{totalPlatforms} platforms connected
           </div>
           {!connections.gemini && (
             <div style={{ fontSize: '11px', color: 'var(--accent-amber)', marginTop: '6px' }}>
