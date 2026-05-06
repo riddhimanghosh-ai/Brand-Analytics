@@ -71,30 +71,15 @@ async function callApi(
   // Pass encryption key so Apps Script can encrypt/decrypt credentials
   if (ENCRYPTION_KEY) url += `&encKey=${encodeURIComponent(ENCRYPTION_KEY)}`;
 
-  const options: RequestInit = {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    // Google Apps Script /exec redirects POST requests — we handle it manually
-    // so the POST body is not dropped when following the redirect
-    redirect: 'manual',
-  };
-
+  // Google Apps Script drops POST bodies on redirect — use GET for everything.
+  // Write payloads (create/update) are passed as a base64-encoded URL parameter.
   if (body) {
-    options.body = JSON.stringify(body);
+    const encoded = Buffer.from(JSON.stringify(body)).toString('base64');
+    url += `&payload=${encodeURIComponent(encoded)}`;
   }
 
   try {
-    let response = await fetch(url, options);
-
-    // Google Apps Script returns a 302 redirect for POST requests.
-    // Node.js fetch drops the body when following a redirect, so we
-    // catch the redirect and re-issue the full request to the new URL.
-    if (response.status === 301 || response.status === 302) {
-      const redirectUrl = response.headers.get('location');
-      if (redirectUrl) {
-        response = await fetch(redirectUrl, { ...options, redirect: 'follow' });
-      }
-    }
+    const response = await fetch(url, { method: 'GET' });
 
     const text = await response.text();
     let json: any;
