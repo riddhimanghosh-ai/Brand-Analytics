@@ -47,6 +47,12 @@ export async function POST(request: Request) {
       googleAdsRefreshToken: body.googleAdsRefreshToken || null,
       googleAdsCustomerId: body.googleAdsCustomerId || null,
       geminiApiKey: body.geminiApiKey || null,
+      tiktokAccessToken: body.tiktokAccessToken || null,
+      tiktokAdvertiserId: body.tiktokAdvertiserId || null,
+      klaviyoApiKey: body.klaviyoApiKey || null,
+      pinterestAccessToken: body.pinterestAccessToken || null,
+      pinterestAdAccountId: body.pinterestAdAccountId || null,
+      customDashboard: body.customDashboard || null,
     });
 
     // Never return raw secrets — return the masked brand

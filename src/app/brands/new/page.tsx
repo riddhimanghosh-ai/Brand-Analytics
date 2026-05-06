@@ -25,6 +25,11 @@ export default function NewBrandPage() {
     googleAdsRefreshToken: '',
     googleAdsCustomerId: '',
     geminiApiKey: '',
+    tiktokAccessToken: '',
+    tiktokAdvertiserId: '',
+    klaviyoApiKey: '',
+    pinterestAccessToken: '',
+    pinterestAdAccountId: '',
   });
 
   const updateField = (field: string, value: string) => {
