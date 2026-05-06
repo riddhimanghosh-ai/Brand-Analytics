@@ -37,7 +37,12 @@ let cachedClient: MongoClient;
 async function connectDb() {
   if (cachedDb) return cachedDb;
 
-  const client = new MongoClient(process.env.MONGODB_URI!);
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    throw new Error('MONGODB_URI environment variable is not set. Please add it in Amplify → Environment variables.');
+  }
+
+  const client = new MongoClient(uri);
   await client.connect();
   cachedClient = client;
   cachedDb = client.db('analytics-dashboard');
