@@ -21,15 +21,18 @@ export default async function DashboardLayout({
   const allBrandsData = await getBrands();
   const allBrands = allBrandsData.map((b) => ({ name: b.name, slug: b.slug }));
 
-  const connections = {
-    shopify: !!(brand.shopifyStoreUrl && brand.shopifyAccessToken),
-    ga4: !!brand.ga4PropertyId,
-    metaAds: !!brand.metaAccessToken,
-    googleAds: !!brand.googleAdsCustomerId,
-    gemini: !!(brand.geminiApiKey || process.env.GEMINI_API_KEY),
-    tiktok: !!(brand.tiktokAccessToken && brand.tiktokAdvertiserId),
-    klaviyo: !!brand.klaviyoApiKey,
-  };
+  const isDemoMode = slug === 'demo';
+  const connections = isDemoMode
+    ? { shopify: true, ga4: true, metaAds: true, googleAds: true, gemini: true, tiktok: true, klaviyo: true }
+    : {
+        shopify: !!(brand.shopifyStoreUrl && brand.shopifyAccessToken),
+        ga4: !!brand.ga4PropertyId,
+        metaAds: !!brand.metaAccessToken,
+        googleAds: !!brand.googleAdsCustomerId,
+        gemini: !!(brand.geminiApiKey || process.env.GEMINI_API_KEY),
+        tiktok: !!(brand.tiktokAccessToken && brand.tiktokAdvertiserId),
+        klaviyo: !!brand.klaviyoApiKey,
+      };
 
   const connectedCount = Object.values(connections).filter(Boolean).length;
   const totalPlatforms = Object.keys(connections).length;

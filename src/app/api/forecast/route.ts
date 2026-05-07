@@ -1,6 +1,7 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as shopify from '@/lib/services/shopify';
+import { getDemoForecast } from '@/lib/demo-data';
 
 function linearRegression(values: number[]): { slope: number; intercept: number } {
   const n = values.length;
@@ -40,6 +41,12 @@ export async function GET(request: Request) {
     const horizon = parseInt(searchParams.get('horizon') || '30', 10);
 
     if (!slug) return NextResponse.json({ error: 'slug required' }, { status: 400 });
+
+    // ── Demo mode ──────────────────────────────────────────────────────────
+    if (slug === 'demo') {
+      return NextResponse.json(getDemoForecast(horizon));
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     const brand = await getBrand(slug);
     if (!brand?.shopifyStoreUrl || !brand?.shopifyAccessToken) {

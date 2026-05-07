@@ -1,6 +1,7 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { getPageComments, analyzeSentiment } from '@/lib/services/social';
 import { NextResponse } from 'next/server';
+import { demoSocialComments, demoSocialStats } from '@/lib/demo-data';
 
 export async function GET(request: Request) {
   try {
@@ -12,6 +13,12 @@ export async function GET(request: Request) {
 
     const brand = await getBrand(slug);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
+
+    // ── Demo mode ──────────────────────────────────────────────────────────
+    if (slug === 'demo') {
+      return NextResponse.json({ comments: demoSocialComments, stats: demoSocialStats });
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     if (!brand.metaAccessToken) {
       return NextResponse.json({ error: 'Meta Ads not connected. Add your Meta Access Token in Settings.' }, { status: 400 });

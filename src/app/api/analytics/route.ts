@@ -1,6 +1,11 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as ga4 from '@/lib/services/ga4';
+import {
+  demoGA4KPIs, demoGA4Sessions, demoGA4Channels, demoGA4Devices,
+  demoGA4Pages, demoGA4Countries, demoGA4LandingPages, demoGA4Events,
+  demoGA4ConversionFunnel, demoGA4ProductFunnel,
+} from '@/lib/demo-data';
 
 export async function GET(request: Request) {
   try {
@@ -17,6 +22,24 @@ export async function GET(request: Request) {
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
+
+    // ── Demo mode ──────────────────────────────────────────────────────────
+    if (slug === 'demo') {
+      switch (action) {
+        case 'kpis': return NextResponse.json(demoGA4KPIs);
+        case 'sessions': return NextResponse.json(demoGA4Sessions);
+        case 'channels': return NextResponse.json(demoGA4Channels);
+        case 'devices': return NextResponse.json(demoGA4Devices);
+        case 'pages': return NextResponse.json(demoGA4Pages);
+        case 'countries': return NextResponse.json(demoGA4Countries);
+        case 'landing-pages': return NextResponse.json(demoGA4LandingPages);
+        case 'events': return NextResponse.json(demoGA4Events);
+        case 'conversion-funnel': return NextResponse.json(demoGA4ConversionFunnel);
+        case 'product-funnel': return NextResponse.json(demoGA4ProductFunnel);
+        default: return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     if (!brand.ga4PropertyId || !brand.ga4ServiceAccountJson) {
       return NextResponse.json({ error: 'Google Analytics not connected' }, { status: 400 });

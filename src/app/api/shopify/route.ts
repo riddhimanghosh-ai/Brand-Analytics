@@ -1,6 +1,17 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as shopify from '@/lib/services/shopify';
+import {
+  demoShopifyKPIs,
+  demoShopifyRevenue,
+  demoShopifyProducts,
+  demoShopifyOrders,
+  demoShopifyCustomers,
+  demoShopifyOrderStatus,
+  demoShopifyCombined,
+  demoShopifyAdvanced,
+  demoShopifyConversionFunnel,
+} from '@/lib/demo-data';
 
 function getDateRangeForShopify(range: string): { startDate: string; endDate: string } {
   const now = new Date();
@@ -27,6 +38,24 @@ export async function GET(request: Request) {
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
+
+    // ── Demo mode ──────────────────────────────────────────────────────────
+    if (slug === 'demo') {
+      switch (action) {
+        case 'kpis': return NextResponse.json(demoShopifyKPIs);
+        case 'revenue': return NextResponse.json(demoShopifyRevenue);
+        case 'products': return NextResponse.json(demoShopifyProducts);
+        case 'orders': return NextResponse.json(demoShopifyOrders);
+        case 'customers': return NextResponse.json(demoShopifyCustomers);
+        case 'order-status': return NextResponse.json(demoShopifyOrderStatus);
+        case 'combined': return NextResponse.json(demoShopifyCombined);
+        case 'advanced': return NextResponse.json(demoShopifyAdvanced);
+        case 'conversion-funnel': return NextResponse.json(demoShopifyConversionFunnel);
+        case 'shop': return NextResponse.json({ name: 'Demo Store', currency: 'INR', domain: 'demo.myshopify.com' });
+        default: return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+      }
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     if (!brand.shopifyStoreUrl || !brand.shopifyAccessToken) {
       return NextResponse.json({ error: 'Shopify not connected' }, { status: 400 });

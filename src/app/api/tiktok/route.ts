@@ -1,6 +1,7 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { getKPIs, getCampaigns } from '@/lib/services/tiktok';
 import { NextResponse } from 'next/server';
+import { demoTikTokKPIs, demoTikTokCampaigns } from '@/lib/demo-data';
 
 export async function GET(request: Request) {
   try {
@@ -12,6 +13,12 @@ export async function GET(request: Request) {
 
     const brand = await getBrand(slug);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
+
+    // ── Demo mode ──────────────────────────────────────────────────────────
+    if (slug === 'demo') {
+      return NextResponse.json({ kpis: demoTikTokKPIs, campaigns: demoTikTokCampaigns, error: null });
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     if (!brand.tiktokAccessToken || !brand.tiktokAdvertiserId) {
       return NextResponse.json({ error: 'TikTok Ads not connected' }, { status: 400 });

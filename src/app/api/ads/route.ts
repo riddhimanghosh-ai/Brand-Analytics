@@ -2,6 +2,10 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
+import {
+  demoMetaKPIs, demoMetaCampaigns, demoMetaSpend,
+  demoGoogleAdsKPIs, demoGoogleAdsCampaigns, demoGoogleAdsSpend,
+} from '@/lib/demo-data';
 
 export async function GET(request: Request) {
   try {
@@ -19,6 +23,28 @@ export async function GET(request: Request) {
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
+
+    // ── Demo mode ──────────────────────────────────────────────────────────
+    if (slug === 'demo') {
+      if (platform === 'meta') {
+        switch (action) {
+          case 'kpis': return NextResponse.json(demoMetaKPIs);
+          case 'campaigns': return NextResponse.json(demoMetaCampaigns);
+          case 'spend': return NextResponse.json(demoMetaSpend);
+          default: return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+        }
+      }
+      if (platform === 'google') {
+        switch (action) {
+          case 'kpis': return NextResponse.json(demoGoogleAdsKPIs);
+          case 'campaigns': return NextResponse.json(demoGoogleAdsCampaigns);
+          case 'spend': return NextResponse.json(demoGoogleAdsSpend);
+          default: return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+        }
+      }
+      return NextResponse.json({ error: 'Unknown platform' }, { status: 400 });
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     // ---- Meta Ads ----
     if (platform === 'meta') {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ConnectionAccordion } from '@/components/ConnectionAccordion';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface BrandData {
   id: string;
@@ -275,9 +276,12 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             <h2>⚙️ Connection Setup</h2>
             <p>Step-by-step guides to connect all platforms for <strong>{brand.name}</strong></p>
           </div>
-          <button className="btn btn-primary" onClick={save} disabled={saving}>
-            {saving ? '⏳ Saving...' : saved ? '✅ Saved!' : '💾 Save Changes'}
-          </button>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <ThemeToggle />
+            <button className="btn btn-primary" onClick={save} disabled={saving}>
+              {saving ? '⏳ Saving...' : saved ? '✅ Saved!' : '💾 Save Changes'}
+            </button>
+          </div>
         </div>
       </div>
 

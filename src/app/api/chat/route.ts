@@ -5,6 +5,7 @@ import * as shopify from '@/lib/services/shopify';
 import * as ga4 from '@/lib/services/ga4';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
+import { getDemoChatResponse } from '@/lib/demo-data';
 
 // Detect which platforms are relevant to the user's question.
 // Returns a set of platform keys. Falls back to all connected platforms if unclear.
@@ -70,6 +71,38 @@ export async function POST(request: Request) {
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
+
+    // ── Demo mode — return a scripted SSE response without calling Gemini ──
+    if (slug === 'demo') {
+      const lastMsg = messages[messages.length - 1]?.content ?? '';
+      const responseText = getDemoChatResponse(lastMsg);
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          // Simulate streaming by chunking the response word by word
+          const words = responseText.split(' ');
+          let i = 0;
+          const tick = () => {
+            if (i < words.length) {
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ text: (i === 0 ? '' : ' ') + words[i] })}\n\n`)
+              );
+              i++;
+              // Use setImmediate-like approach
+              Promise.resolve().then(tick);
+            } else {
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+            }
+          };
+          tick();
+        },
+      });
+      return new Response(stream, {
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' },
+      });
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     const apiKey = brand.geminiApiKey || process.env.GEMINI_API_KEY;
     if (!apiKey) {

@@ -1,6 +1,7 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { getKPIs, getCampaigns, getFlows } from '@/lib/services/klaviyo';
 import { NextResponse } from 'next/server';
+import { demoKlaviyoKPIs, demoKlaviyoCampaigns, demoKlaviyoFlows } from '@/lib/demo-data';
 
 export async function GET(request: Request) {
   try {
@@ -11,6 +12,12 @@ export async function GET(request: Request) {
 
     const brand = await getBrand(slug);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
+
+    // ── Demo mode ──────────────────────────────────────────────────────────
+    if (slug === 'demo') {
+      return NextResponse.json({ kpis: demoKlaviyoKPIs, campaigns: demoKlaviyoCampaigns, flows: demoKlaviyoFlows, error: null });
+    }
+    // ────────────────────────────────────────────────────────────────────────
 
     if (!brand.klaviyoApiKey) {
       return NextResponse.json({ error: 'Klaviyo not connected' }, { status: 400 });
