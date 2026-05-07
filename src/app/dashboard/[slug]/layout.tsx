@@ -187,7 +187,7 @@ export default async function DashboardLayout({
             </div>
           )}
           <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px' }}>
-            May 7, 2026
+            {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </div>
         </div>
       </aside>
