@@ -47,7 +47,12 @@ export default async function DashboardLayout({
 
         {/* Brand Switcher */}
         <div className="brand-switcher">
-          <div className="brand-switcher-label">Current Brand</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <div className="brand-switcher-label">Current Brand</div>
+            <a href="/brands/new" title="Add new brand" style={{ fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none', cursor: 'pointer', transition: 'all 0.15s' }} onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--accent-blue)'; }} onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; }}>
+              ➕
+            </a>
+          </div>
           <select
             defaultValue={slug}
             id="brand-switcher-select"

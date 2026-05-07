@@ -220,6 +220,8 @@ a:hover { text-decoration: underline; }
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .nav-section-label {
