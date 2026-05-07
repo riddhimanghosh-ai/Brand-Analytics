@@ -12,16 +12,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
-        {/* Anti-flash: read saved theme before first paint */}
+        {/* Anti-flash: read saved theme before first paint — suppressHydrationWarning on <html> allows this */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var t=localStorage.getItem('theme')||'dark';document.documentElement.dataset.theme=t;}catch(e){}})();`,
           }}
         />
       </head>
-      <body>
+      <body suppressHydrationWarning>
         {children}
       </body>
     </html>
