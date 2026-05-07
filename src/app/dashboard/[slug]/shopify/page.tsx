@@ -1286,13 +1286,21 @@ export default function ShopifyDashboard({
 
         {/* Tabs */}
         <div className="dashboard-tabs">
-          {(['overview', 'sales', 'customers', 'products', 'orders', 'funnels'] as const).map((tab) => (
+          {([
+            { id: 'overview',   label: 'Overview',   icon: '📊' },
+            { id: 'sales',      label: 'Sales',      icon: '💰' },
+            { id: 'customers',  label: 'Customers',  icon: '👥' },
+            { id: 'products',   label: 'Products',   icon: '📦' },
+            { id: 'orders',     label: 'Orders',     icon: '🧾' },
+            { id: 'funnels',    label: 'Funnels',    icon: '🔻' },
+          ] as const).map((tab) => (
             <button
-              key={tab}
-              className={`tab-btn${activeTab === tab ? ' active' : ''}`}
-              onClick={() => setActiveTab(tab)}
+              key={tab.id}
+              className={`dashboard-tab${activeTab === tab.id ? ' active' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              <span>{tab.icon}</span>
+              {tab.label}
             </button>
           ))}
         </div>
