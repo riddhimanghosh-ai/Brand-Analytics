@@ -8,10 +8,9 @@ export async function streamChat(
 ): Promise<ReadableStream<Uint8Array>> {
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  // Use gemini-1.5-flash — gemini-2.0-flash on v1beta rejects system_instruction
-  // in certain SDK versions causing [400 Bad Request] errors.
-  // Inject context as the first history exchange instead — works on ALL models.
-  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+  // Use gemini-2.0-flash — inject context as first history exchange to avoid
+  // system_instruction compatibility issues across SDK versions.
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
   const systemPrompt = `You are a concise e-commerce analyst. Answer using ONLY the data below. No fluff.
 

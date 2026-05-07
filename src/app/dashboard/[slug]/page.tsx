@@ -52,14 +52,16 @@ export default async function OverviewPage({
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2>📊 {brand.name} — Overview</h2>
-            <p>Last 30 days • {connectedCount} platform{connectedCount !== 1 ? 's' : ''} connected</p>
+            <h2 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '-0.03em' }}>
+              {brand.name}
+            </h2>
+            <p>Overview · Last 30 days · {connectedCount} platform{connectedCount !== 1 ? 's' : ''} connected</p>
           </div>
         </div>
       </div>
 
       <div className="page-body">
-        {/* Connection Status */}
+        {/* Connection Status Chips */}
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {Object.entries(connections).map(([key, connected]) => {
@@ -71,14 +73,50 @@ export default async function OverviewPage({
                 gemini: '🤖 AI Assistant',
               };
               return (
-                <div key={key} className="connection-dot" style={{ padding: '6px 14px' }}>
-                  <span className={`dot ${connected ? 'connected' : 'disconnected'}`} />
+                <span key={key} className={`connection-chip ${connected ? 'connected' : ''}`}>
+                  <span className="chip-dot" />
                   {labels[key]}
-                </div>
+                </span>
               );
             })}
           </div>
         </div>
+
+        {/* Quick Setup — shown when fewer than 2 platforms are connected */}
+        {connectedCount < 2 && (
+          <div className="chart-card" style={{ marginBottom: '24px', background: 'rgba(59,130,246,0.04)', borderColor: 'rgba(59,130,246,0.15)' }}>
+            <div className="chart-card-header">
+              <div>
+                <div className="chart-card-title">⚡ Quick Setup</div>
+                <div className="chart-card-subtitle">Connect your platforms to unlock full analytics</div>
+              </div>
+              <Link href={`/dashboard/${slug}/settings`} className="btn btn-primary btn-sm">
+                Set up →
+              </Link>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              {[
+                { key: 'shopify', label: 'Shopify', icon: '🛒', on: connections.shopify },
+                { key: 'ga4', label: 'Google Analytics', icon: '📈', on: connections.ga4 },
+                { key: 'metaAds', label: 'Meta Ads', icon: '📱', on: connections.metaAds },
+                { key: 'googleAds', label: 'Google Ads', icon: '🎯', on: connections.googleAds },
+                { key: 'gemini', label: 'AI Assistant', icon: '🤖', on: connections.gemini },
+              ].map(({ key, label, icon, on }) => (
+                <span key={key} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: '6px',
+                  padding: '6px 12px', borderRadius: 'var(--radius-full)',
+                  background: on ? 'rgba(16,185,129,0.08)' : 'var(--bg-elevated)',
+                  border: `1px solid ${on ? 'rgba(16,185,129,0.2)' : 'var(--glass-border)'}`,
+                  fontSize: '12px', fontWeight: 500,
+                  color: on ? 'var(--accent-emerald)' : 'var(--text-muted)',
+                }}>
+                  {icon} {label}
+                  {on && <span style={{ fontSize: '10px' }}>✓</span>}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Shopify KPIs */}
         {shopifyKPIs ? (
@@ -261,12 +299,14 @@ export default async function OverviewPage({
             </Link>
           </div>
         ) : (
-          <div className="connection-required">
-            <div className="cr-icon">🔌</div>
-            <h3>Connect Your Platforms</h3>
-            <p>Connect Shopify, Google Analytics, or ad platforms to start seeing your analytics here.</p>
-            <Link href={`/dashboard/${slug}/settings`} className="btn btn-primary">
-              ⚙️ Set Up Connections
+          <div className="connection-required" style={{ borderColor: 'rgba(149,196,105,0.2)', background: 'rgba(149,196,105,0.03)' }}>
+            <div className="cr-icon" style={{ fontSize: '52px' }}>🛒</div>
+            <h3 style={{ color: '#96c46a' }}>Connect Shopify to Get Started</h3>
+            <p>
+              Unlock revenue analytics, order trends, top products, customer insights, and CRO opportunities — all in one place.
+            </p>
+            <Link href={`/dashboard/${slug}/settings`} className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #96c46a, #5a9e2f)', boxShadow: '0 0 20px rgba(149,196,105,0.2)' }}>
+              Connect Shopify →
             </Link>
           </div>
         )}

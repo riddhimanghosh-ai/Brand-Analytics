@@ -177,11 +177,16 @@ export default function ChatPage() {
       {/* Left Sidebar — Prompt Categories */}
       <div style={{
         width: '280px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '12px',
-        background: 'var(--bg-elevated)', borderRadius: '16px', padding: '20px',
+        background: 'linear-gradient(160deg, var(--bg-tertiary) 0%, var(--bg-elevated) 100%)',
+        borderRadius: '20px', padding: '20px',
         border: '1px solid var(--glass-border)', overflowY: 'auto',
       }}>
-        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-          SUGGESTED PROMPTS
+        {/* Sidebar header */}
+        <div style={{ marginBottom: '4px' }}>
+          <div style={{ fontSize: '13px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '2px' }}>
+            Suggested Prompts
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Click to ask</div>
         </div>
 
         {/* Category tabs */}
@@ -191,9 +196,12 @@ export default function ChatPage() {
               key={i}
               onClick={() => setActiveCategory(i)}
               style={{
-                padding: '4px 10px', borderRadius: '20px', border: 'none', cursor: 'pointer', fontSize: '12px',
-                background: activeCategory === i ? 'var(--accent-blue)' : 'var(--bg-card)',
+                padding: '5px 11px', borderRadius: '20px',
+                border: activeCategory === i ? 'none' : '1px solid var(--glass-border)',
+                cursor: 'pointer', fontSize: '12px', fontWeight: 500,
+                background: activeCategory === i ? 'var(--accent-blue)' : 'transparent',
                 color: activeCategory === i ? '#fff' : 'var(--text-secondary)',
+                transition: 'all 0.15s',
               }}
             >
               {cat.icon} {cat.label}
@@ -209,33 +217,31 @@ export default function ChatPage() {
               onClick={() => sendMessage(prompt)}
               disabled={isLoading}
               style={{
-                padding: '10px 12px', borderRadius: '10px', border: '1px solid var(--glass-border)',
-                background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer',
-                fontSize: '12px', textAlign: 'left', lineHeight: '1.4', transition: 'all 0.15s',
+                padding: '10px 12px', borderRadius: '12px', border: '1px solid var(--glass-border)',
+                background: 'rgba(255,255,255,0.02)', color: 'var(--text-primary)', cursor: 'pointer',
+                fontSize: '12px', textAlign: 'left', lineHeight: '1.5', transition: 'all 0.15s',
+                fontFamily: 'var(--font-sans)',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'var(--accent-blue)')}
-              onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'var(--glass-border)')}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--accent-blue)';
+                e.currentTarget.style.background = 'rgba(59,130,246,0.04)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--glass-border)';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+              }}
             >
               {prompt}
             </button>
           ))}
         </div>
 
-        {/* Chat stats */}
+        {/* Chat stats + clear */}
         {messages.length > 0 && (
           <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid var(--glass-border)' }}>
-            <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '8px' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
               {Math.floor(messages.length / 2)} messages in this session
             </div>
-            <button
-              onClick={clearChat}
-              style={{
-                width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--glass-border)',
-                background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px',
-              }}
-            >
-              🗑️ Clear chat
-            </button>
           </div>
         )}
       </div>
@@ -243,37 +249,61 @@ export default function ChatPage() {
       {/* Main Chat Area */}
       <div style={{
         flex: 1, display: 'flex', flexDirection: 'column',
-        background: 'var(--bg-elevated)', borderRadius: '16px',
+        background: 'var(--bg-elevated)', borderRadius: '20px',
         border: '1px solid var(--glass-border)', overflow: 'hidden',
       }}>
         {/* Chat Header */}
         <div style={{
           padding: '16px 24px', borderBottom: '1px solid var(--glass-border)',
           display: 'flex', alignItems: 'center', gap: '12px',
+          background: 'rgba(255,255,255,0.01)',
         }}>
           <div style={{
             width: '36px', height: '36px', borderRadius: '10px',
             background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px',
-            flexShrink: 0,
+            flexShrink: 0, boxShadow: '0 0 16px rgba(99,102,241,0.3)',
           }}>✨</div>
           <div>
-            <div style={{ fontWeight: '600', fontSize: '15px' }}>AI Consultant</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-              Powered by Gemini · Analysing your brand data in real time
+            <div style={{ fontWeight: '700', fontSize: '15px' }}>AI Consultant</div>
+            <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+              Powered by Gemini 2.0 Flash
             </div>
           </div>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{
               width: '8px', height: '8px', borderRadius: '50%',
               background: '#22c55e', boxShadow: '0 0 6px #22c55e',
             }} />
+            {/* Clear chat button */}
+            {messages.length > 0 && (
+              <button
+                onClick={clearChat}
+                title="Clear chat"
+                style={{
+                  padding: '5px 10px', borderRadius: '8px',
+                  border: '1px solid var(--glass-border)', background: 'transparent',
+                  color: 'var(--text-muted)', cursor: 'pointer', fontSize: '11px',
+                  fontFamily: 'var(--font-sans)', transition: 'all 0.15s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(239,68,68,0.4)';
+                  e.currentTarget.style.color = '#ef4444';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--glass-border)';
+                  e.currentTarget.style.color = 'var(--text-muted)';
+                }}
+              >
+                🗑️ Clear
+              </button>
+            )}
             <a
               href={`/dashboard/${slug}`}
               title="Close AI Consultant"
               style={{
                 width: '32px', height: '32px', borderRadius: '8px',
-                background: 'var(--bg-card)', border: '1px solid var(--glass-border)',
+                background: 'transparent', border: '1px solid var(--glass-border)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: 'var(--text-muted)', fontSize: '16px', textDecoration: 'none',
                 cursor: 'pointer', transition: 'all 0.15s',
@@ -284,7 +314,7 @@ export default function ChatPage() {
                 e.currentTarget.style.color = '#ef4444';
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'var(--bg-card)';
+                e.currentTarget.style.background = 'transparent';
                 e.currentTarget.style.borderColor = 'var(--glass-border)';
                 e.currentTarget.style.color = 'var(--text-muted)';
               }}
@@ -297,21 +327,20 @@ export default function ChatPage() {
         {/* Messages */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {messages.length === 0 ? (
-            <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: '56px', marginBottom: '16px', opacity: 0.3 }}>🤖</div>
-              <div style={{ fontSize: '18px', fontWeight: '600', marginBottom: '8px', color: 'var(--text-secondary)' }}>
-                Your AI CRO Consultant
+            <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', padding: '40px 20px' }}>
+              <div style={{ fontSize: '64px', marginBottom: '20px' }}>✨</div>
+              <div style={{ fontSize: '20px', fontWeight: '700', marginBottom: '8px', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                Ask anything about your store
               </div>
-              <div style={{ fontSize: '13px', maxWidth: '360px', lineHeight: '1.6' }}>
-                Ask me anything about your store performance, growth opportunities, ad strategy, or CRO improvements.
-                I have access to all your connected platform data.
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', maxWidth: '380px', lineHeight: '1.7', margin: '0 auto' }}>
+                I have access to your Shopify, Ads, and Analytics data — ask about revenue, trends, CRO, or growth strategy.
               </div>
               <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '24px', flexWrap: 'wrap' }}>
                 {['📦 Shopify', '📊 GA4', '💰 Ads', '🎯 CRO'].map((tag) => (
                   <span key={tag} style={{
-                    padding: '4px 12px', borderRadius: '20px',
-                    background: 'var(--bg-card)', border: '1px solid var(--glass-border)',
-                    fontSize: '12px', color: 'var(--text-secondary)',
+                    padding: '5px 14px', borderRadius: '20px',
+                    background: 'var(--bg-tertiary)', border: '1px solid var(--glass-border)',
+                    fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500,
                   }}>{tag}</span>
                 ))}
               </div>
@@ -329,11 +358,28 @@ export default function ChatPage() {
                   }}>✨</div>
                 )}
                 <div style={{
-                  maxWidth: '70%', padding: '12px 16px', borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                  background: msg.role === 'user' ? 'var(--accent-blue)' : 'var(--bg-card)',
-                  color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
-                  fontSize: '14px', lineHeight: '1.6',
-                  border: msg.role === 'assistant' ? '1px solid var(--glass-border)' : 'none',
+                  maxWidth: '72%',
+                  ...(msg.role === 'user'
+                    ? {
+                        padding: '12px 16px',
+                        borderRadius: '16px 16px 4px 16px',
+                        background: 'var(--accent-blue)',
+                        color: '#fff',
+                        fontSize: '14px',
+                        lineHeight: '1.6',
+                      }
+                    : {
+                        padding: '14px 16px 14px 20px',
+                        borderRadius: '0 16px 16px 0',
+                        borderLeft: '3px solid var(--accent-blue)',
+                        background: 'rgba(59,130,246,0.05)',
+                        color: 'var(--text-primary)',
+                        fontSize: '14px',
+                        lineHeight: '1.7',
+                        border: '1px solid var(--glass-border)',
+                        borderLeftWidth: '3px',
+                        borderLeftColor: 'var(--accent-blue)',
+                      }),
                 }}>
                   {msg.role === 'assistant' && msg.content === '' ? (
                     <div style={{ display: 'flex', gap: '4px', alignItems: 'center', padding: '2px 0' }}>
@@ -357,7 +403,8 @@ export default function ChatPage() {
         {/* Input Area */}
         <div style={{
           padding: '16px 24px', borderTop: '1px solid var(--glass-border)',
-          display: 'flex', gap: '12px', alignItems: 'center',
+          display: 'flex', gap: '10px', alignItems: 'center',
+          background: 'rgba(255,255,255,0.01)',
         }}>
           <input
             ref={inputRef}
@@ -367,20 +414,30 @@ export default function ChatPage() {
             placeholder="Ask about your store's performance, ads, CRO opportunities..."
             disabled={isLoading}
             style={{
-              flex: 1, padding: '12px 16px', borderRadius: '12px',
-              border: '1px solid var(--glass-border)', background: 'var(--bg-card)',
+              flex: 1, padding: '13px 18px', borderRadius: '14px',
+              border: '1px solid var(--glass-border)',
+              background: 'var(--bg-tertiary)',
               color: 'var(--text-primary)', fontSize: '14px', outline: 'none',
+              fontFamily: 'var(--font-sans)',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.2)',
+              transition: 'border-color 0.15s',
             }}
+            onFocus={(e) => (e.currentTarget.style.borderColor = 'var(--accent-blue)')}
+            onBlur={(e) => (e.currentTarget.style.borderColor = 'var(--glass-border)')}
           />
           <button
             onClick={() => sendMessage(input)}
             disabled={!input.trim() || isLoading}
             style={{
-              padding: '12px 20px', borderRadius: '12px', border: 'none',
-              background: !input.trim() || isLoading ? 'var(--bg-card)' : 'var(--accent-blue)',
+              padding: '13px 22px', borderRadius: '14px',
+              border: `1px solid ${!input.trim() || isLoading ? 'var(--glass-border)' : 'transparent'}`,
+              background: !input.trim() || isLoading
+                ? 'var(--bg-tertiary)'
+                : 'linear-gradient(135deg, var(--accent-blue), #6366f1)',
               color: !input.trim() || isLoading ? 'var(--text-dim)' : '#fff',
               cursor: !input.trim() || isLoading ? 'default' : 'pointer',
-              fontSize: '16px', transition: 'all 0.15s',
+              fontSize: '18px', transition: 'all 0.15s',
+              boxShadow: !input.trim() || isLoading ? 'none' : '0 0 16px rgba(59,130,246,0.3)',
             }}
           >
             →

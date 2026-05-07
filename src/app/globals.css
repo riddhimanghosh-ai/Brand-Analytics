@@ -1563,3 +1563,104 @@ textarea.form-input {
 .section-title .section-icon {
   font-size: 20px;
 }
+
+/* ---- Custom Scrollbars ---- */
+.sidebar-nav::-webkit-scrollbar { width: 3px; }
+.sidebar-nav::-webkit-scrollbar-track { background: transparent; }
+.sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-hover); border-radius: 10px; }
+
+.main-content::-webkit-scrollbar { width: 6px; }
+.main-content::-webkit-scrollbar-track { background: transparent; }
+.main-content::-webkit-scrollbar-thumb { background: var(--bg-elevated); border-radius: 10px; }
+
+/* ---- Nav Link Disabled State ---- */
+.nav-link.disabled {
+  opacity: 0.35;
+  pointer-events: none;
+  cursor: not-allowed;
+  filter: grayscale(0.3);
+}
+
+/* ---- Active Nav Link Brighter Blue ---- */
+.nav-link.active.active-bright {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  box-shadow: inset 0 0 12px rgba(59, 130, 246, 0.06);
+}
+
+/* ---- Page Transition Animation ---- */
+.main-content > * {
+  animation: pageSlideIn 0.2s ease-out both;
+}
+@keyframes pageSlideIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Platform Dots in Footer ---- */
+.platform-dots {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.platform-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  cursor: default;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.platform-dot:hover {
+  transform: scale(1.4);
+}
+.platform-dot.on { background: var(--accent-emerald); box-shadow: 0 0 6px rgba(16, 185, 129, 0.5); }
+.platform-dot.off { background: var(--text-dim); }
+
+/* ---- Connection Chip ---- */
+.connection-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+.connection-chip.connected {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: var(--accent-emerald);
+}
+.connection-chip .chip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.connection-chip.connected .chip-dot {
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+  animation: pulse-green 2s infinite;
+}
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ---- Add Brand Card Enhanced ---- */
+.add-brand-card {
+  border-color: rgba(59, 130, 246, 0.2) !important;
+}
+.add-brand-card:hover {
+  background: rgba(59, 130, 246, 0.05) !important;
+  border-color: rgba(59, 130, 246, 0.4) !important;
+}
+.add-brand-card .add-icon {
+  color: var(--accent-blue);
+  opacity: 0.8;
+}

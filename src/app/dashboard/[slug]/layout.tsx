@@ -47,8 +47,8 @@ export default async function DashboardLayout({
 
         {/* Brand Switcher */}
         <div className="brand-switcher">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <div className="brand-switcher-label">Current Brand</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <div className="brand-switcher-label">Brand</div>
             <a href="/brands/new" title="Add new brand" className="add-brand-btn">
               ➕
             </a>
@@ -74,7 +74,7 @@ export default async function DashboardLayout({
             My Dashboard
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/chat`} disabled={!connections.gemini}>
+          <NavLink href={`/dashboard/${slug}/chat`} disabled={!connections.gemini} disabledPlatform="AI (Gemini)">
             <span className="nav-icon">🤖</span>
             AI Consultant
             {connections.gemini && <span className="nav-badge">AI</span>}
@@ -87,23 +87,23 @@ export default async function DashboardLayout({
             Overview
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/shopify`} disabled={!connections.shopify}>
+          <NavLink href={`/dashboard/${slug}/shopify`} disabled={!connections.shopify} disabledPlatform="Shopify">
             <span className="nav-icon">🛒</span>
             Shopify
             {connections.shopify && <span className="nav-badge">Live</span>}
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/analytics`} disabled={!connections.ga4}>
+          <NavLink href={`/dashboard/${slug}/analytics`} disabled={!connections.ga4} disabledPlatform="Google Analytics">
             <span className="nav-icon">📈</span>
             Google Analytics
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/cro`} disabled={!connections.shopify}>
+          <NavLink href={`/dashboard/${slug}/cro`} disabled={!connections.shopify} disabledPlatform="Shopify">
             <span className="nav-icon">🎯</span>
             CRO Optimization
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/forecast`} disabled={!connections.shopify}>
+          <NavLink href={`/dashboard/${slug}/forecast`} disabled={!connections.shopify} disabledPlatform="Shopify">
             <span className="nav-icon">📉</span>
             Forecast
           </NavLink>
@@ -113,31 +113,32 @@ export default async function DashboardLayout({
           <NavLink
             href={`/dashboard/${slug}/ads`}
             disabled={!connections.metaAds && !connections.googleAds}
+            disabledPlatform="Meta or Google Ads"
           >
             <span className="nav-icon">🎯</span>
             Ads Manager
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/tiktok`} disabled={!connections.tiktok}>
+          <NavLink href={`/dashboard/${slug}/tiktok`} disabled={!connections.tiktok} disabledPlatform="TikTok">
             <span className="nav-icon">🎵</span>
             TikTok Ads
             {connections.tiktok && <span className="nav-badge">Live</span>}
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/klaviyo`} disabled={!connections.klaviyo}>
+          <NavLink href={`/dashboard/${slug}/klaviyo`} disabled={!connections.klaviyo} disabledPlatform="Klaviyo">
             <span className="nav-icon">📧</span>
             Email Marketing
             {connections.klaviyo && <span className="nav-badge">Live</span>}
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/social`} disabled={!connections.metaAds}>
+          <NavLink href={`/dashboard/${slug}/social`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
             <span className="nav-icon">💬</span>
             Social Comments
           </NavLink>
 
           <div className="nav-section-label">Tools</div>
 
-          <NavLink href={`/dashboard/${slug}/metrics`} disabled={!connections.shopify}>
+          <NavLink href={`/dashboard/${slug}/metrics`} disabled={!connections.shopify} disabledPlatform="Shopify">
             <span className="nav-icon">📐</span>
             Custom Metrics
           </NavLink>
@@ -157,14 +158,37 @@ export default async function DashboardLayout({
 
         {/* Sidebar Footer */}
         <div className="sidebar-footer">
-          <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+          {/* Platform dots row */}
+          <div className="platform-dots">
+            {[
+              { key: 'shopify', label: 'Shopify 🛒', on: connections.shopify },
+              { key: 'ga4', label: 'Google Analytics 📈', on: connections.ga4 },
+              { key: 'metaAds', label: 'Meta Ads 📱', on: connections.metaAds },
+              { key: 'googleAds', label: 'Google Ads 🎯', on: connections.googleAds },
+              { key: 'gemini', label: 'AI Assistant 🤖', on: connections.gemini },
+              { key: 'tiktok', label: 'TikTok 🎵', on: connections.tiktok },
+              { key: 'klaviyo', label: 'Klaviyo 📧', on: connections.klaviyo },
+            ].map(({ key, label, on }) => (
+              <span
+                key={key}
+                className={`platform-dot ${on ? 'on' : 'off'}`}
+                title={`${label} — ${on ? 'Connected' : 'Disconnected'}`}
+              />
+            ))}
+          </div>
+          <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '6px' }}>
             {connectedCount}/{totalPlatforms} platforms connected
           </div>
           {!connections.gemini && (
-            <div style={{ fontSize: '11px', color: 'var(--accent-amber)', marginTop: '6px' }}>
-              ⚠️ Set GEMINI_API_KEY to enable AI chat
+            <div style={{ fontSize: '11px', marginBottom: '6px' }}>
+              <a href={`/dashboard/${slug}/settings`} style={{ color: 'var(--accent-blue)', textDecoration: 'none', fontWeight: 500 }}>
+                ⚡ Add AI Key
+              </a>
             </div>
           )}
+          <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px' }}>
+            May 7, 2026
+          </div>
         </div>
       </aside>
 

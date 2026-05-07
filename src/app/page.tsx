@@ -57,12 +57,15 @@ export default async function HomePage() {
         </div>
 
         {/* Brand Grid */}
-        <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h2 style={{ fontSize: '18px', fontWeight: '600' }}>Your Brands</h2>
           <Link href="/brands/new" className="btn btn-primary">
             <span>+</span> Add Brand
           </Link>
         </div>
+        <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '20px' }}>
+          Select a brand to view its analytics dashboard
+        </p>
 
         {brands.length === 0 ? (
           <div className="empty-state">
@@ -87,8 +90,8 @@ export default async function HomePage() {
                 googleAdsCustomerId={brand.googleAdsCustomerId}
               />
             ))}
-            <Link href="/brands/new" className="add-brand-card">
-              <div className="add-icon">+</div>
+            <Link href="/brands/new" className="add-brand-card" style={{ border: '2px dashed rgba(59,130,246,0.2)' }}>
+              <div className="add-icon" style={{ fontSize: '36px', color: 'var(--accent-blue)', opacity: 1, marginBottom: '8px' }}>+</div>
               <div style={{ fontSize: '14px', fontWeight: '500' }}>Add Another Brand</div>
             </Link>
           </div>
