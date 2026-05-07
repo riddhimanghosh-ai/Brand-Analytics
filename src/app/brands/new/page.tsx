@@ -166,6 +166,14 @@ export default function NewBrandPage() {
         <div className="form-card">
           <div className="form-card-title">🛒 Shopify Connection</div>
           <div className="form-card-desc">Connect your Shopify store for order, product, and customer analytics</div>
+
+          {/* Note about dual methods */}
+          <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: '8px', padding: '12px', marginBottom: '16px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+            <strong>💡 Two ways to connect:</strong><br />
+            • <strong>Now (Manual Token):</strong> Paste your store URL + token below to set up immediately.<br />
+            • <strong>Later (One-Click OAuth):</strong> After creating the brand, go to Settings → Shopify → use the one-click Shopify App install.
+          </div>
+
           <div className="form-group">
             <label className="form-label">Store URL</label>
             <input
