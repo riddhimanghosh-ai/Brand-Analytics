@@ -265,11 +265,11 @@ export const demoGA4Countries = [
 ];
 
 export const demoGA4LandingPages = [
-  { page: '/', sessions: 18400, bounceRate: 42.3, conversionRate: 2.14, revenue: 48700 },
-  { page: '/products/premium-wireless-earbuds', sessions: 12800, bounceRate: 31.2, conversionRate: 4.21, revenue: 68400 },
-  { page: '/collections/headphones', sessions: 9400, bounceRate: 38.7, conversionRate: 2.87, revenue: 31200 },
-  { page: '/blogs/news/best-earbuds-2024', sessions: 6200, bounceRate: 61.4, conversionRate: 1.12, revenue: 8400 },
-  { page: '/pages/deals', sessions: 4800, bounceRate: 28.9, conversionRate: 5.41, revenue: 37800 },
+  { page: '/', sessions: 18400, bounceRate: 42.3, conversions: 394, revenue: 48700 },
+  { page: '/products/premium-wireless-earbuds', sessions: 12800, bounceRate: 31.2, conversions: 539, revenue: 68400 },
+  { page: '/collections/headphones', sessions: 9400, bounceRate: 38.7, conversions: 270, revenue: 31200 },
+  { page: '/blogs/news/best-earbuds-2024', sessions: 6200, bounceRate: 61.4, conversions: 69, revenue: 8400 },
+  { page: '/pages/deals', sessions: 4800, bounceRate: 28.9, conversions: 260, revenue: 37800 },
 ];
 
 export const demoGA4Events = [
