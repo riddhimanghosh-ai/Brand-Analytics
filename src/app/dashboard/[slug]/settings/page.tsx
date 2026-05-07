@@ -46,7 +46,7 @@ function ShopifyConnect({
   brand: BrandData;
   isConnected: boolean;
 }) {
-  const [shopUrl, setShopUrl] = useState('');
+  const [shopUrl, setShopUrl] = useState(brand.shopifyStoreUrl || '');
 
   const handleConnect = () => {
     const clean = shopUrl.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -70,6 +70,11 @@ function ShopifyConnect({
 
   return (
     <div>
+      {brand.shopifyStoreUrl && !isConnected && (
+        <div style={{ marginBottom: '14px', padding: '10px 14px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '8px', fontSize: '13px', color: 'var(--accent-amber)' }}>
+          ⚠️ Store URL saved but authorization is incomplete — click <strong>Connect Shopify</strong> below to finish.
+        </div>
+      )}
       <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
         Enter your Shopify store URL and click <strong>Connect Shopify</strong>. You will be taken to Shopify to approve the connection — no tokens needed.
       </div>
@@ -240,7 +245,7 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   if (!brand) return null;
 
   const isConnected = {
-    shopify: !!(brand.shopifyConnected || brand.shopifyStoreUrl),
+    shopify: !!(brand.shopifyConnected),  // needs both URL + token — shopifyConnected flag set by masked API
     ga4: !!(brand.ga4Connected || brand.ga4PropertyId),
     meta: !!(brand.metaConnected || brand.metaAccessToken),
     googleAds: !!(brand.googleAdsConnected || brand.googleAdsCustomerId),
