@@ -36,7 +36,7 @@ interface BrandData {
   klaviyoConnected?: boolean;
 }
 
-// ── Shopify connection component (Global app credentials) ──
+// ── Shopify OAuth connect component ──
 function ShopifyConnect({
   slug,
   brand,
@@ -46,36 +46,62 @@ function ShopifyConnect({
   brand: BrandData;
   isConnected: boolean;
 }) {
-  const Step = ({ n, text }: { n: number; text: string }) => (
-    <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'flex-start' }}>
-      <span style={{ minWidth: '22px', height: '22px', borderRadius: '50%', background: 'var(--accent-blue)', color: '#fff', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>{n}</span>
-      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }} dangerouslySetInnerHTML={{ __html: text }} />
-    </div>
-  );
+  const [shopUrl, setShopUrl] = useState('');
+
+  const handleConnect = () => {
+    const clean = shopUrl.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    if (!clean) return;
+    window.location.href = `/api/shopify/install?shop=${encodeURIComponent(clean)}&slug=${encodeURIComponent(slug)}`;
+  };
+
+  if (isConnected) {
+    return (
+      <div style={{ padding: '14px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <span style={{ fontSize: '24px' }}>✅</span>
+        <div>
+          <div style={{ fontWeight: '600', color: '#22c55e', fontSize: '14px' }}>Connected</div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+            Store: <strong>{brand.shopifyStoreUrl}</strong> — data syncing automatically
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <>
-      {!isConnected ? (
-        <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
-          <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>One-click install (2 steps)</div>
-          <Step n={1} text="Go to <a href=&quot;https://partners.shopify.com&quot; target=&quot;_blank&quot; style=&quot;color:var(--accent-blue)&quot;>Shopify Partner Dashboard</a> &gt; Your app &gt; Distribution &gt; Enter your store domain &gt; Click <strong>Generate link</strong>" />
-          <Step n={2} text="Click the generated link &gt; Click <strong>Install app</strong> &gt; You will be redirected back here, fully connected" />
-          <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '6px', padding: '10px 12px', marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-            ✅ No tokens needed - the app credentials are stored securely and work instantly after installation.
-          </div>
+    <div>
+      <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+        Enter your Shopify store URL and click <strong>Connect Shopify</strong>. You will be taken to Shopify to approve the connection — no tokens needed.
+      </div>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+        <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+          <label className="form-label">Store URL</label>
+          <input
+            className="form-input mono"
+            placeholder="your-store.myshopify.com"
+            value={shopUrl}
+            onChange={(e) => setShopUrl(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+          />
         </div>
-      ) : (
-        <div style={{ padding: '12px 14px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: '20px' }}>✅</span>
-          <div>
-            <div style={{ fontWeight: '600', color: '#22c55e' }}>Connected</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Connected to <strong>{brand.shopifyStoreUrl}</strong> - Real-time data syncing
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+        <button
+          onClick={handleConnect}
+          disabled={!shopUrl.trim()}
+          style={{
+            padding: '10px 20px', borderRadius: '10px', border: 'none',
+            background: shopUrl.trim() ? '#96bf48' : 'var(--bg-card)',
+            color: shopUrl.trim() ? '#fff' : 'var(--text-dim)',
+            fontSize: '14px', fontWeight: '600', cursor: shopUrl.trim() ? 'pointer' : 'default',
+            whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '22px',
+          }}
+        >
+          🛍️ Connect Shopify
+        </button>
+      </div>
+      <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
+        You will be redirected to Shopify to approve permissions, then automatically redirected back here.
+      </div>
+    </div>
   );
 }
 
