@@ -58,8 +58,9 @@ export interface ConversionFunnel {
 async function shopifyGraphQL(
   config: ShopifyConfig,
   query: string,
-  variables?: Record<string, unknown>
-) {
+  variables?: Record<string, unknown>,
+  retries = 3
+): Promise<Record<string, unknown>> {
   const url = `https://${config.storeUrl}/admin/api/${API_VERSION}/graphql.json`;
 
   const response = await fetch(url, {
@@ -78,7 +79,15 @@ async function shopifyGraphQL(
 
   const json = await response.json();
 
+  // Handle Shopify rate limiting — retry with backoff
   if (json.errors) {
+    const isThrottled = json.errors.some(
+      (e: { extensions?: { code?: string } }) => e.extensions?.code === 'THROTTLED'
+    );
+    if (isThrottled && retries > 0) {
+      await new Promise((r) => setTimeout(r, 1500));
+      return shopifyGraphQL(config, query, variables, retries - 1);
+    }
     throw new Error(`Shopify GraphQL error: ${JSON.stringify(json.errors)}`);
   }
 
@@ -94,7 +103,7 @@ async function fetchAllOrders(
   config: ShopifyConfig,
   startDate: string,
   endDate: string,
-  maxPages = 10
+  maxPages = 5
 ): Promise<Array<Record<string, unknown>>> {
   const allOrders: Array<Record<string, unknown>> = [];
   let cursor: string | null = null;
