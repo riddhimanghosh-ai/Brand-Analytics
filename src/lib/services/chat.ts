@@ -8,9 +8,9 @@ export async function streamChat(
 ): Promise<ReadableStream<Uint8Array>> {
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  // Use gemini-2.0-flash — inject context as first history exchange to avoid
-  // system_instruction compatibility issues across SDK versions.
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+  // Try gemini-2.0-flash first; fall back to gemini-2.0-flash-lite (higher free quota)
+  // if the primary model hits rate limits.
+  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
 
   const systemPrompt = `You are a concise e-commerce analyst. Answer using ONLY the data below. No fluff.
 
@@ -76,8 +76,15 @@ If you don't have the data: "No data for that. I have: [list what's available]."
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
       } catch (error) {
+        const raw = (error as Error).message || '';
+        let friendly = raw;
+        if (raw.includes('429') || raw.toLowerCase().includes('quota') || raw.toLowerCase().includes('too many requests')) {
+          friendly = '⚠️ Gemini API rate limit reached. Your free tier quota is exhausted for now. Please wait a minute and try again, or upgrade your Gemini API key at aistudio.google.com for higher limits.';
+        } else if (raw.includes('API_KEY_INVALID') || raw.includes('invalid api key')) {
+          friendly = '❌ Invalid Gemini API key. Please update it in Settings → AI Consultant.';
+        }
         controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: (error as Error).message })}\n\n`)
+          encoder.encode(`data: ${JSON.stringify({ error: friendly })}\n\n`)
         );
         controller.close();
       }
