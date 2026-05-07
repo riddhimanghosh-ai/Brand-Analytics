@@ -31,11 +31,11 @@ export interface BrandData {
   updatedAt: string;
 }
 
-let cachedDb: Db;
-let cachedClient: MongoClient;
+// Use globalThis so the connection survives HMR in dev and Lambda warm starts in production
+const g = globalThis as typeof globalThis & { _mongoDb?: Db; _mongoClient?: MongoClient };
 
 async function connectDb() {
-  if (cachedDb) return cachedDb;
+  if (g._mongoDb) return g._mongoDb;
 
   const uri = process.env.MONGODB_URI;
   if (!uri) {
@@ -48,14 +48,14 @@ async function connectDb() {
     socketTimeoutMS: 10000,
   });
   await client.connect();
-  cachedClient = client;
-  cachedDb = client.db('analytics-dashboard');
+  g._mongoClient = client;
+  g._mongoDb = client.db('analytics-dashboard');
 
   // Create indexes
-  const collection = cachedDb.collection('brands');
+  const collection = g._mongoDb.collection('brands');
   await collection.createIndex({ slug: 1 });
 
-  return cachedDb;
+  return g._mongoDb;
 }
 
 async function getBrandsCollection(): Promise<Collection> {
