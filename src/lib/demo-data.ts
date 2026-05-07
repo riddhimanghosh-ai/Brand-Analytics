@@ -59,27 +59,35 @@ export const demoShopifyKPIs = {
 export const demoShopifyRevenue = revenueSeries;
 
 export const demoShopifyProducts = [
-  { title: 'Premium Wireless Earbuds', revenue: 54200, orders: 412, quantity: 487 },
-  { title: 'Noise-Cancelling Headphones', revenue: 38900, orders: 198, quantity: 213 },
-  { title: 'Smart Watch Series 5', revenue: 31700, orders: 147, quantity: 152 },
-  { title: 'Portable Bluetooth Speaker', revenue: 24100, orders: 287, quantity: 301 },
-  { title: 'USB-C Fast Charger (3-Pack)', revenue: 19800, orders: 521, quantity: 1563 },
-  { title: 'Laptop Stand Pro', revenue: 17400, orders: 193, quantity: 207 },
-  { title: 'Mechanical Keyboard TKL', revenue: 14200, orders: 89, quantity: 92 },
-  { title: 'RGB Gaming Mouse', revenue: 11600, orders: 154, quantity: 163 },
-  { title: 'Webcam 4K Ultra', revenue: 9800, orders: 112, quantity: 118 },
-  { title: 'Monitor Light Bar', revenue: 8100, orders: 243, quantity: 261 },
+  { id: 'prod_01', title: 'Premium Wireless Earbuds', totalRevenue: 54200, totalOrders: 412, totalUnitsSold: 487, averagePrice: 131.55 },
+  { id: 'prod_02', title: 'Noise-Cancelling Headphones', totalRevenue: 38900, totalOrders: 198, totalUnitsSold: 213, averagePrice: 196.46 },
+  { id: 'prod_03', title: 'Smart Watch Series 5', totalRevenue: 31700, totalOrders: 147, totalUnitsSold: 152, averagePrice: 215.65 },
+  { id: 'prod_04', title: 'Portable Bluetooth Speaker', totalRevenue: 24100, totalOrders: 287, totalUnitsSold: 301, averagePrice: 83.99 },
+  { id: 'prod_05', title: 'USB-C Fast Charger (3-Pack)', totalRevenue: 19800, totalOrders: 521, totalUnitsSold: 1563, averagePrice: 38.0 },
+  { id: 'prod_06', title: 'Laptop Stand Pro', totalRevenue: 17400, totalOrders: 193, totalUnitsSold: 207, averagePrice: 90.16 },
+  { id: 'prod_07', title: 'Mechanical Keyboard TKL', totalRevenue: 14200, totalOrders: 89, totalUnitsSold: 92, averagePrice: 159.55 },
+  { id: 'prod_08', title: 'RGB Gaming Mouse', totalRevenue: 11600, totalOrders: 154, totalUnitsSold: 163, averagePrice: 75.32 },
+  { id: 'prod_09', title: 'Webcam 4K Ultra', totalRevenue: 9800, totalOrders: 112, totalUnitsSold: 118, averagePrice: 87.5 },
+  { id: 'prod_10', title: 'Monitor Light Bar', totalRevenue: 8100, totalOrders: 243, totalUnitsSold: 261, averagePrice: 33.33 },
 ];
 
-export const demoShopifyCustomers = [
-  { date: daysAgo(29), new_customers: 87, returning_customers: 43 },
-  { date: daysAgo(24), new_customers: 94, returning_customers: 51 },
-  { date: daysAgo(19), new_customers: 76, returning_customers: 47 },
-  { date: daysAgo(14), new_customers: 103, returning_customers: 58 },
-  { date: daysAgo(9), new_customers: 89, returning_customers: 62 },
-  { date: daysAgo(4), new_customers: 112, returning_customers: 71 },
-  { date: daysAgo(0), new_customers: 98, returning_customers: 67 },
-];
+export const demoShopifyCustomers = {
+  newVsReturning: [
+    { name: 'New Customers', value: 2141 },
+    { name: 'Returning Customers', value: 1100 },
+  ],
+  revenueBySegment: [
+    { name: 'New Customers', value: 187367 },
+    { name: 'Returning Customers', value: 97383 },
+  ],
+  topCustomers: [
+    { id: 'cust_01', firstName: 'Priya', lastName: 'Sharma', email: 'p.sharma@email.com', ordersCount: 12, totalSpent: 4820 },
+    { id: 'cust_02', firstName: 'Arjun', lastName: 'Mehta', email: 'arjun.m@email.com', ordersCount: 9, totalSpent: 3640 },
+    { id: 'cust_03', firstName: 'Sunita', lastName: 'Reddy', email: 's.reddy@email.com', ordersCount: 8, totalSpent: 2980 },
+    { id: 'cust_04', firstName: 'Vikram', lastName: 'Nair', email: 'vnair@email.com', ordersCount: 7, totalSpent: 2410 },
+    { id: 'cust_05', firstName: 'Divya', lastName: 'Menon', email: 'divya.m@email.com', ordersCount: 6, totalSpent: 1970 },
+  ],
+};
 
 export const demoShopifyOrderStatus = [
   { status: 'fulfilled', count: 1524, percentage: 82.5 },
@@ -89,13 +97,13 @@ export const demoShopifyOrderStatus = [
 ];
 
 export const demoShopifyOrders = Array.from({ length: 50 }, (_, i) => ({
-  id: `#${10000 + i}`,
-  created_at: daysAgo(Math.floor(Math.random() * 30)),
-  total_price: randomBetween(49, 490, 2),
-  financial_status: ['paid', 'paid', 'paid', 'refunded', 'pending'][Math.floor(Math.random() * 5)],
-  fulfillment_status: ['fulfilled', 'fulfilled', 'unfulfilled', 'partial'][Math.floor(Math.random() * 4)],
-  line_items_count: Math.floor(Math.random() * 4) + 1,
-  customer_name: ['Alex M.', 'Priya S.', 'Jordan T.', 'Sam K.', 'Riley P.'][Math.floor(Math.random() * 5)],
+  id: `gid://shopify/Order/${10000 + i}`,
+  name: `#${10000 + i}`,
+  email: ['priya@demo.com', 'arjun@demo.com', 'sunita@demo.com', 'vikram@demo.com', 'divya@demo.com'][i % 5],
+  totalPrice: randomBetween(49, 490, 2),
+  financialStatus: ['paid', 'paid', 'paid', 'refunded', 'pending'][Math.floor(Math.random() * 5)],
+  fulfillmentStatus: ['fulfilled', 'fulfilled', 'unfulfilled', 'partial'][Math.floor(Math.random() * 4)],
+  createdAt: new Date(Date.now() - Math.floor(Math.random() * 30) * 86400000).toISOString(),
 }));
 
 export const demoShopifyConversionFunnel = [
@@ -106,62 +114,87 @@ export const demoShopifyConversionFunnel = [
   { stage: 'Checkout Completed', count: 1847, dropoffRate: 61.2 },
 ];
 
+const hourLabels = ['12am','1am','2am','3am','4am','5am','6am','7am','8am','9am','10am','11am','12pm','1pm','2pm','3pm','4pm','5pm','6pm','7pm','8pm','9pm','10pm','11pm'];
+
 export const demoShopifyAdvanced = {
-  locationBreakdown: [
-    { city: 'Mumbai', state: 'Maharashtra', revenue: 54200, orders: 341 },
-    { city: 'Delhi', state: 'Delhi', revenue: 48700, orders: 298 },
-    { city: 'Bangalore', state: 'Karnataka', revenue: 39800, orders: 251 },
-    { city: 'Hyderabad', state: 'Telangana', revenue: 29100, orders: 187 },
-    { city: 'Chennai', state: 'Tamil Nadu', revenue: 24300, orders: 163 },
-    { city: 'Pune', state: 'Maharashtra', revenue: 19800, orders: 143 },
-    { city: 'Kolkata', state: 'West Bengal', revenue: 16700, orders: 112 },
-    { city: 'Ahmedabad', state: 'Gujarat', revenue: 12400, orders: 87 },
-  ],
+  locationBreakdown: {
+    byCountry: [
+      { country: 'India', countryCode: 'IN', orders: 1524, revenue: 234200 },
+      { country: 'United States', countryCode: 'US', orders: 183, revenue: 29800 },
+      { country: 'United Kingdom', countryCode: 'GB', orders: 87, revenue: 13400 },
+      { country: 'Canada', countryCode: 'CA', orders: 53, revenue: 7350 },
+    ],
+    byCity: [
+      { city: 'Mumbai', province: 'Maharashtra', country: 'India', orders: 341, revenue: 54200 },
+      { city: 'Delhi', province: 'Delhi', country: 'India', orders: 298, revenue: 48700 },
+      { city: 'Bangalore', province: 'Karnataka', country: 'India', orders: 251, revenue: 39800 },
+      { city: 'Hyderabad', province: 'Telangana', country: 'India', orders: 187, revenue: 29100 },
+      { city: 'Chennai', province: 'Tamil Nadu', country: 'India', orders: 163, revenue: 24300 },
+      { city: 'Pune', province: 'Maharashtra', country: 'India', orders: 143, revenue: 19800 },
+    ],
+  },
   salesChannels: [
-    { channel: 'Online Store', revenue: 219000, orders: 1412, percentage: 76.9 },
-    { channel: 'Instagram Shopping', revenue: 38200, orders: 247, percentage: 13.4 },
-    { channel: 'Google Shopping', revenue: 18900, orders: 132, percentage: 6.6 },
-    { channel: 'Point of Sale', revenue: 8650, orders: 56, percentage: 3.1 },
+    { channel: 'Online Store', revenue: 219000, orders: 1412 },
+    { channel: 'Instagram Shopping', revenue: 38200, orders: 247 },
+    { channel: 'Google Shopping', revenue: 18900, orders: 132 },
+    { channel: 'Point of Sale', revenue: 8650, orders: 56 },
   ],
   discountAnalysis: {
-    discountedOrders: 412,
-    totalDiscountAmount: 18750,
-    avgDiscountPct: 11.4,
-    mostUsedCode: 'SAVE15',
+    topCodes: [
+      { code: 'SAVE15', uses: 214, totalDiscount: 8940, avgDiscount: 41.8 },
+      { code: 'WELCOME10', uses: 127, totalDiscount: 5210, avgDiscount: 41.0 },
+      { code: 'FLASH20', uses: 71, totalDiscount: 4600, avgDiscount: 64.8 },
+    ],
+    discountedOrdersRate: 22.3,
+    totalDiscountGiven: 18750,
+    avgDiscount: 45.5,
   },
   timeAnalysis: {
-    peakHour: 20,
-    peakDay: 'Saturday',
-    avgOrdersByHour: Array.from({ length: 24 }, (_, h) => ({
+    byHour: Array.from({ length: 24 }, (_, h) => ({
       hour: h,
-      orders: Math.round(15 + (h >= 18 && h <= 22 ? 45 : h >= 10 && h <= 14 ? 25 : 5) * Math.random()),
+      label: hourLabels[h],
+      orders: Math.round(8 + (h >= 18 && h <= 22 ? 38 : h >= 10 && h <= 14 ? 22 : 3) * (0.7 + Math.random() * 0.6)),
+      revenue: Math.round(1200 + (h >= 18 && h <= 22 ? 5800 : h >= 10 && h <= 14 ? 3400 : 400) * (0.7 + Math.random() * 0.6)),
     })),
+    byDayOfWeek: [
+      { day: 'Sunday', dayNum: 0, orders: 312, revenue: 48100 },
+      { day: 'Monday', dayNum: 1, orders: 241, revenue: 37200 },
+      { day: 'Tuesday', dayNum: 2, orders: 228, revenue: 35200 },
+      { day: 'Wednesday', dayNum: 3, orders: 247, revenue: 38100 },
+      { day: 'Thursday', dayNum: 4, orders: 263, revenue: 40600 },
+      { day: 'Friday', dayNum: 5, orders: 289, revenue: 44600 },
+      { day: 'Saturday', dayNum: 6, orders: 267, revenue: 40950 },
+    ],
   },
   clvMetrics: {
     avgLTV: 387,
-    avgPurchaseFrequency: 2.51,
-    avgCustomerLifespan: 14.2,
-    topCustomerLTV: 4820,
+    avgOrdersPerCustomer: 2.51,
+    buyOnce: 1847,
+    buyTwice: 892,
+    buyThreePlus: 502,
+    totalCustomers: 3241,
   },
   aovByDate: revenueSeries.slice(-30).map((d) => ({
     date: d.date,
+    orders: d.orders,
+    revenue: d.revenue,
     aov: parseFloat((d.revenue / (d.orders || 1)).toFixed(2)),
   })),
-  financialFunnel: {
-    grossRevenue: 284750,
-    discounts: 18750,
-    refunds: 5980,
-    netRevenue: 260020,
-    shippingRevenue: 14230,
-    taxes: 31200,
-  },
+  financialFunnel: [
+    { name: 'Gross Revenue', value: 284750 },
+    { name: 'Discounts', value: -18750 },
+    { name: 'Refunds', value: -5980 },
+    { name: 'Net Revenue', value: 260020 },
+    { name: 'Shipping', value: 14230 },
+    { name: 'Taxes', value: -31200 },
+  ],
 };
 
 export const demoShopifyCombined = {
   kpis: demoShopifyKPIs,
   revenue: demoShopifyRevenue,
   products: demoShopifyProducts,
-  customers: demoShopifyCustomers,
+  customers: demoShopifyCustomers, // now matches CustomerData interface
   orderStatus: demoShopifyOrderStatus,
 };
 
