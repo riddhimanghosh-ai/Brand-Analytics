@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { ConnectionAccordion } from '@/components/ConnectionAccordion';
 
 interface BrandData {
   id: string;
@@ -283,32 +284,32 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
       <div className="page-body">
 
         {/* ── SHOPIFY ── */}
-        <div className="form-card">
-          <div className="form-card-title">
-            🛒 Shopify
-            <span className={`badge ${isConnected.shopify ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
-              {isConnected.shopify ? 'Connected' : 'Not Connected'}
-            </span>
+        <ConnectionAccordion
+          id="shopify"
+          title="Shopify"
+          icon="🛒"
+          isConnected={isConnected.shopify}
+        >
+          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Enables orders, products, customers, revenue analytics, and Custom Metrics (ShopifyQL)
           </div>
-          <div className="form-card-desc">Enables orders, products, customers, revenue analytics, and Custom Metrics (ShopifyQL)</div>
-
-          {/* Shopify connect */}
           <ShopifyConnect
             slug={params?.slug ?? ''}
             brand={brand}
             isConnected={isConnected.shopify}
           />
-        </div>
+        </ConnectionAccordion>
 
         {/* ── GOOGLE ANALYTICS 4 ── */}
-        <div className="form-card">
-          <div className="form-card-title">
-            📈 Google Analytics 4 (GA4)
-            <span className={`badge ${isConnected.ga4 ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
-              {isConnected.ga4 ? 'Connected' : 'Not Connected'}
-            </span>
+        <ConnectionAccordion
+          id="ga4"
+          title="Google Analytics 4"
+          icon="📈"
+          isConnected={isConnected.ga4}
+        >
+          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Traffic sources, sessions, bounce rates, and conversion funnel data
           </div>
-          <div className="form-card-desc">Traffic sources, sessions, bounce rates, and conversion funnel data</div>
 
           <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
@@ -328,17 +329,18 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             <label className="form-label">Service Account JSON</label>
             <textarea className="form-input mono" rows={5} value={brand.ga4ServiceAccountJson || ''} onChange={(e) => updateField('ga4ServiceAccountJson', e.target.value)} placeholder={'{\n  "type": "service_account",\n  "project_id": "...",\n  "private_key": "-----BEGIN RSA PRIVATE KEY-----\\n..."\n}'} />
           </div>
-        </div>
+        </ConnectionAccordion>
 
         {/* ── META ADS ── */}
-        <div className="form-card">
-          <div className="form-card-title">
-            📱 Meta Ads (Facebook & Instagram)
-            <span className={`badge ${isConnected.meta ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
-              {isConnected.meta ? 'Connected' : 'Not Connected'}
-            </span>
+        <ConnectionAccordion
+          id="metaAds"
+          title="Meta Ads"
+          icon="📱"
+          isConnected={isConnected.meta}
+        >
+          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Facebook and Instagram ad campaign performance, ROAS and spend analytics
           </div>
-          <div className="form-card-desc">Facebook and Instagram ad campaign performance, ROAS and spend analytics</div>
 
           <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
@@ -369,17 +371,18 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
               <input className="form-input mono" value={brand.metaAdAccountId || ''} onChange={(e) => updateField('metaAdAccountId', e.target.value)} placeholder="act_123456789" />
             </div>
           </div>
-        </div>
+        </ConnectionAccordion>
 
         {/* ── GOOGLE ADS ── */}
-        <div className="form-card">
-          <div className="form-card-title">
-            🎯 Google Ads
-            <span className={`badge ${isConnected.googleAds ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
-              {isConnected.googleAds ? 'Connected' : 'Not Connected'}
-            </span>
+        <ConnectionAccordion
+          id="googleAds"
+          title="Google Ads"
+          icon="🎯"
+          isConnected={isConnected.googleAds}
+        >
+          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Search, Shopping and Display campaign performance and ROAS
           </div>
-          <div className="form-card-desc">Search, Shopping and Display campaign performance and ROAS</div>
 
           <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
@@ -414,17 +417,18 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             <label className="form-label">Refresh Token</label>
             <input className="form-input mono" type="password" value={brand.googleAdsRefreshToken || ''} onChange={(e) => updateField('googleAdsRefreshToken', e.target.value)} placeholder="1//0g..." />
           </div>
-        </div>
+        </ConnectionAccordion>
 
         {/* ── GEMINI AI ── */}
-        <div className="form-card">
-          <div className="form-card-title">
-            🤖 AI Consultant (Gemini)
-            <span className={`badge ${isConnected.ai ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
-              {isConnected.ai ? '🔑 Key Saved' : 'Not Connected'}
-            </span>
+        <ConnectionAccordion
+          id="gemini"
+          title="AI Consultant"
+          icon="🤖"
+          isConnected={isConnected.ai}
+        >
+          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Powers the AI chat assistant with real-time brand data for consulting
           </div>
-          <div className="form-card-desc">Powers the AI chat assistant with real-time brand data for consulting</div>
 
           <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
@@ -462,17 +466,18 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
               autoComplete="new-password"
             />
           </div>
-        </div>
+        </ConnectionAccordion>
 
         {/* ── TIKTOK ADS ── */}
-        <div className="form-card">
-          <div className="form-card-title">
-            🎵 TikTok Ads
-            <span className={`badge ${(brand as unknown as Record<string,string|null>).tiktokAdvertiserId ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
-              {(brand as unknown as Record<string,string|null>).tiktokAdvertiserId ? 'Connected' : 'Not Connected'}
-            </span>
+        <ConnectionAccordion
+          id="tiktok"
+          title="TikTok Ads"
+          icon="🎵"
+          isConnected={!!(brand as unknown as Record<string,string|null>).tiktokAdvertiserId}
+        >
+          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Track TikTok Ads spend, ROAS, video views, and conversions
           </div>
-          <div className="form-card-desc">Track TikTok Ads spend, ROAS, video views, and conversions</div>
 
           <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
@@ -490,17 +495,18 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             <label className="form-label">Advertiser ID</label>
             <input className="form-input mono" value={(brand as unknown as Record<string,string>).tiktokAdvertiserId || ''} onChange={(e) => updateField('tiktokAdvertiserId', e.target.value)} placeholder="1234567890" />
           </div>
-        </div>
+        </ConnectionAccordion>
 
         {/* ── KLAVIYO ── */}
-        <div className="form-card">
-          <div className="form-card-title">
-            📧 Klaviyo (Email Marketing)
-            <span className={`badge ${(brand as unknown as Record<string,string|null>).klaviyoApiKey ? 'green' : 'gray'}`} style={{ marginLeft: '8px', fontSize: '11px' }}>
-              {(brand as unknown as Record<string,string|null>).klaviyoApiKey ? 'Connected' : 'Not Connected'}
-            </span>
+        <ConnectionAccordion
+          id="klaviyo"
+          title="Klaviyo"
+          icon="📧"
+          isConnected={!!(brand as unknown as Record<string,string|null>).klaviyoApiKey}
+        >
+          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Track email revenue, open rates, click rates, flows, and subscriber growth
           </div>
-          <div className="form-card-desc">Track email revenue, open rates, click rates, flows, and subscriber growth</div>
 
           <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
@@ -513,7 +519,7 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             <label className="form-label">Klaviyo Private API Key</label>
             <input className="form-input mono" type="password" value={(brand as unknown as Record<string,string>).klaviyoApiKey || ''} onChange={(e) => updateField('klaviyoApiKey', e.target.value)} placeholder="pk_..." />
           </div>
-        </div>
+        </ConnectionAccordion>
 
         {/* Save */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
