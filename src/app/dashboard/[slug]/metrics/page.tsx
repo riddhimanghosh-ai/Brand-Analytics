@@ -51,6 +51,7 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
   const [savedMetrics, setSavedMetrics] = useState<SavedMetric[]>([]);
   const [saveName, setSaveName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [dataSource, setDataSource] = useState<'shopifyql' | 'orders_api' | null>(null);
 
   useEffect(() => {
     paramsPromise.then(p => {
@@ -72,6 +73,7 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
     setError('');
     setColumns([]);
     setRows([]);
+    setDataSource(null);
     try {
       const res = await fetch('/api/metrics', {
         method: 'POST',
@@ -84,6 +86,7 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
       } else {
         setColumns(data.columns);
         setRows(data.rows);
+        setDataSource(data.source || null);
       }
     } catch {
       setError('Failed to connect to Shopify');
@@ -329,7 +332,17 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
             <div className="chart-card-header" style={{ marginBottom: '16px' }}>
               <div>
                 <div className="chart-card-title">Query Results</div>
-                <div className="chart-card-subtitle">{rows.length} rows · {columns.length} columns</div>
+                <div className="chart-card-subtitle">
+                  {rows.length} rows · {columns.length} columns
+                  {dataSource === 'orders_api' && (
+                    <span style={{ marginLeft: '8px', color: 'var(--accent-amber)', fontSize: '11px' }}>
+                      ⚡ Orders API (ShopifyQL requires Advanced/Plus plan)
+                    </span>
+                  )}
+                  {dataSource === 'shopifyql' && (
+                    <span style={{ marginLeft: '8px', color: 'var(--accent-emerald)', fontSize: '11px' }}>✓ ShopifyQL</span>
+                  )}
+                </div>
               </div>
             </div>
             <MetricChart columns={columns} rows={rows} chartType={chartType} />
