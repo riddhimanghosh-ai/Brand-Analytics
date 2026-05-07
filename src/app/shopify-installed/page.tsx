@@ -1,9 +1,9 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 
-export default function ShopifyInstalledPage() {
+function ShopifyInstalledContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const shop = searchParams.get('shop');
@@ -23,6 +23,7 @@ export default function ShopifyInstalledPage() {
   };
 
   return (
+
     <div style={{ maxWidth: '600px', margin: '0 auto', padding: '60px 24px', textAlign: 'center' }}>
       {/* Success icon */}
       <div style={{ fontSize: '72px', marginBottom: '24px' }}>✅</div>
@@ -134,8 +135,16 @@ export default function ShopifyInstalledPage() {
       {/* Info box */}
       <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: '8px', padding: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
         <div style={{ fontWeight: '600', marginBottom: '6px', color: 'var(--text-primary)' }}>💡 Tip</div>
-        The access token is shown in the Partner Dashboard Configuration. Keep it secure and never share it.
+        No manual steps needed - the app is now connected to your dashboard.
       </div>
     </div>
+  );
+}
+
+export default function ShopifyInstalledPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: '60px 24px', textAlign: 'center' }}>Loading...</div>}>
+      <ShopifyInstalledContent />
+    </Suspense>
   );
 }

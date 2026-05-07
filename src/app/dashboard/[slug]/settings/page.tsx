@@ -58,10 +58,10 @@ function ShopifyConnect({
       {!isConnected ? (
         <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
           <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>One-click install (2 steps)</div>
-          <Step n={1} text='Go to <a href="https://partners.shopify.com" target="_blank" style="color:var(--accent-blue)">Shopify Partner Dashboard</a> → Your app → Distribution → Enter your store domain → Click <strong>Generate link</strong>' />
-          <Step n={2} text='Click the generated link → Click <strong>Install app</strong> → You\'ll be redirected back here, fully connected ✨' />
+          <Step n={1} text="Go to <a href=&quot;https://partners.shopify.com&quot; target=&quot;_blank&quot; style=&quot;color:var(--accent-blue)&quot;>Shopify Partner Dashboard</a> &gt; Your app &gt; Distribution &gt; Enter your store domain &gt; Click <strong>Generate link</strong>" />
+          <Step n={2} text="Click the generated link &gt; Click <strong>Install app</strong> &gt; You will be redirected back here, fully connected" />
           <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '6px', padding: '10px 12px', marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-            ✅ No tokens needed — the app's credentials are stored securely and work instantly after installation.
+            ✅ No tokens needed - the app credentials are stored securely and work instantly after installation.
           </div>
         </div>
       ) : (
@@ -70,7 +70,7 @@ function ShopifyConnect({
           <div>
             <div style={{ fontWeight: '600', color: '#22c55e' }}>Connected</div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Connected to <strong>{brand.shopifyStoreUrl}</strong> — Real-time data syncing
+              Connected to <strong>{brand.shopifyStoreUrl}</strong> - Real-time data syncing
             </div>
           </div>
         </div>
