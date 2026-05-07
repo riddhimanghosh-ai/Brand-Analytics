@@ -196,7 +196,11 @@ async function fetchAllOrders(
     `;
 
     const data = await shopifyGraphQL(config, query);
-    const edges = data.orders.edges;
+    const ordersData = data.orders as {
+      edges: Array<{ cursor: string; node: Record<string, unknown> }>;
+      pageInfo: { hasNextPage: boolean };
+    };
+    const edges = ordersData?.edges;
 
     if (!edges || edges.length === 0) break;
 
@@ -205,7 +209,7 @@ async function fetchAllOrders(
       cursor = edge.cursor;
     }
 
-    if (!data.orders.pageInfo.hasNextPage) break;
+    if (!ordersData.pageInfo.hasNextPage) break;
     page++;
   }
 
@@ -221,7 +225,8 @@ export async function testConnection(
 ): Promise<{ success: boolean; shopName?: string; error?: string }> {
   try {
     const data = await shopifyGraphQL(config, '{ shop { name email myshopifyDomain } }');
-    return { success: true, shopName: data.shop.name };
+    const shop = data.shop as { name: string };
+    return { success: true, shopName: shop.name };
   } catch (error) {
     return { success: false, error: (error as Error).message };
   }
@@ -530,8 +535,11 @@ export async function getRecentOrders(
   `;
 
   const data = await shopifyGraphQL(config, query);
+  const ordersResult = data.orders as {
+    edges: Array<{ node: Record<string, unknown> }>;
+  };
 
-  return data.orders.edges.map((edge: { node: Record<string, unknown> }) => {
+  return ordersResult.edges.map((edge: { node: Record<string, unknown> }) => {
     const o = edge.node;
     const customer = o.customer as { firstName: string; lastName: string } | null;
     const priceSet = o.totalPriceSet as { shopMoney: { amount: string; currencyCode: string } };
@@ -999,6 +1007,214 @@ export async function getAdvancedCROMetrics(
     aovByDate,
     financialFunnel,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Public: getAllAnalytics — fetches orders ONCE and computes all metrics
+// ---------------------------------------------------------------------------
+
+export async function getAllAnalytics(
+  config: ShopifyConfig,
+  dateRange: string = '30d'
+): Promise<{
+  kpis: ShopifyKPIs;
+  revenue: (RevenueDataPoint & { aov: number })[];
+  products: ShopifyProduct[];
+  customers: {
+    newVsReturning: { name: string; value: number }[];
+    revenueBySegment: { name: string; value: number }[];
+    topCustomers: ShopifyCustomer[];
+  };
+  orderStatus: { name: string; value: number }[];
+}> {
+  const now = new Date();
+  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
+  const days = daysMap[dateRange] || 30;
+
+  const currentEnd = now.toISOString();
+  const currentStart = new Date(now.getTime() - days * 86400000).toISOString();
+  const prevEnd = new Date(now.getTime() - days * 86400000).toISOString();
+  const prevStart = new Date(now.getTime() - 2 * days * 86400000).toISOString();
+
+  // Fetch current and previous period orders in parallel — just 2 requests total
+  const [currentOrders, prevOrders] = await Promise.all([
+    fetchAllOrders(config, currentStart, currentEnd),
+    fetchAllOrders(config, prevStart, prevEnd),
+  ]);
+
+  // ── KPIs ──
+  const currentMetrics = computeMetrics(currentOrders);
+  const prevMetrics = computeMetrics(prevOrders);
+
+  const kpis: ShopifyKPIs = {
+    totalRevenue: currentMetrics.totalRevenue,
+    totalOrders: currentMetrics.totalOrders,
+    averageOrderValue: currentMetrics.averageOrderValue,
+    totalCustomers: currentMetrics.uniqueCustomers,
+    repeatCustomerRate: currentMetrics.repeatCustomerRate,
+    conversionRate: 0,
+    cartAbandonmentRate: 0,
+    refundRate: currentMetrics.refundRate,
+    averageItemsPerOrder: currentMetrics.averageItemsPerOrder,
+    returningCustomerRevenue: currentMetrics.returningCustomerRevenue,
+    newCustomerRevenue: currentMetrics.newCustomerRevenue,
+    topSellingProduct: currentMetrics.topProduct,
+    averageFulfillmentDays: 0,
+    prevTotalRevenue: prevMetrics.totalRevenue,
+    prevTotalOrders: prevMetrics.totalOrders,
+    prevAverageOrderValue: prevMetrics.averageOrderValue,
+    prevTotalCustomers: prevMetrics.uniqueCustomers,
+  };
+
+  // ── Revenue over time ──
+  const byDate: Record<string, { revenue: number; orders: number }> = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(now.getTime() - (days - i - 1) * 86400000);
+    const key = d.toISOString().split('T')[0];
+    byDate[key] = { revenue: 0, orders: 0 };
+  }
+  for (const order of currentOrders) {
+    const dateKey = (order.createdAt as string).split('T')[0];
+    const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
+    if (byDate[dateKey]) {
+      byDate[dateKey].revenue += price;
+      byDate[dateKey].orders += 1;
+    }
+  }
+  const revenue = Object.entries(byDate)
+    .map(([date, data]) => ({
+      date,
+      revenue: data.revenue,
+      orders: data.orders,
+      aov: data.orders > 0 ? data.revenue / data.orders : 0,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // ── Products ──
+  const productMap: Record<string, ShopifyProduct> = {};
+  for (const order of currentOrders) {
+    const lineItems = order.lineItems as {
+      edges: Array<{
+        node: {
+          title: string;
+          quantity: number;
+          originalUnitPriceSet: { shopMoney: { amount: string } };
+          product: { id: string; title: string; featuredImage?: { url: string } } | null;
+        };
+      }>;
+    };
+    if (!lineItems?.edges) continue;
+    for (const li of lineItems.edges) {
+      const node = li.node;
+      const productId = node.product?.id || node.title;
+      const productTitle = node.product?.title || node.title;
+      const unitPrice = parseFloat(node.originalUnitPriceSet?.shopMoney?.amount || '0');
+      const rev = unitPrice * (node.quantity || 0);
+      if (!productMap[productId]) {
+        productMap[productId] = {
+          id: productId,
+          title: productTitle,
+          totalRevenue: 0,
+          totalUnitsSold: 0,
+          totalOrders: 0,
+          averagePrice: unitPrice,
+          imageUrl: node.product?.featuredImage?.url || null,
+        };
+      }
+      productMap[productId].totalRevenue += rev;
+      productMap[productId].totalUnitsSold += node.quantity || 0;
+      productMap[productId].totalOrders += 1;
+    }
+  }
+  const products = Object.values(productMap)
+    .sort((a, b) => b.totalRevenue - a.totalRevenue)
+    .slice(0, 15);
+
+  // ── Customers ──
+  let newCount = 0;
+  let returningCount = 0;
+  let newRevenue = 0;
+  let returningRevenue = 0;
+  const customerMap: Record<
+    string,
+    { customer: Record<string, unknown>; totalSpent: number; orderCount: number }
+  > = {};
+
+  for (const order of currentOrders) {
+    const customer = order.customer as {
+      id: string;
+      firstName: string;
+      lastName: string;
+      email: string;
+      numberOfOrders: number;
+      createdAt: string;
+      tags: string[];
+    } | null;
+    const priceSet = order.totalPriceSet as { shopMoney: { amount: string } };
+    const price = parseFloat(priceSet?.shopMoney?.amount || '0');
+
+    if (customer?.id) {
+      if (customer.numberOfOrders > 1) {
+        returningCount++;
+        returningRevenue += price;
+      } else {
+        newCount++;
+        newRevenue += price;
+      }
+      if (!customerMap[customer.id]) {
+        customerMap[customer.id] = { customer, totalSpent: 0, orderCount: 0 };
+      }
+      customerMap[customer.id].totalSpent += price;
+      customerMap[customer.id].orderCount += 1;
+    }
+  }
+
+  const topCustomers = Object.values(customerMap)
+    .sort((a, b) => b.totalSpent - a.totalSpent)
+    .slice(0, 10)
+    .map((c) => {
+      const cust = c.customer as {
+        id: string;
+        firstName: string;
+        lastName: string;
+        email: string;
+        numberOfOrders: number;
+        createdAt: string;
+        tags: string[];
+      };
+      return {
+        id: cust.id,
+        email: cust.email || '',
+        firstName: cust.firstName || '',
+        lastName: cust.lastName || '',
+        ordersCount: c.orderCount,
+        totalSpent: c.totalSpent,
+        createdAt: cust.createdAt,
+        tags: cust.tags || [],
+      };
+    });
+
+  const customers = {
+    newVsReturning: [
+      { name: 'New Customers', value: newCount },
+      { name: 'Returning Customers', value: returningCount },
+    ],
+    revenueBySegment: [
+      { name: 'New Customer Revenue', value: newRevenue },
+      { name: 'Returning Revenue', value: returningRevenue },
+    ],
+    topCustomers,
+  };
+
+  // ── Order status ──
+  const statusMap: Record<string, number> = {};
+  for (const order of currentOrders) {
+    const status = (order.displayFulfillmentStatus as string) || 'UNFULFILLED';
+    statusMap[status] = (statusMap[status] || 0) + 1;
+  }
+  const orderStatus = Object.entries(statusMap).map(([name, value]) => ({ name, value }));
+
+  return { kpis, revenue, products, customers, orderStatus };
 }
 
 // ---------------------------------------------------------------------------

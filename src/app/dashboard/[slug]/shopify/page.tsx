@@ -173,38 +173,45 @@ export default function ShopifyDashboard({
   const [advancedLoading, setAdvancedLoading] = useState(true);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<'throttled' | 'connection' | null>(null);
 
   // Resolve params promise
   useEffect(() => {
     paramsPromise.then((p) => setSlug(p.slug));
   }, [paramsPromise]);
 
-  // Fetch main data
+  // Fetch main data — single combined call + orders separately
   useEffect(() => {
     if (!slug) return;
     setLoading(true);
     setError(null);
 
-    const base = `/api/shopify?slug=${slug}&range=${range}`;
-
     Promise.allSettled([
-      fetch(`${base}&action=kpis`).then((r) => r.json()),
-      fetch(`${base}&action=revenue`).then((r) => r.json()),
-      fetch(`${base}&action=products`).then((r) => r.json()),
+      fetch(`/api/shopify?slug=${slug}&range=${range}&action=combined`).then((r) => r.json()),
       fetch(`/api/shopify?slug=${slug}&action=orders`).then((r) => r.json()),
-      fetch(`${base}&action=customers`).then((r) => r.json()),
-      fetch(`${base}&action=order-status`).then((r) => r.json()),
-      fetch(`${base}&action=conversion-funnel`).then((r) => r.json()),
-    ]).then(([kpisRes, revenueRes, productsRes, ordersRes, customersRes, statusRes, funnelRes]) => {
-      if (kpisRes.status === 'fulfilled' && !kpisRes.value?.error) setKpis(kpisRes.value);
-      if (revenueRes.status === 'fulfilled') setRevenue(Array.isArray(revenueRes.value) ? revenueRes.value : []);
-      if (productsRes.status === 'fulfilled') setProducts(Array.isArray(productsRes.value) ? productsRes.value : []);
+      fetch(`/api/shopify?slug=${slug}&range=${range}&action=conversion-funnel`).then((r) => r.json()),
+    ]).then(([combinedRes, ordersRes, funnelRes]) => {
+      if (combinedRes.status === 'fulfilled') {
+        const data = combinedRes.value;
+        if (data?.error) {
+          const msg: string = data.error || '';
+          if (msg.includes('THROTTLED') || msg.includes('throttle') || msg.includes('rate limit')) {
+            setError('throttled');
+          } else {
+            setError('connection');
+          }
+        } else {
+          if (data?.kpis) setKpis(data.kpis);
+          if (Array.isArray(data?.revenue)) setRevenue(data.revenue);
+          if (Array.isArray(data?.products)) setProducts(data.products);
+          if (data?.customers) setCustomers(data.customers);
+          if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
+        }
+      } else {
+        setError('connection');
+      }
       if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
-      if (customersRes.status === 'fulfilled' && !customersRes.value?.error) setCustomers(customersRes.value);
-      if (statusRes.status === 'fulfilled') setOrderStatus(Array.isArray(statusRes.value) ? statusRes.value : []);
       if (funnelRes.status === 'fulfilled') setConversionFunnel(Array.isArray(funnelRes.value) ? funnelRes.value : []);
-      if (kpisRes.status === 'fulfilled' && kpisRes.value?.error) setError(kpisRes.value.error);
       setLoading(false);
     });
   }, [slug, range]);
@@ -1295,7 +1302,11 @@ export default function ShopifyDashboard({
         {error && (
           <div className="connection-required">
             <span className="cr-icon">⚠️</span>
-            <p>{error}</p>
+            <p>
+              {error === 'throttled'
+                ? 'Taking longer than expected — please refresh'
+                : 'Shopify connection error'}
+            </p>
           </div>
         )}
 

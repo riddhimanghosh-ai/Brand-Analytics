@@ -13,10 +13,21 @@ export function NavLink({ href, disabled, children, exact = false }: NavLinkProp
   const pathname = usePathname();
   const isActive = exact ? pathname === href : pathname.startsWith(href) && href !== '/';
 
+  if (disabled) {
+    return (
+      <span
+        className="nav-link disabled"
+        style={{ pointerEvents: 'none', cursor: 'default', userSelect: 'none' }}
+      >
+        {children}
+      </span>
+    );
+  }
+
   return (
     <Link
-      href={disabled ? '#' : href}
-      className={`nav-link ${isActive ? 'active' : ''} ${disabled ? 'disabled' : ''}`}
+      href={href}
+      className={`nav-link${isActive ? ' active' : ''}`}
     >
       {children}
     </Link>

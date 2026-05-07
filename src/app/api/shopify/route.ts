@@ -61,6 +61,9 @@ export async function GET(request: Request) {
       case 'order-status':
         return NextResponse.json(await shopify.getOrderStatusBreakdown(config, dateRange));
 
+      case 'combined':
+        return NextResponse.json(await shopify.getAllAnalytics(config, dateRange));
+
       case 'advanced':
         return NextResponse.json(await shopify.getAdvancedCROMetrics(config, dateRange));
 
