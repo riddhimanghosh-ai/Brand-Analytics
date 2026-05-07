@@ -14,6 +14,14 @@ export function NavLink({ href, disabled, disabledPlatform, children, exact = fa
   const pathname = usePathname();
   const isActive = exact ? pathname === href : pathname.startsWith(href) && href !== '/';
 
+  const closeSidebar = () => {
+    // Remove sidebar-open class from document
+    document.documentElement.classList.remove('sidebar-open');
+    // Remove active class from sidebar
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.classList.remove('active');
+  };
+
   if (disabled) {
     const tooltipText = disabledPlatform
       ? `Connect ${disabledPlatform} in Settings`
@@ -34,6 +42,7 @@ export function NavLink({ href, disabled, disabledPlatform, children, exact = fa
     <Link
       href={href}
       className={`nav-link${isActive ? ' active active-bright' : ''}`}
+      onClick={closeSidebar}
     >
       {children}
     </Link>

@@ -2,6 +2,7 @@ import { getBrand, getBrands } from '@/lib/mongodb-store';
 import { redirect } from 'next/navigation';
 import { ChatPanel } from '@/components/ChatPanel';
 import { NavLink } from '@/components/NavLink';
+import { SidebarToggle } from '@/components/SidebarToggle';
 
 export default async function DashboardLayout({
   children,
@@ -35,6 +36,9 @@ export default async function DashboardLayout({
 
   return (
     <div className="app-layout">
+      {/* Hamburger Menu + Sidebar Toggle */}
+      <SidebarToggle />
+
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo">
