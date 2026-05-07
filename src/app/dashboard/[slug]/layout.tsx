@@ -176,9 +176,6 @@ export default async function DashboardLayout({
               />
             ))}
           </div>
-          <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '6px' }}>
-            {connectedCount}/{totalPlatforms} platforms connected
-          </div>
           {!connections.gemini && (
             <div style={{ fontSize: '11px', marginBottom: '6px' }}>
               <a href={`/dashboard/${slug}/settings`} style={{ color: 'var(--accent-blue)', textDecoration: 'none', fontWeight: 500 }}>

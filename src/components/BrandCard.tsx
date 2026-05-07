@@ -200,9 +200,6 @@ export function BrandCard({
           </div>
           <div>
             <h3>{name}</h3>
-            {shopifyStoreUrl && (
-              <div className="brand-url">{shopifyStoreUrl}</div>
-            )}
           </div>
         </div>
         <div className="brand-connections">
