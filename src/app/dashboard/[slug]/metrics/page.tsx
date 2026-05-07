@@ -36,6 +36,7 @@ const PRESETS = [
   },
 ];
 
+interface SavedMetric { name: string; query: string; chartType: string }
 interface Column { name: string; dataType: string }
 type Row = string[];
 
@@ -47,12 +48,22 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
   const [columns, setColumns] = useState<Column[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState('');
-  const [savedMetrics, setSavedMetrics] = useState<{ name: string; query: string; chartType: string }[]>([]);
+  const [savedMetrics, setSavedMetrics] = useState<SavedMetric[]>([]);
   const [saveName, setSaveName] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    paramsPromise.then(p => setSlug(p.slug));
+    paramsPromise.then(p => {
+      const resolvedSlug = p.slug;
+      setSlug(resolvedSlug);
+      // Load saved metrics on mount
+      fetch(`/api/brands/${resolvedSlug}`)
+        .then(r => r.json())
+        .then(brand => {
+          setSavedMetrics(brand.savedMetrics || []);
+        })
+        .catch(() => {});
+    });
   }, [paramsPromise]);
 
   const runQuery = async () => {
@@ -81,9 +92,9 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
     }
   };
 
-  const applyPreset = (preset: typeof PRESETS[0]) => {
+  const applyPreset = (preset: { name: string; query: string; chartType: string }) => {
     setQuery(preset.query);
-    setChartType(preset.chartType);
+    setChartType(preset.chartType as 'line' | 'bar' | 'pie' | 'table');
     setColumns([]);
     setRows([]);
     setError('');
@@ -93,27 +104,33 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
     if (!saveName.trim() || !slug) return;
     setSaving(true);
     try {
-      const res = await fetch(`/api/brands`, { method: 'GET' });
-      const brands = await res.json();
-      const brand = brands.find((b: { slug: string; id: string }) => b.slug === slug);
-      if (!brand) return;
+      // Fetch current savedMetrics from the brand
+      const res = await fetch(`/api/brands/${slug}`);
+      const brand = await res.json();
+      const existing: SavedMetric[] = brand.savedMetrics || [];
+      const updated = [...existing, { name: saveName.trim(), query, chartType }];
 
-      const fullBrandRes = await fetch(`/api/brands/${brand.id}`);
-      const fullBrand = await fullBrandRes.json();
-      const existing = fullBrand.savedMetrics || [];
-      const updated = [...existing, { name: saveName, query, chartType }];
-
-      await fetch(`/api/brands/${brand.id}`, {
+      // Only send savedMetrics — don't touch any other field
+      await fetch(`/api/brands/${slug}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...fullBrand, savedMetrics: updated }),
+        body: JSON.stringify({ savedMetrics: updated }),
       });
-
       setSavedMetrics(updated);
       setSaveName('');
     } finally {
       setSaving(false);
     }
+  };
+
+  const deleteMetric = async (idx: number) => {
+    const updated = savedMetrics.filter((_, i) => i !== idx);
+    await fetch(`/api/brands/${slug}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ savedMetrics: updated }),
+    });
+    setSavedMetrics(updated);
   };
 
   return (
@@ -155,6 +172,88 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Saved Metrics */}
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Saved Metrics
+          </div>
+          {savedMetrics.length === 0 ? (
+            <div style={{ fontSize: '12px', color: 'var(--text-dim)', fontStyle: 'italic', padding: '8px 0' }}>
+              Run a query and save it to see it here and in My Dashboard.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: '10px', overflowX: 'auto', paddingBottom: '4px' }}>
+              {savedMetrics.map((metric, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    minWidth: '180px',
+                    maxWidth: '180px',
+                    padding: '12px',
+                    background: 'var(--bg-elevated)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    flexShrink: 0,
+                  }}
+                >
+                  <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', wordBreak: 'break-word' }}>
+                    {metric.name}
+                  </div>
+                  <div style={{
+                    fontSize: '10px',
+                    fontWeight: '600',
+                    color: '#8b5cf6',
+                    background: 'rgba(139,92,246,0.1)',
+                    borderRadius: '4px',
+                    padding: '2px 6px',
+                    display: 'inline-block',
+                    alignSelf: 'flex-start',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                  }}>
+                    {metric.chartType}
+                  </div>
+                  <div style={{ display: 'flex', gap: '6px', marginTop: 'auto' }}>
+                    <button
+                      onClick={() => applyPreset(metric)}
+                      style={{
+                        flex: 1,
+                        padding: '4px 8px',
+                        fontSize: '11px',
+                        background: 'var(--accent-blue)',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '5px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                      }}
+                    >
+                      Load
+                    </button>
+                    <button
+                      onClick={() => deleteMetric(idx)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '11px',
+                        background: 'var(--bg-card)',
+                        color: 'var(--text-dim)',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: '5px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Query Editor */}
@@ -232,32 +331,41 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
                 <div className="chart-card-title">Query Results</div>
                 <div className="chart-card-subtitle">{rows.length} rows · {columns.length} columns</div>
               </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <input
-                  value={saveName}
-                  onChange={e => setSaveName(e.target.value)}
-                  placeholder="Name this metric..."
-                  style={{
-                    padding: '5px 10px',
-                    background: 'var(--bg-primary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '5px',
-                    color: 'var(--text-primary)',
-                    fontSize: '12px',
-                    width: '160px',
-                  }}
-                />
-                <button
-                  onClick={saveMetric}
-                  disabled={saving || !saveName.trim()}
-                  className="btn btn-secondary"
-                  style={{ fontSize: '12px', padding: '5px 12px' }}
-                >
-                  {saving ? '⏳' : '💾 Save'}
-                </button>
-              </div>
             </div>
             <MetricChart columns={columns} rows={rows} chartType={chartType} />
+          </div>
+        )}
+
+        {/* Save Metric Section */}
+        {columns.length > 0 && (
+          <div className="form-card" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 }}>
+              💾 Save this metric
+            </div>
+            <input
+              value={saveName}
+              onChange={e => setSaveName(e.target.value)}
+              placeholder="Name this metric..."
+              style={{
+                flex: 1,
+                minWidth: '160px',
+                padding: '7px 12px',
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                color: 'var(--text-primary)',
+                fontSize: '13px',
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') saveMetric(); }}
+            />
+            <button
+              onClick={saveMetric}
+              disabled={saving || !saveName.trim()}
+              className="btn btn-secondary"
+              style={{ fontSize: '13px', padding: '7px 16px', flexShrink: 0 }}
+            >
+              {saving ? '⏳ Saving...' : '💾 Save Metric'}
+            </button>
           </div>
         )}
 

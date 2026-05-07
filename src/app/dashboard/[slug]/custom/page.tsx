@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { MetricChart } from '@/components/MetricChart';
 
 // ─── Widget Catalog ──────────────────────────────────────────────────────────
 const WIDGET_CATALOG = [
@@ -32,6 +33,7 @@ const SOURCE_COLOR: Record<string, string> = {
   'Google Ads': '#f59e0b',
   TikTok: '#000000',
   Klaviyo: '#00bfa5',
+  'My Metrics': '#8b5cf6',
 };
 
 interface Widget {
@@ -45,6 +47,10 @@ interface Widget {
   error?: string;
   col: number;
   row: number;
+  savedMetricQuery?: string;
+  savedMetricChartType?: string;
+  metricColumns?: { name: string; dataType: string }[];
+  metricRows?: string[][];
 }
 
 function getNestedValue(obj: Record<string, unknown>, path: string): number {
@@ -75,6 +81,7 @@ export default function CustomDashboardPage() {
   const slug = params?.slug as string;
 
   const [widgets, setWidgets] = useState<Widget[]>([]);
+  const [savedMetrics, setSavedMetrics] = useState<{ name: string; query: string; chartType: string }[]>([]);
   const [showPicker, setShowPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
@@ -94,6 +101,7 @@ export default function CustomDashboardPage() {
             setWidgets(saved.map((w: Omit<Widget, 'loading' | 'value'>) => ({ ...w, value: null, loading: true })));
           } catch { /* invalid JSON */ }
         }
+        setSavedMetrics(brand.savedMetrics || []);
       })
       .catch(() => {});
   }, [slug]);
@@ -102,7 +110,25 @@ export default function CustomDashboardPage() {
   useEffect(() => {
     if (widgets.length === 0) return;
     widgets.forEach((widget, i) => {
-      if (!widget.loading && widget.value !== null) return;
+      if (!widget.loading && (widget.value !== null || widget.metricColumns)) return;
+
+      // Handle saved metric widgets
+      if (widget.savedMetricQuery) {
+        fetch('/api/metrics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, query: widget.savedMetricQuery }),
+        })
+          .then(r => r.json())
+          .then(data => {
+            setWidgets(prev => prev.map((w, idx) =>
+              idx === i ? { ...w, metricColumns: data.columns, metricRows: data.rows, loading: false } : w
+            ));
+          })
+          .catch(() => setWidgets(prev => prev.map((w, idx) => idx === i ? { ...w, loading: false, error: 'Failed' } : w)));
+        return;
+      }
+
       const catalog = WIDGET_CATALOG.find(c => c.id === widget.catalogId);
       if (!catalog) return;
 
@@ -139,6 +165,27 @@ export default function CustomDashboardPage() {
     setShowPicker(false);
   };
 
+  const addSavedMetricWidget = (metric: { name: string; query: string; chartType: string }) => {
+    const catalogId = 'saved_' + metric.name;
+    if (widgets.find(w => w.catalogId === catalogId)) return; // already added
+
+    const newWidget: Widget = {
+      id: `${catalogId}_${Date.now()}`,
+      catalogId,
+      label: metric.name,
+      source: 'My Metrics',
+      unit: '',
+      value: null,
+      loading: true,
+      col: 0,
+      row: Math.floor(widgets.length / 3),
+      savedMetricQuery: metric.query,
+      savedMetricChartType: metric.chartType,
+    };
+    setWidgets(prev => [...prev, newWidget]);
+    setShowPicker(false);
+  };
+
   const removeWidget = (idx: number) => {
     setWidgets(prev => prev.filter((_, i) => i !== idx));
   };
@@ -146,8 +193,9 @@ export default function CustomDashboardPage() {
   const saveLayout = async () => {
     setSaving(true);
     try {
-      const layoutData = widgets.map(({ id, catalogId, label, source, unit, col, row }) => ({
+      const layoutData = widgets.map(({ id, catalogId, label, source, unit, col, row, savedMetricQuery, savedMetricChartType }) => ({
         id, catalogId, label, source, unit, col, row,
+        ...(savedMetricQuery ? { savedMetricQuery, savedMetricChartType } : {}),
       }));
       await fetch(`/api/brands/${slug}`, {
         method: 'PUT',
@@ -181,6 +229,11 @@ export default function CustomDashboardPage() {
   const filteredCatalog = WIDGET_CATALOG.filter(c =>
     c.label.toLowerCase().includes(pickerSearch.toLowerCase()) ||
     c.source.toLowerCase().includes(pickerSearch.toLowerCase())
+  );
+
+  const filteredSavedMetrics = savedMetrics.filter(m =>
+    m.name.toLowerCase().includes(pickerSearch.toLowerCase()) ||
+    'my metrics'.includes(pickerSearch.toLowerCase())
   );
 
   return (
@@ -250,6 +303,7 @@ export default function CustomDashboardPage() {
                 border: `1px solid ${dragOver === i ? 'var(--accent-blue)' : 'var(--glass-border)'}`,
                 cursor: 'grab', position: 'relative', opacity: dragging === i ? 0.5 : 1,
                 transition: 'border-color 0.15s',
+                ...(widget.savedMetricQuery ? { gridColumn: '1 / -1', minHeight: '220px' } : {}),
               }}
             >
               {/* Remove button */}
@@ -271,15 +325,32 @@ export default function CustomDashboardPage() {
               {/* Label */}
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>{widget.label}</div>
 
-              {/* Value */}
-              {widget.loading ? (
-                <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-dim)' }}>—</div>
-              ) : widget.error ? (
-                <div style={{ fontSize: '13px', color: '#ef4444' }}>⚠️ {widget.error}</div>
+              {/* Saved metric widget: show chart */}
+              {widget.savedMetricQuery ? (
+                widget.loading ? (
+                  <div style={{ height: '160px', background: 'var(--bg-card)', borderRadius: '8px', animation: 'pulse 1.5s ease-in-out infinite' }} />
+                ) : widget.error ? (
+                  <div style={{ fontSize: '13px', color: '#ef4444' }}>⚠️ {widget.error}</div>
+                ) : widget.metricColumns && widget.metricRows ? (
+                  <MetricChart
+                    columns={widget.metricColumns}
+                    rows={widget.metricRows}
+                    chartType={(widget.savedMetricChartType as 'line' | 'bar' | 'pie' | 'table') || 'line'}
+                  />
+                ) : (
+                  <div style={{ fontSize: '13px', color: 'var(--text-dim)' }}>No data</div>
+                )
               ) : (
-                <div style={{ fontSize: '32px', fontWeight: '700', color: 'var(--text-primary)' }}>
-                  {widget.value !== null ? formatValue(widget.value, widget.unit) : '—'}
-                </div>
+                /* Standard KPI widget */
+                widget.loading ? (
+                  <div style={{ fontSize: '28px', fontWeight: '700', color: 'var(--text-dim)' }}>—</div>
+                ) : widget.error ? (
+                  <div style={{ fontSize: '13px', color: '#ef4444' }}>⚠️ {widget.error}</div>
+                ) : (
+                  <div style={{ fontSize: '32px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                    {widget.value !== null ? formatValue(widget.value, widget.unit) : '—'}
+                  </div>
+                )
               )}
             </div>
           ))}
@@ -353,6 +424,42 @@ export default function CustomDashboardPage() {
                   </div>
                 );
               })}
+
+              {/* My Metrics section */}
+              {filteredSavedMetrics.length > 0 && (
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: '600', color: SOURCE_COLOR['My Metrics'], textTransform: 'uppercase', letterSpacing: '0.5px', padding: '8px 8px 4px' }}>
+                    My Metrics
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                    {filteredSavedMetrics.map(metric => {
+                      const catalogId = 'saved_' + metric.name;
+                      const added = widgets.some(w => w.catalogId === catalogId);
+                      return (
+                        <button
+                          key={metric.name}
+                          onClick={() => !added && addSavedMetricWidget(metric)}
+                          disabled={added}
+                          style={{
+                            padding: '12px 14px', borderRadius: '10px', textAlign: 'left',
+                            border: '1px solid var(--glass-border)',
+                            background: 'var(--bg-card)',
+                            color: added ? 'var(--text-dim)' : 'var(--text-primary)',
+                            cursor: added ? 'default' : 'pointer', fontSize: '13px',
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          }}
+                        >
+                          <div>
+                            <div>{metric.name}</div>
+                            <div style={{ fontSize: '10px', color: SOURCE_COLOR['My Metrics'], marginTop: '2px', textTransform: 'uppercase' }}>{metric.chartType}</div>
+                          </div>
+                          {added ? <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>Added</span> : <span style={{ color: 'var(--accent-blue)' }}>+</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>
