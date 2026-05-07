@@ -36,28 +36,16 @@ interface BrandData {
   klaviyoConnected?: boolean;
 }
 
-// ── Shopify connection component (Option A: Pre-generated link + manual token) ──
+// ── Shopify connection component (Global app credentials) ──
 function ShopifyConnect({
   slug,
   brand,
   isConnected,
-  testing,
-  testResult,
-  onTest,
-  onUpdateField,
 }: {
   slug: string;
   brand: BrandData;
   isConnected: boolean;
-  testing: boolean;
-  testResult?: { success: boolean; message: string };
-  onTest: () => void;
-  onUpdateField: (field: string, value: string) => void;
 }) {
-  const Code = ({ children }: { children: string }) => (
-    <code style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '1px 6px', fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)' }}>{children}</code>
-  );
-
   const Step = ({ n, text }: { n: number; text: string }) => (
     <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'flex-start' }}>
       <span style={{ minWidth: '22px', height: '22px', borderRadius: '50%', background: 'var(--accent-blue)', color: '#fff', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>{n}</span>
@@ -67,41 +55,24 @@ function ShopifyConnect({
 
   return (
     <>
-      <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
-        <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to connect (3 steps)</div>
-        <Step n={1} text='Go to <a href="https://partners.shopify.com" target="_blank" style="color:var(--accent-blue)">Shopify Partner Dashboard</a> → Your app → Distribution → Enter your store domain <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">hiraperfume.myshopify.com</code> → Click <strong>Generate link</strong>' />
-        <Step n={2} text='Click the generated link → In Shopify admin, click <strong>Install app</strong> → App is installed on your store' />
-        <Step n={3} text='Back in Partner Dashboard, go to app Configuration → copy the <strong>Admin API access token</strong> → paste it below' />
-        <div style={{ background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: '6px', padding: '10px 12px', marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
-          💡 The token starts with <Code>shpat_</Code> and is displayed in your Partner Dashboard app Configuration.
+      {!isConnected ? (
+        <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
+          <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>One-click install (2 steps)</div>
+          <Step n={1} text='Go to <a href="https://partners.shopify.com" target="_blank" style="color:var(--accent-blue)">Shopify Partner Dashboard</a> → Your app → Distribution → Enter your store domain → Click <strong>Generate link</strong>' />
+          <Step n={2} text='Click the generated link → Click <strong>Install app</strong> → You\'ll be redirected back here, fully connected ✨' />
+          <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '6px', padding: '10px 12px', marginTop: '12px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+            ✅ No tokens needed — the app's credentials are stored securely and work instantly after installation.
+          </div>
         </div>
-      </div>
-
-      <div className="form-row">
-        <div className="form-group">
-          <label className="form-label">Store URL</label>
-          <input className="form-input mono" value={brand.shopifyStoreUrl || ''} onChange={(e) => onUpdateField('shopifyStoreUrl', e.target.value)} placeholder="your-store.myshopify.com" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Admin API Access Token</label>
-          <input className="form-input mono" type="password" value={brand.shopifyAccessToken || ''} onChange={(e) => onUpdateField('shopifyAccessToken', e.target.value)} placeholder="shpat_..." />
-        </div>
-      </div>
-
-      {brand.shopifyStoreUrl && (
-        <div>
-          <button onClick={onTest} className="test-connection-btn" disabled={testing}>
-            {testing ? '⏳ Testing...' : '🔌 Test Connection'}
-          </button>
-          {testResult && (
-            <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>{testResult.message}</div>
-          )}
-        </div>
-      )}
-
-      {isConnected && (
-        <div style={{ marginTop: '16px', padding: '12px 14px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '8px', fontSize: '13px', color: '#22c55e' }}>
-          ✅ Connected to <strong>{brand.shopifyStoreUrl}</strong>
+      ) : (
+        <div style={{ padding: '12px 14px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '8px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '20px' }}>✅</span>
+          <div>
+            <div style={{ fontWeight: '600', color: '#22c55e' }}>Connected</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Connected to <strong>{brand.shopifyStoreUrl}</strong> — Real-time data syncing
+            </div>
+          </div>
         </div>
       )}
     </>
@@ -290,15 +261,11 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           </div>
           <div className="form-card-desc">Enables orders, products, customers, revenue analytics, and Custom Metrics (ShopifyQL)</div>
 
-          {/* Method tabs */}
+          {/* Shopify connect */}
           <ShopifyConnect
             slug={params?.slug ?? ''}
             brand={brand}
             isConnected={isConnected.shopify}
-            testing={testing.shopify}
-            testResult={testResults.shopify}
-            onTest={testShopify}
-            onUpdateField={updateField}
           />
         </div>
 

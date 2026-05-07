@@ -28,13 +28,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
 
-    if (!brand.shopifyStoreUrl || !brand.shopifyAccessToken) {
+    if (!brand.shopifyStoreUrl) {
       return NextResponse.json({ error: 'Shopify not connected' }, { status: 400 });
     }
 
+    // Use global app credentials from environment — no per-store token needed
     const config = {
       storeUrl: brand.shopifyStoreUrl,
-      accessToken: brand.shopifyAccessToken,
+      // accessToken will default to SHOPIFY_ACCESS_TOKEN from env
     };
 
     const { startDate, endDate } = getDateRangeForShopify(dateRange);

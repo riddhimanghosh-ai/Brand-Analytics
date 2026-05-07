@@ -8,7 +8,7 @@ import type {
 
 interface ShopifyConfig {
   storeUrl: string;
-  accessToken: string;
+  accessToken?: string; // Optional — uses global app token if not provided
 }
 
 const API_VERSION = '2024-10';
@@ -62,11 +62,17 @@ async function shopifyGraphQL(
 ) {
   const url = `https://${config.storeUrl}/admin/api/${API_VERSION}/graphql.json`;
 
+  // Use provided token, or fall back to global app token from Partner Dashboard
+  const token = config.accessToken || process.env.SHOPIFY_ACCESS_TOKEN;
+  if (!token) {
+    throw new Error('No Shopify access token configured. Set SHOPIFY_ACCESS_TOKEN in env.');
+  }
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Shopify-Access-Token': config.accessToken,
+      'X-Shopify-Access-Token': token,
     },
     body: JSON.stringify({ query, variables }),
   });

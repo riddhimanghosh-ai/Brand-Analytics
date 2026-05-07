@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { updateBrand, getBrands } from '@/lib/mongodb-store';
 
 const APP_URL = 'https://main.d1rrlzi8cyg90j.amplifyapp.com';
 
@@ -41,7 +42,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${APP_URL}/?error=invalid_hmac`);
   }
 
-  // HMAC verified — redirect to success page with store domain
-  const encodedShop = encodeURIComponent(shop);
-  return NextResponse.redirect(`${APP_URL}/shopify-installed?shop=${encodedShop}`);
+  // HMAC verified — find the brand with matching store URL and auto-connect
+  try {
+    const brands = await getBrands();
+    const matchingBrand = brands.find(b => b.shopifyStoreUrl === shop);
+
+    if (matchingBrand) {
+      // Brand already registered — just mark as connected by updating timestamp
+      // (No token to save — we use global app credentials)
+      await updateBrand(matchingBrand.slug, {
+        shopifyStoreUrl: shop,
+        // shopifyAccessToken intentionally not set — uses global SHOPIFY_ACCESS_TOKEN
+      });
+
+      // Redirect to dashboard settings with success message
+      const encodedShop = encodeURIComponent(shop);
+      const slug = encodeURIComponent(matchingBrand.slug);
+      return NextResponse.redirect(
+        `${APP_URL}/dashboard/${slug}/settings?shopify=connected&shop=${encodedShop}`
+      );
+    } else {
+      // No matching brand — show generic success page
+      const encodedShop = encodeURIComponent(shop);
+      return NextResponse.redirect(`${APP_URL}/shopify-installed?shop=${encodedShop}`);
+    }
+  } catch (err) {
+    console.error('Error updating brand after install:', err);
+    const encodedShop = encodeURIComponent(shop);
+    return NextResponse.redirect(`${APP_URL}/shopify-installed?shop=${encodedShop}`);
+  }
 }
