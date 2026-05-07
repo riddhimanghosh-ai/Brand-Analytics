@@ -133,11 +133,16 @@ export async function createBrand(data: any) {
 export async function updateBrand(slug: string, data: any) {
   try {
     const collection = await getBrandsCollection();
+    // Strip undefined and null values so we never accidentally overwrite
+    // existing DB fields (e.g. shopifyAccessToken) with nothing.
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([, v]) => v !== undefined && v !== null && v !== '')
+    );
     const result = await collection.findOneAndUpdate(
       { slug },
       {
         $set: {
-          ...data,
+          ...cleanData,
           updatedAt: new Date().toISOString(),
         },
       },

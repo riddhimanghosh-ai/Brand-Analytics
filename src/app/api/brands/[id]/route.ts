@@ -28,30 +28,28 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const brand = await updateBrand(id, {
-      name: body.name,
-      logoUrl: body.logoUrl,
-      shopifyStoreUrl: body.shopifyStoreUrl,
-      shopifyAccessToken: body.shopifyAccessToken,
-      ga4PropertyId: body.ga4PropertyId,
-      ga4ServiceAccountJson: body.ga4ServiceAccountJson,
-      metaAppId: body.metaAppId,
-      metaAppSecret: body.metaAppSecret,
-      metaAccessToken: body.metaAccessToken,
-      metaAdAccountId: body.metaAdAccountId,
-      googleAdsDevToken: body.googleAdsDevToken,
-      googleAdsClientId: body.googleAdsClientId,
-      googleAdsClientSecret: body.googleAdsClientSecret,
-      googleAdsRefreshToken: body.googleAdsRefreshToken,
-      googleAdsCustomerId: body.googleAdsCustomerId,
-      geminiApiKey: body.geminiApiKey,
-      tiktokAccessToken: body.tiktokAccessToken,
-      tiktokAdvertiserId: body.tiktokAdvertiserId,
-      klaviyoApiKey: body.klaviyoApiKey,
-      pinterestAccessToken: body.pinterestAccessToken,
-      pinterestAdAccountId: body.pinterestAdAccountId,
-      customDashboard: body.customDashboard,
-    });
+    // Only forward fields that were explicitly provided in the request body.
+    // This prevents overwriting secrets (e.g. shopifyAccessToken) that the
+    // masked API response returns as null/undefined.
+    const allowedFields = [
+      'name', 'logoUrl', 'shopifyStoreUrl', 'shopifyAccessToken',
+      'ga4PropertyId', 'ga4ServiceAccountJson',
+      'metaAppId', 'metaAppSecret', 'metaAccessToken', 'metaAdAccountId',
+      'googleAdsDevToken', 'googleAdsClientId', 'googleAdsClientSecret',
+      'googleAdsRefreshToken', 'googleAdsCustomerId',
+      'geminiApiKey',
+      'tiktokAccessToken', 'tiktokAdvertiserId',
+      'klaviyoApiKey',
+      'pinterestAccessToken', 'pinterestAdAccountId',
+      'customDashboard',
+    ];
+    const updates = Object.fromEntries(
+      allowedFields
+        .filter(f => f in body)
+        .map(f => [f, body[f]])
+    );
+
+    const brand = await updateBrand(id, updates);
 
     // Never return raw secrets to the client
     return NextResponse.json(maskBrand(brand));
