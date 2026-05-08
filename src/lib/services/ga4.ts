@@ -150,6 +150,11 @@ function formatPropertyId(propertyId: string): string {
 }
 
 function getDateRange(range: string): { startDate: string; endDate: string } {
+  // Custom range: "YYYY-MM-DD:YYYY-MM-DD"
+  if (/^\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}$/.test(range)) {
+    const [startDate, endDate] = range.split(':');
+    return { startDate, endDate };
+  }
   const now = new Date();
   const days = ({ '7d': 7, '30d': 30, '90d': 90 } as Record<string, number>)[range] ?? 30;
   const start = new Date(now.getTime() - days * 86_400_000);
@@ -160,6 +165,10 @@ function getDateRange(range: string): { startDate: string; endDate: string } {
 }
 
 function getDays(range: string): number {
+  if (/^\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}$/.test(range)) {
+    const [from, to] = range.split(':').map((d) => new Date(d).getTime());
+    return Math.round((to - from) / 86_400_000);
+  }
   return ({ '7d': 7, '30d': 30, '90d': 90 } as Record<string, number>)[range] ?? 30;
 }
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useGlobalDateRange, useDateRangeLabel } from '@/lib/use-date-range';
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell,
@@ -47,7 +48,7 @@ function SpendTooltip({ active, payload, label }: {
 }
 
 // ---- Meta Ads Section ----
-function MetaSection({ slug, range, connected }: { slug: string; range: string; connected: boolean }) {
+function MetaSection({ slug, from, to, connected }: { slug: string; from: string; to: string; connected: boolean }) {
   const [kpis, setKpis] = useState<MetaKPIs | null>(null);
   const [campaigns, setCampaigns] = useState<MetaCampaign[]>([]);
   const [spend, setSpend] = useState<MetaSpendPoint[]>([]);
@@ -59,9 +60,9 @@ function MetaSection({ slug, range, connected }: { slug: string; range: string; 
     setLoading(true);
     setError(null);
     Promise.all([
-      fetch(`/api/ads?slug=${slug}&platform=meta&action=kpis&range=${range}`).then((r) => r.json()),
-      fetch(`/api/ads?slug=${slug}&platform=meta&action=campaigns&range=${range}`).then((r) => r.json()),
-      fetch(`/api/ads?slug=${slug}&platform=meta&action=spend&range=${range}`).then((r) => r.json()),
+      fetch(`/api/ads?slug=${slug}&platform=meta&action=kpis&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/ads?slug=${slug}&platform=meta&action=campaigns&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/ads?slug=${slug}&platform=meta&action=spend&from=${from}&to=${to}`).then((r) => r.json()),
     ])
       .then(([k, c, s]) => {
         if (k.error) { setError(k.error); return; }
@@ -71,7 +72,7 @@ function MetaSection({ slug, range, connected }: { slug: string; range: string; 
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [slug, range, connected]);
+  }, [slug, from, to, connected]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -231,7 +232,7 @@ function MetaSection({ slug, range, connected }: { slug: string; range: string; 
 }
 
 // ---- Google Ads Section ----
-function GoogleAdsSection({ slug, range, connected }: { slug: string; range: string; connected: boolean }) {
+function GoogleAdsSection({ slug, from, to, connected }: { slug: string; from: string; to: string; connected: boolean }) {
   const [kpis, setKpis] = useState<GoogleAdsKPIs | null>(null);
   const [campaigns, setCampaigns] = useState<GoogleAdsCampaign[]>([]);
   const [spend, setSpend] = useState<GoogleAdsSpendPoint[]>([]);
@@ -243,9 +244,9 @@ function GoogleAdsSection({ slug, range, connected }: { slug: string; range: str
     setLoading(true);
     setError(null);
     Promise.all([
-      fetch(`/api/ads?slug=${slug}&platform=google&action=kpis&range=${range}`).then((r) => r.json()),
-      fetch(`/api/ads?slug=${slug}&platform=google&action=campaigns&range=${range}`).then((r) => r.json()),
-      fetch(`/api/ads?slug=${slug}&platform=google&action=spend&range=${range}`).then((r) => r.json()),
+      fetch(`/api/ads?slug=${slug}&platform=google&action=kpis&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/ads?slug=${slug}&platform=google&action=campaigns&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/ads?slug=${slug}&platform=google&action=spend&from=${from}&to=${to}`).then((r) => r.json()),
     ])
       .then(([k, c, s]) => {
         if (k.error) { setError(k.error); return; }
@@ -255,7 +256,7 @@ function GoogleAdsSection({ slug, range, connected }: { slug: string; range: str
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [slug, range, connected]);
+  }, [slug, from, to, connected]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -418,8 +419,8 @@ function GoogleAdsSection({ slug, range, connected }: { slug: string; range: str
 }
 
 // ---- Combined Overview ----
-function CombinedSection({ slug, range, metaConnected, googleConnected }: {
-  slug: string; range: string; metaConnected: boolean; googleConnected: boolean;
+function CombinedSection({ slug, from, to, metaConnected, googleConnected }: {
+  slug: string; from: string; to: string; metaConnected: boolean; googleConnected: boolean;
 }) {
   const [metaKpis, setMetaKpis] = useState<MetaKPIs | null>(null);
   const [googleKpis, setGoogleKpis] = useState<GoogleAdsKPIs | null>(null);
@@ -429,20 +430,20 @@ function CombinedSection({ slug, range, metaConnected, googleConnected }: {
     const fetches: Promise<void>[] = [];
     if (metaConnected) {
       fetches.push(
-        fetch(`/api/ads?slug=${slug}&platform=meta&action=kpis&range=${range}`)
+        fetch(`/api/ads?slug=${slug}&platform=meta&action=kpis&from=${from}&to=${to}`)
           .then((r) => r.json())
           .then((k) => { if (!k.error) setMetaKpis(k); })
       );
     }
     if (googleConnected) {
       fetches.push(
-        fetch(`/api/ads?slug=${slug}&platform=google&action=kpis&range=${range}`)
+        fetch(`/api/ads?slug=${slug}&platform=google&action=kpis&from=${from}&to=${to}`)
           .then((r) => r.json())
           .then((k) => { if (!k.error) setGoogleKpis(k); })
       );
     }
     Promise.all(fetches).finally(() => setLoading(false));
-  }, [slug, range, metaConnected, googleConnected]);
+  }, [slug, from, to, metaConnected, googleConnected]);
 
   if (!metaConnected && !googleConnected) {
     return (
@@ -562,8 +563,9 @@ function CombinedSection({ slug, range, metaConnected, googleConnected }: {
 // ---- Main Page ----
 export default function AdsPage({ params: paramsPromise }: { params: Promise<{ slug: string }> }) {
   const [slug, setSlug] = useState<string | null>(null);
-  const [range, setRange] = useState('30d');
   const [activeTab, setActiveTab] = useState<'overview' | 'meta' | 'google'>('overview');
+  const { from, to } = useGlobalDateRange();
+  const rangeLabel = useDateRangeLabel();
   const [connections, setConnections] = useState({ meta: false, google: false, checked: false });
 
   useEffect(() => {
@@ -598,17 +600,7 @@ export default function AdsPage({ params: paramsPromise }: { params: Promise<{ s
             <h2>🎯 Ads Manager</h2>
             <p>Cross-platform campaign performance — Meta & Google Ads</p>
           </div>
-          <div className="date-range-picker">
-            {(['7d', '30d', '90d'] as const).map((r) => (
-              <button
-                key={r}
-                className={`date-range-btn ${range === r ? 'active' : ''}`}
-                onClick={() => setRange(r)}
-              >
-                {r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}
-              </button>
-            ))}
-          </div>
+          <div className="date-range-label">📅 {rangeLabel}</div>
         </div>
       </div>
 
@@ -628,13 +620,13 @@ export default function AdsPage({ params: paramsPromise }: { params: Promise<{ s
 
       <div className="page-body">
         {activeTab === 'overview' && (
-          <CombinedSection slug={slug} range={range} metaConnected={connections.meta} googleConnected={connections.google} />
+          <CombinedSection slug={slug} from={from} to={to} metaConnected={connections.meta} googleConnected={connections.google} />
         )}
         {activeTab === 'meta' && (
-          <MetaSection slug={slug} range={range} connected={connections.meta} />
+          <MetaSection slug={slug} from={from} to={to} connected={connections.meta} />
         )}
         {activeTab === 'google' && (
-          <GoogleAdsSection slug={slug} range={range} connected={connections.google} />
+          <GoogleAdsSection slug={slug} from={from} to={to} connected={connections.google} />
         )}
       </div>
     </>

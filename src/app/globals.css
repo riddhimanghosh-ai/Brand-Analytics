@@ -946,6 +946,22 @@ textarea.form-input {
   box-shadow: var(--shadow-sm);
 }
 
+/* Replaces the date-range-picker in page headers once global picker is in sidebar */
+.date-range-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  user-select: none;
+}
+
 /* ---- Brand Cards ---- */
 .brands-grid {
   display: grid;

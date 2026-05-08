@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useGlobalDateRange, useDateRangeLabel } from '@/lib/use-date-range';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -78,10 +78,10 @@ export default function AnalyticsPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const searchParams = useSearchParams();
   const [slug, setSlug] = useState<string | null>(null);
-  const [range, setRange] = useState(() => searchParams?.get('range') || '30d');
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const { from, to } = useGlobalDateRange();
+  const rangeLabel = useDateRangeLabel();
 
   const [kpis, setKpis] = useState<GA4KPIs | null>(null);
   const [sessions, setSessions] = useState<GA4SessionsOverTime[]>([]);
@@ -108,16 +108,16 @@ export default function AnalyticsPage({
     setNotConnected(false);
 
     Promise.all([
-      fetch(`/api/analytics?slug=${slug}&action=kpis&range=${range}`).then((r) => r.json()),
-      fetch(`/api/analytics?slug=${slug}&action=sessions&range=${range}`).then((r) => r.json()),
-      fetch(`/api/analytics?slug=${slug}&action=channels&range=${range}`).then((r) => r.json()),
-      fetch(`/api/analytics?slug=${slug}&action=devices&range=${range}`).then((r) => r.json()),
-      fetch(`/api/analytics?slug=${slug}&action=pages&range=${range}`).then((r) => r.json()),
-      fetch(`/api/analytics?slug=${slug}&action=countries&range=${range}`).then((r) => r.json()),
-      fetch(`/api/analytics?slug=${slug}&action=landing-pages&range=${range}`).then((r) => r.json()),
-      fetch(`/api/analytics?slug=${slug}&action=events&range=${range}`).then((r) => r.json()),
-      fetch(`/api/analytics?slug=${slug}&action=conversion-funnel&range=${range}`).then((r) => r.json()),
-      fetch(`/api/analytics?slug=${slug}&action=product-funnel&range=${range}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=kpis&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=sessions&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=channels&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=devices&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=pages&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=countries&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=landing-pages&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=events&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=conversion-funnel&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/analytics?slug=${slug}&action=product-funnel&from=${from}&to=${to}`).then((r) => r.json()),
     ])
       .then(([k, s, c, d, p, co, lp, ev, cf, pf]) => {
         if (k.error === 'Google Analytics not connected') { setNotConnected(true); return; }
@@ -135,18 +135,7 @@ export default function AnalyticsPage({
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [slug, range]);
-
-  const router = useRouter();
-  const pathname = usePathname();
-  const isInitialMount = useRef(true);
-
-  useEffect(() => {
-    if (isInitialMount.current) { isInitialMount.current = false; return; }
-    const params = new URLSearchParams();
-    params.set('range', range);
-    router.push(`${pathname}?${params.toString()}`);
-  }, [range, router, pathname]);
+  }, [slug, from, to]);
 
   if (notConnected) {
     return (
@@ -739,17 +728,7 @@ export default function AnalyticsPage({
             <h2>📈 Google Analytics</h2>
             <p>Traffic, sessions, conversions and e-commerce data</p>
           </div>
-          <div className="date-range-picker">
-            {(['7d', '30d', '90d'] as const).map((r) => (
-              <button
-                key={r}
-                className={`date-range-btn ${range === r ? 'active' : ''}`}
-                onClick={() => setRange(r)}
-              >
-                {r === '7d' ? '7 Days' : r === '30d' ? '30 Days' : '90 Days'}
-              </button>
-            ))}
-          </div>
+          <div className="date-range-label">📅 {rangeLabel}</div>
         </div>
       </div>
 

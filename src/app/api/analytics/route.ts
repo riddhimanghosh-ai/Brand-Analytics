@@ -12,7 +12,9 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get('slug');
     const action = searchParams.get('action') ?? 'kpis';
-    const dateRange = searchParams.get('range') ?? '30d';
+    const fromParam = searchParams.get('from');
+    const toParam   = searchParams.get('to');
+    const dateRange = fromParam && toParam ? `${fromParam}:${toParam}` : (searchParams.get('range') ?? '30d');
 
     if (!slug) {
       return NextResponse.json({ error: 'Brand slug required' }, { status: 400 });

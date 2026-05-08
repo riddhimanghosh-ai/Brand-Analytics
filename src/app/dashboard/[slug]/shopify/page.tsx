@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useRouter, usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useGlobalDateRange, useDateRangeLabel } from '@/lib/use-date-range';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -135,15 +135,6 @@ function maskEmail(email: string): string {
   return `${local.slice(0, 3)}***@${domain}`;
 }
 
-// ─── Date range options ───────────────────────────────────────────────────────
-
-const DATE_RANGES = [
-  { label: '7D', value: '7d' },
-  { label: '30D', value: '30d' },
-  { label: '90D', value: '90d' },
-  { label: '1Y', value: '1y' },
-];
-
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function ShopifyDashboard({
@@ -151,13 +142,10 @@ export default function ShopifyDashboard({
 }: {
   params: Promise<{ slug: string }>;
 }) {
-  const searchParams = useSearchParams();
   const [slug, setSlug] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
-  const [range, setRange] = useState(() => {
-    const rangeParam = searchParams?.get('range');
-    return rangeParam || '30d';
-  });
+  const { from, to } = useGlobalDateRange();
+  const rangeLabel = useDateRangeLabel();
 
   // Main data
   const [kpis, setKpis] = useState<ShopifyKPIs | null>(null);
@@ -187,9 +175,9 @@ export default function ShopifyDashboard({
     setError(null);
 
     Promise.allSettled([
-      fetch(`/api/shopify?slug=${slug}&range=${range}&action=combined`).then((r) => r.json()),
+      fetch(`/api/shopify?slug=${slug}&from=${from}&to=${to}&action=combined`).then((r) => r.json()),
       fetch(`/api/shopify?slug=${slug}&action=orders`).then((r) => r.json()),
-      fetch(`/api/shopify?slug=${slug}&range=${range}&action=conversion-funnel`).then((r) => r.json()),
+      fetch(`/api/shopify?slug=${slug}&from=${from}&to=${to}&action=conversion-funnel`).then((r) => r.json()),
     ]).then(([combinedRes, ordersRes, funnelRes]) => {
       if (combinedRes.status === 'fulfilled') {
         const data = combinedRes.value;
@@ -214,7 +202,7 @@ export default function ShopifyDashboard({
       if (funnelRes.status === 'fulfilled') setConversionFunnel(Array.isArray(funnelRes.value) ? funnelRes.value : []);
       setLoading(false);
     });
-  }, [slug, range]);
+  }, [slug, from, to]);
 
   // Fetch advanced data separately
   useEffect(() => {
@@ -222,29 +210,14 @@ export default function ShopifyDashboard({
     setAdvancedLoading(true);
     setAdvanced(null);
 
-    fetch(`/api/shopify?slug=${slug}&action=advanced&range=${range}`)
+    fetch(`/api/shopify?slug=${slug}&action=advanced&from=${from}&to=${to}`)
       .then((r) => r.json())
       .then((data) => {
         if (!data?.error) setAdvanced(data);
         setAdvancedLoading(false);
       })
       .catch(() => setAdvancedLoading(false));
-  }, [slug, range]);
-
-  // Sync range with URL params
-  const router = useRouter();
-  const pathname = usePathname();
-  const isInitialMount = useRef(true);
-
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    const params = new URLSearchParams();
-    params.set('range', range);
-    router.push(`${pathname}?${params.toString()}`);
-  }, [range, router, pathname]);
+  }, [slug, from, to]);
 
   // ─── Derived values ─────────────────────────────────────────────────────────
 
@@ -1270,18 +1243,7 @@ export default function ShopifyDashboard({
             {slug && <span className="badge violet" style={{ fontSize: '0.75rem' }}>{slug}</span>}
           </h1>
 
-          {/* Date range picker */}
-          <div className="date-range-picker">
-            {DATE_RANGES.map((dr) => (
-              <button
-                key={dr.value}
-                className={`date-range-btn${range === dr.value ? ' active' : ''}`}
-                onClick={() => setRange(dr.value)}
-              >
-                {dr.label}
-              </button>
-            ))}
-          </div>
+          <div className="date-range-label">📅 {rangeLabel}</div>
         </div>
 
         {/* Tabs */}

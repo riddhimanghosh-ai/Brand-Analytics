@@ -13,14 +13,17 @@ import {
   demoShopifyConversionFunnel,
 } from '@/lib/demo-data';
 
-function getDateRangeForShopify(range: string): { startDate: string; endDate: string } {
+function getDateRangeForShopify(
+  range: string,
+  fromParam?: string | null,
+  toParam?: string | null,
+): { startDate: string; endDate: string } {
+  const today = new Date().toISOString().split('T')[0];
+  if (fromParam && toParam) return { startDate: fromParam, endDate: toParam };
   const now = new Date();
   const days = ({ '7d': 7, '30d': 30, '90d': 90, '1y': 365 } as Record<string, number>)[range] ?? 30;
   const start = new Date(now.getTime() - days * 86_400_000);
-  return {
-    startDate: start.toISOString().split('T')[0],
-    endDate: now.toISOString().split('T')[0],
-  };
+  return { startDate: start.toISOString().split('T')[0], endDate: today };
 }
 
 export async function GET(request: Request) {
@@ -28,6 +31,8 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get('slug');
     const action = searchParams.get('action') || 'kpis';
+    const fromParam = searchParams.get('from');
+    const toParam   = searchParams.get('to');
     const dateRange = searchParams.get('range') || '30d';
 
     if (!slug) {
@@ -66,7 +71,7 @@ export async function GET(request: Request) {
       accessToken: brand.shopifyAccessToken,
     };
 
-    const { startDate, endDate } = getDateRangeForShopify(dateRange);
+    const { startDate, endDate } = getDateRangeForShopify(dateRange, fromParam, toParam);
 
     switch (action) {
       case 'shop':
