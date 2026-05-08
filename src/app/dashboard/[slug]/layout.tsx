@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation';
 import { ChatPanel } from '@/components/ChatPanel';
 import { NavLink } from '@/components/NavLink';
 import { SidebarToggle } from '@/components/SidebarToggle';
-import { GlobalDateRangePicker } from '@/components/GlobalDateRangePicker';
 
 export default async function DashboardLayout({
   children,
@@ -163,9 +162,6 @@ export default async function DashboardLayout({
             All Brands
           </NavLink>
         </nav>
-
-        {/* Global Date Range Picker */}
-        <GlobalDateRangePicker />
 
         {/* Sidebar Footer */}
         <div className="sidebar-footer">

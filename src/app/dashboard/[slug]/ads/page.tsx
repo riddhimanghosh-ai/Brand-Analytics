@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { useGlobalDateRange, useDateRangeLabel } from '@/lib/use-date-range';
+import { useGlobalDateRange } from '@/lib/use-date-range';
+import { DateRangeDropdown } from '@/components/DateRangeDropdown';
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell,
@@ -565,7 +566,6 @@ export default function AdsPage({ params: paramsPromise }: { params: Promise<{ s
   const [slug, setSlug] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'meta' | 'google'>('overview');
   const { from, to } = useGlobalDateRange();
-  const rangeLabel = useDateRangeLabel();
   const [connections, setConnections] = useState({ meta: false, google: false, checked: false });
 
   useEffect(() => {
@@ -600,7 +600,7 @@ export default function AdsPage({ params: paramsPromise }: { params: Promise<{ s
             <h2>🎯 Ads Manager</h2>
             <p>Cross-platform campaign performance — Meta & Google Ads</p>
           </div>
-          <div className="date-range-label">📅 {rangeLabel}</div>
+          <DateRangeDropdown />
         </div>
       </div>
 

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useGlobalDateRange, useDateRangeLabel } from '@/lib/use-date-range';
+import { useGlobalDateRange } from '@/lib/use-date-range';
+import { DateRangeDropdown } from '@/components/DateRangeDropdown';
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -81,7 +82,6 @@ export default function AnalyticsPage({
   const [slug, setSlug] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const { from, to } = useGlobalDateRange();
-  const rangeLabel = useDateRangeLabel();
 
   const [kpis, setKpis] = useState<GA4KPIs | null>(null);
   const [sessions, setSessions] = useState<GA4SessionsOverTime[]>([]);
@@ -728,7 +728,7 @@ export default function AnalyticsPage({
             <h2>📈 Google Analytics</h2>
             <p>Traffic, sessions, conversions and e-commerce data</p>
           </div>
-          <div className="date-range-label">📅 {rangeLabel}</div>
+          <DateRangeDropdown />
         </div>
       </div>
 

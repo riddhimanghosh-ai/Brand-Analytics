@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useGlobalDateRange, useDateRangeLabel } from '@/lib/use-date-range';
+import { useGlobalDateRange } from '@/lib/use-date-range';
+import { DateRangeDropdown } from '@/components/DateRangeDropdown';
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -145,7 +146,6 @@ export default function ShopifyDashboard({
   const [slug, setSlug] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
   const { from, to } = useGlobalDateRange();
-  const rangeLabel = useDateRangeLabel();
 
   // Main data
   const [kpis, setKpis] = useState<ShopifyKPIs | null>(null);
@@ -1243,7 +1243,7 @@ export default function ShopifyDashboard({
             {slug && <span className="badge violet" style={{ fontSize: '0.75rem' }}>{slug}</span>}
           </h1>
 
-          <div className="date-range-label">📅 {rangeLabel}</div>
+          <DateRangeDropdown />
         </div>
 
         {/* Tabs */}
