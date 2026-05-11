@@ -2,7 +2,10 @@ import crypto from 'crypto';
 
 export interface GA4Config {
   propertyId: string;
-  serviceAccountJson: string;
+  /** Service-account JSON (legacy manual setup) */
+  serviceAccountJson?: string | null;
+  /** OAuth refresh token (from one-click connect flow) */
+  refreshToken?: string | null;
 }
 
 interface ParsedRow {
@@ -95,7 +98,8 @@ function base64url(str: string): string {
   return Buffer.from(str).toString('base64url');
 }
 
-async function getAccessToken(serviceAccountJson: string): Promise<string> {
+/** Get an access token from a service account JSON (legacy manual setup) */
+async function getAccessTokenFromServiceAccount(serviceAccountJson: string): Promise<string> {
   const sa = JSON.parse(serviceAccountJson) as {
     client_email: string;
     private_key: string;
@@ -141,6 +145,52 @@ async function getAccessToken(serviceAccountJson: string): Promise<string> {
   }
 
   return tokenData.access_token;
+}
+
+/** Get an access token from an OAuth refresh token (one-click connect flow) */
+async function getAccessTokenFromRefreshToken(refreshToken: string): Promise<string> {
+  const clientId     = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (!clientId || !clientSecret) {
+    throw new Error('GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not configured on server');
+  }
+
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+    }),
+  });
+
+  const tokenData = (await tokenRes.json()) as {
+    access_token?: string;
+    error_description?: string;
+    error?: string;
+  };
+
+  if (!tokenData.access_token) {
+    throw new Error(
+      `GA4 OAuth refresh failed: ${tokenData.error_description ?? tokenData.error ?? JSON.stringify(tokenData)}`
+    );
+  }
+
+  return tokenData.access_token;
+}
+
+/** Get an access token using whichever auth method is configured */
+async function getAccessToken(config: GA4Config): Promise<string> {
+  if (config.refreshToken) {
+    return getAccessTokenFromRefreshToken(config.refreshToken);
+  }
+  if (config.serviceAccountJson) {
+    return getAccessTokenFromServiceAccount(config.serviceAccountJson);
+  }
+  throw new Error('GA4: no auth credentials configured (need refreshToken or serviceAccountJson)');
 }
 
 // ---- Helpers ----
@@ -223,7 +273,7 @@ function val(arr: Array<{ value: string }> | undefined, i: number): number {
 // ---- Exported functions ----
 
 export async function getKPIs(config: GA4Config, dateRange: string): Promise<GA4KPIs> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
   const days = getDays(dateRange);
 
@@ -290,7 +340,7 @@ export async function getSessionsOverTime(
   config: GA4Config,
   dateRange: string
 ): Promise<GA4SessionsOverTime[]> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
   const data = await runReport(accessToken, config.propertyId, {
@@ -314,7 +364,7 @@ export async function getTrafficChannels(
   config: GA4Config,
   dateRange: string
 ): Promise<GA4TrafficChannel[]> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
   const data = await runReport(accessToken, config.propertyId, {
@@ -344,7 +394,7 @@ export async function getDeviceBreakdown(
   config: GA4Config,
   dateRange: string
 ): Promise<GA4DeviceBreakdown[]> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
   const data = await runReport(accessToken, config.propertyId, {
@@ -368,7 +418,7 @@ export async function getTopPages(
   config: GA4Config,
   dateRange: string
 ): Promise<GA4TopPage[]> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
   const data = await runReport(accessToken, config.propertyId, {
@@ -395,7 +445,7 @@ export async function getTopCountries(
   config: GA4Config,
   dateRange: string
 ): Promise<GA4Country[]> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
   const data = await runReport(accessToken, config.propertyId, {
@@ -417,7 +467,7 @@ export async function getLandingPages(
   config: GA4Config,
   dateRange: string
 ): Promise<GA4LandingPage[]> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
   const data = await runReport(accessToken, config.propertyId, {
@@ -446,7 +496,7 @@ export async function getKeyEvents(
   config: GA4Config,
   dateRange: string
 ): Promise<GA4KeyEvent[]> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
   const data = await runReport(accessToken, config.propertyId, {
@@ -468,7 +518,7 @@ export async function getConversionFunnel(
   config: GA4Config,
   dateRange: string
 ): Promise<GA4ConversionFunnel[]> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
   const [sessionsData, cartData, checkoutData, purchaseData] = await Promise.all([
@@ -525,7 +575,7 @@ export async function getProductConversionFunnel(
   config: GA4Config,
   dateRange: string
 ): Promise<GA4ProductFunnel[]> {
-  const accessToken = await getAccessToken(config.serviceAccountJson);
+  const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
   const [viewData, cartData, purchaseData] = await Promise.all([

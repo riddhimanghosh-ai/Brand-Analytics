@@ -10,6 +10,7 @@ export interface BrandData {
   shopifyAccessToken?: string | null;
   ga4PropertyId?: string | null;
   ga4ServiceAccountJson?: string | null;
+  ga4RefreshToken?: string | null;
   metaAppId?: string | null;
   metaAppSecret?: string | null;
   metaAccessToken?: string | null;

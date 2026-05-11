@@ -1,9 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ConnectionAccordion } from '@/components/ConnectionAccordion';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { MetaConnect } from '@/components/MetaConnect';
+import { GoogleAdsConnect } from '@/components/GoogleAdsConnect';
+import { GA4Connect } from '@/components/GA4Connect';
 
 interface BrandData {
   id: string;
@@ -112,8 +115,18 @@ function ShopifyConnect({
   );
 }
 
+// Parse the ad account picker list from URL: "act_123|Name,act_456|Other"
+function parseAccountsParam(raw: string | null): { id: string; name: string }[] {
+  if (!raw) return [];
+  return raw.split(',').map(item => {
+    const [id, encodedName] = item.split('|');
+    return { id, name: decodeURIComponent(encodedName ?? id) };
+  });
+}
+
 export default function SettingsPage({ params: paramsPromise }: { params: Promise<{ slug: string }> }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [params, setParams] = useState<{ slug: string } | null>(null);
   const [brand, setBrand] = useState<BrandData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -124,6 +137,26 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   const [testing, setTesting] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
+
+  // OAuth callback state from URL params
+  const metaConnectedViaOAuth      = searchParams.get('meta') === 'connected';
+  const googleAdsConnectedViaOAuth = searchParams.get('google_ads') === 'connected';
+  const ga4ConnectedViaOAuth       = searchParams.get('ga4') === 'connected';
+  const metaError      = searchParams.get('meta_error');
+  const googleAdsError = searchParams.get('google_ads_error');
+  const ga4Error       = searchParams.get('ga4_error');
+  const shopifySuccess = searchParams.get('shopify') === 'connected';
+
+  // Parse pending picker lists (shown after OAuth if multiple accounts/properties found)
+  const [metaPendingAccounts, setMetaPendingAccounts] = useState(() =>
+    parseAccountsParam(searchParams.get('meta_accounts'))
+  );
+  const [googleAdsPendingAccounts, setGoogleAdsPendingAccounts] = useState(() =>
+    parseAccountsParam(searchParams.get('google_ads_accounts'))
+  );
+  const [ga4PendingProperties, setGa4PendingProperties] = useState(() =>
+    parseAccountsParam(searchParams.get('ga4_properties'))
+  );
 
   useEffect(() => {
     paramsPromise.then(setParams);
@@ -137,7 +170,7 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
       .then(setBrand)
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [params]);
+  }, [params, metaConnectedViaOAuth, googleAdsConnectedViaOAuth, ga4ConnectedViaOAuth]);
 
   const updateField = (field: string, value: string) => {
     if (!brand) return;
@@ -287,6 +320,19 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
 
       <div className="page-body">
 
+        {/* OAuth success/error banners at top */}
+        {(shopifySuccess || metaConnectedViaOAuth || googleAdsConnectedViaOAuth || ga4ConnectedViaOAuth) && (
+          <div style={{ padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '18px' }}>✅</span>
+            <span>
+              {shopifySuccess && 'Shopify connected successfully!'}
+              {metaConnectedViaOAuth && 'Meta Ads connected successfully!'}
+              {googleAdsConnectedViaOAuth && 'Google Ads connected successfully!'}
+              {ga4ConnectedViaOAuth && 'Google Analytics connected successfully!'}
+            </span>
+          </div>
+        )}
+
         {/* ── SHOPIFY ── */}
         <ConnectionAccordion
           id="shopify"
@@ -315,24 +361,23 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             Traffic sources, sessions, bounce rates, and conversion funnel data
           </div>
 
-          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
-            <Step n={1} text='Go to <a href="https://console.cloud.google.com" target="_blank" style="color:var(--accent-blue)">Google Cloud Console</a> → Create or select a project' />
-            <Step n={2} text='Enable the <strong>Google Analytics Data API</strong> (APIs & Services → Library → search "Analytics Data API")' />
-            <Step n={3} text='Go to <strong>IAM & Admin → Service Accounts</strong> → Create Service Account → Download the <strong>JSON key</strong>' />
-            <Step n={4} text='In <strong>Google Analytics Admin</strong> → Property → Property Access Management → Add the service account email as <strong>Viewer</strong>' />
-            <Step n={5} text='Copy your <strong>GA4 Property ID</strong> from Analytics Admin → Property Settings (numeric ID, e.g. 123456789)' />
-            <Step n={6} text='Paste the full JSON key content and Property ID below' />
-          </div>
+          {/* OAuth error banner */}
+          {ga4Error && (
+            <div style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}>
+              ❌ Connection failed: {ga4Error.replace(/_/g, ' ')}. Please try again.
+            </div>
+          )}
 
-          <div className="form-group">
-            <label className="form-label">GA4 Property ID</label>
-            <input className="form-input mono" value={brand.ga4PropertyId || ''} onChange={(e) => updateField('ga4PropertyId', e.target.value)} placeholder="123456789" />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Service Account JSON</label>
-            <textarea className="form-input mono" rows={5} value={brand.ga4ServiceAccountJson || ''} onChange={(e) => updateField('ga4ServiceAccountJson', e.target.value)} placeholder={'{\n  "type": "service_account",\n  "project_id": "...",\n  "private_key": "-----BEGIN RSA PRIVATE KEY-----\\n..."\n}'} />
-          </div>
+          <GA4Connect
+            slug={params?.slug ?? ''}
+            isConnected={isConnected.ga4}
+            propertyId={brand.ga4PropertyId}
+            pendingProperties={ga4PendingProperties}
+            onPropertySelected={(id) => {
+              setBrand(b => b ? { ...b, ga4PropertyId: id } : b);
+              setGa4PendingProperties([]);
+            }}
+          />
         </ConnectionAccordion>
 
         {/* ── META ADS ── */}
@@ -346,35 +391,23 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             Facebook and Instagram ad campaign performance, ROAS and spend analytics
           </div>
 
-          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
-            <Step n={1} text='Go to <a href="https://developers.facebook.com" target="_blank" style="color:var(--accent-blue)">developers.facebook.com</a> → My Apps → Create App → Select <strong>Business</strong> type' />
-            <Step n={2} text='In your app dashboard, click <strong>Add Product</strong> → Add <strong>Marketing API</strong>' />
-            <Step n={3} text='Go to <strong>Tools → Graph API Explorer</strong> → Generate Access Token with permissions: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">ads_read, ads_management, business_management</code>' />
-            <Step n={4} text='Extend token lifetime: use <strong>Access Token Debugger</strong> → Extend to get a long-lived token (60 days)' />
-            <Step n={5} text='Find your <strong>Ad Account ID</strong> in Meta Ads Manager → top left account selector (format: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">act_XXXXXXXXXX</code>)' />
-          </div>
+          {/* OAuth error banner */}
+          {metaError && (
+            <div style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}>
+              ❌ Connection failed: {metaError.replace(/_/g, ' ')}. Please try again.
+            </div>
+          )}
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">App ID</label>
-              <input className="form-input mono" value={brand.metaAppId || ''} onChange={(e) => updateField('metaAppId', e.target.value)} placeholder="App ID from Meta Developer Console" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">App Secret</label>
-              <input className="form-input mono" type="password" value={brand.metaAppSecret || ''} onChange={(e) => updateField('metaAppSecret', e.target.value)} placeholder="App Secret" />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Access Token</label>
-              <input className="form-input mono" type="password" value={brand.metaAccessToken || ''} onChange={(e) => updateField('metaAccessToken', e.target.value)} placeholder="Long-lived access token" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Ad Account ID</label>
-              <input className="form-input mono" value={brand.metaAdAccountId || ''} onChange={(e) => updateField('metaAdAccountId', e.target.value)} placeholder="act_123456789" />
-            </div>
-          </div>
+          <MetaConnect
+            slug={params?.slug ?? ''}
+            isConnected={isConnected.meta}
+            adAccountId={brand.metaAdAccountId}
+            pendingAccounts={metaPendingAccounts}
+            onAccountSelected={(id) => {
+              setBrand(b => b ? { ...b, metaAdAccountId: id } : b);
+              setMetaPendingAccounts([]);
+            }}
+          />
         </ConnectionAccordion>
 
         {/* ── GOOGLE ADS ── */}
@@ -388,39 +421,23 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             Search, Shopping and Display campaign performance and ROAS
           </div>
 
-          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
-            <Step n={1} text='Apply for <strong>Google Ads API access</strong> at <a href="https://developers.google.com/google-ads/api/docs/first-call/dev-token" target="_blank" style="color:var(--accent-blue)">developers.google.com</a> → Your Developer Token will be emailed' />
-            <Step n={2} text='In <a href="https://console.cloud.google.com" target="_blank" style="color:var(--accent-blue)">Google Cloud Console</a> → APIs & Services → Credentials → Create <strong>OAuth 2.0 Client ID</strong> (Web application type)' />
-            <Step n={3} text='Enable <strong>Google Ads API</strong> in APIs & Services → Library' />
-            <Step n={4} text='Use <a href="https://developers.google.com/oauthplayground" target="_blank" style="color:var(--accent-blue)">OAuth 2.0 Playground</a> to generate a <strong>Refresh Token</strong> with scope: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">https://www.googleapis.com/auth/adwords</code>' />
-            <Step n={5} text='Find your <strong>Customer ID</strong> in Google Ads top-right (format: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">XXX-XXX-XXXX</code>, enter without dashes)' />
-          </div>
+          {/* OAuth error banner */}
+          {googleAdsError && (
+            <div style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}>
+              ❌ Connection failed: {googleAdsError.replace(/_/g, ' ')}. Please try again.
+            </div>
+          )}
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Developer Token</label>
-              <input className="form-input mono" type="password" value={brand.googleAdsDevToken || ''} onChange={(e) => updateField('googleAdsDevToken', e.target.value)} placeholder="Developer token" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Customer ID</label>
-              <input className="form-input mono" value={brand.googleAdsCustomerId || ''} onChange={(e) => updateField('googleAdsCustomerId', e.target.value)} placeholder="1234567890" />
-            </div>
-          </div>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">OAuth Client ID</label>
-              <input className="form-input mono" value={brand.googleAdsClientId || ''} onChange={(e) => updateField('googleAdsClientId', e.target.value)} placeholder="xxx.apps.googleusercontent.com" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">OAuth Client Secret</label>
-              <input className="form-input mono" type="password" value={brand.googleAdsClientSecret || ''} onChange={(e) => updateField('googleAdsClientSecret', e.target.value)} />
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Refresh Token</label>
-            <input className="form-input mono" type="password" value={brand.googleAdsRefreshToken || ''} onChange={(e) => updateField('googleAdsRefreshToken', e.target.value)} placeholder="1//0g..." />
-          </div>
+          <GoogleAdsConnect
+            slug={params?.slug ?? ''}
+            isConnected={isConnected.googleAds}
+            customerId={brand.googleAdsCustomerId}
+            pendingAccounts={googleAdsPendingAccounts}
+            onAccountSelected={(id) => {
+              setBrand(b => b ? { ...b, googleAdsCustomerId: id } : b);
+              setGoogleAdsPendingAccounts([]);
+            }}
+          />
         </ConnectionAccordion>
 
         {/* ── GEMINI AI ── */}

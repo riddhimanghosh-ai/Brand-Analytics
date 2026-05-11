@@ -43,13 +43,14 @@ export async function GET(request: Request) {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    if (!brand.ga4PropertyId || !brand.ga4ServiceAccountJson) {
+    if (!brand.ga4PropertyId || (!brand.ga4ServiceAccountJson && !brand.ga4RefreshToken)) {
       return NextResponse.json({ error: 'Google Analytics not connected' }, { status: 400 });
     }
 
     const config: ga4.GA4Config = {
       propertyId: brand.ga4PropertyId,
       serviceAccountJson: brand.ga4ServiceAccountJson,
+      refreshToken: brand.ga4RefreshToken,
     };
 
     switch (action) {

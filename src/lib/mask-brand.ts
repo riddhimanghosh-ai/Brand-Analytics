@@ -15,6 +15,7 @@ export type MaskedBrand = Omit<
   BrandData,
   | 'shopifyAccessToken'
   | 'ga4ServiceAccountJson'
+  | 'ga4RefreshToken'
   | 'metaAppSecret'
   | 'metaAccessToken'
   | 'googleAdsDevToken'
@@ -40,6 +41,7 @@ export function maskBrand(brand: BrandData): MaskedBrand {
     // ── strip every secret ──────────────────────────────
     shopifyAccessToken,
     ga4ServiceAccountJson,
+    ga4RefreshToken,
     metaAppSecret,
     metaAccessToken,
     googleAdsDevToken,
@@ -56,7 +58,7 @@ export function maskBrand(brand: BrandData): MaskedBrand {
   return {
     ...safe,
     shopifyConnected: !!(brand.shopifyStoreUrl && shopifyAccessToken),
-    ga4Connected: !!(brand.ga4PropertyId && ga4ServiceAccountJson),
+    ga4Connected: !!(brand.ga4PropertyId && (ga4ServiceAccountJson || ga4RefreshToken)),
     metaConnected: !!(brand.metaAdAccountId && metaAccessToken),
     googleAdsConnected: !!(brand.googleAdsCustomerId && googleAdsRefreshToken),
     geminiConnected: !!geminiApiKey,
