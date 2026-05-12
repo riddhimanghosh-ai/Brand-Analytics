@@ -106,6 +106,17 @@ export default function AnalyticsPage({
     setLoading(true);
     setError(null);
     setNotConnected(false);
+    // Clear stale data immediately so previous date range's numbers don't show during load
+    setKpis(null);
+    setSessions([]);
+    setChannels([]);
+    setDevices([]);
+    setPages([]);
+    setCountries([]);
+    setLandingPages([]);
+    setEvents([]);
+    setConversionFunnel([]);
+    setProductFunnel([]);
 
     Promise.all([
       fetch(`/api/analytics?slug=${slug}&action=kpis&from=${from}&to=${to}`).then((r) => r.json()),
