@@ -103,7 +103,7 @@ async function fetchAllOrders(
   config: ShopifyConfig,
   startDate: string,
   endDate: string,
-  maxPages = 5
+  maxPages = 100
 ): Promise<Array<Record<string, unknown>>> {
   const allOrders: Array<Record<string, unknown>> = [];
   let cursor: string | null = null;
@@ -113,7 +113,7 @@ async function fetchAllOrders(
     const afterClause = cursor ? `, after: "${cursor}"` : '';
     const query = `
       {
-        orders(first: 100, query: "created_at:>='${startDate}' AND created_at:<='${endDate}'"${afterClause}, sortKey: CREATED_AT, reverse: true) {
+        orders(first: 250, query: "created_at:>='${startDate}' AND created_at:<='${endDate}'"${afterClause}, sortKey: CREATED_AT, reverse: true) {
           edges {
             cursor
             node {
