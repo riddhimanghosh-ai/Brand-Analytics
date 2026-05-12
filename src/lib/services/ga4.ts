@@ -333,7 +333,9 @@ export async function getKPIs(config: GA4Config, dateRange: string): Promise<GA4
     pagesPerSession: val(c, 6),
     transactions: val(c, 7),
     revenue: val(c, 8),
-    conversionRate: val(c, 9) * 100,
+    // Use transactions/sessions for purchase conversion rate (sessionConversionRate
+    // counts ALL key events including scroll/pageview which inflates it to ~99%)
+    conversionRate: val(c, 0) > 0 ? (val(c, 7) / val(c, 0)) * 100 : 0,
     addToCarts: val(cx, 0),
     checkouts: val(cx, 1),
     prevSessions: val(p, 0),
