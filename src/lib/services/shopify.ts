@@ -269,6 +269,10 @@ function computeMetrics(orders: Array<Record<string, unknown>>) {
   const productRevenue: Record<string, number> = {};
 
   for (const order of orders) {
+    // Skip voided orders (cancelled before payment — not real revenue)
+    const financialStatus = (order.displayFinancialStatus as string) || '';
+    if (financialStatus === 'VOIDED') continue;
+
     const priceSet = order.totalPriceSet as { shopMoney: { amount: string } };
     const price = parseFloat(priceSet?.shopMoney?.amount || '0');
     totalRevenue += price;
@@ -344,14 +348,9 @@ export async function getKPIs(
   config: ShopifyConfig,
   dateRange: string = '30d'
 ): Promise<ShopifyKPIs> {
-  const now = new Date();
-  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
-  const days = daysMap[dateRange] || 30;
-
-  const currentEnd = now.toISOString();
-  const currentStart = new Date(now.getTime() - days * 86400000).toISOString();
-  const prevEnd = new Date(now.getTime() - days * 86400000).toISOString();
-  const prevStart = new Date(now.getTime() - 2 * days * 86400000).toISOString();
+  const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
+  const prevEnd = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
+  const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
   const [currentOrders, prevOrders] = await Promise.all([
     fetchAllOrders(config, currentStart, currentEnd),
@@ -390,25 +389,23 @@ export async function getRevenueOverTime(
   config: ShopifyConfig,
   dateRange: string = '30d'
 ): Promise<(RevenueDataPoint & { aov: number })[]> {
-  const now = new Date();
-  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
-  const days = daysMap[dateRange] || 30;
-
-  const startDate = new Date(now.getTime() - days * 86400000).toISOString();
-  const endDate = now.toISOString();
+  const { startDate, endDate, days } = parseDateRange(dateRange);
 
   const orders = await fetchAllOrders(config, startDate, endDate);
 
   const byDate: Record<string, { revenue: number; orders: number }> = {};
 
   // Initialise every day in the range to zero
-  for (let i = 0; i < days; i++) {
-    const d = new Date(now.getTime() - (days - i - 1) * 86400000);
+  const start = new Date(startDate);
+  for (let i = 0; i <= days; i++) {
+    const d = new Date(start.getTime() + i * 86400000);
     const key = d.toISOString().split('T')[0];
     byDate[key] = { revenue: 0, orders: 0 };
   }
 
   for (const order of orders) {
+    // Skip voided orders
+    if ((order.displayFinancialStatus as string) === 'VOIDED') continue;
     const createdAt = order.createdAt as string;
     const dateKey = createdAt.split('T')[0];
     const priceSet = order.totalPriceSet as { shopMoney: { amount: string } };
@@ -438,16 +435,12 @@ export async function getTopProducts(
   config: ShopifyConfig,
   dateRange: string = '30d'
 ): Promise<ShopifyProduct[]> {
-  const now = new Date();
-  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
-  const days = daysMap[dateRange] || 30;
-
-  const startDate = new Date(now.getTime() - days * 86400000).toISOString();
-  const endDate = now.toISOString();
+  const { startDate, endDate } = parseDateRange(dateRange);
 
   const orders = await fetchAllOrders(config, startDate, endDate);
 
   const productMap: Record<string, ShopifyProduct> = {};
+
 
   for (const order of orders) {
     const lineItems = order.lineItems as {
@@ -574,12 +567,7 @@ export async function getCustomerSegments(
   revenueBySegment: { name: string; value: number }[];
   topCustomers: ShopifyCustomer[];
 }> {
-  const now = new Date();
-  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
-  const days = daysMap[dateRange] || 30;
-
-  const startDate = new Date(now.getTime() - days * 86400000).toISOString();
-  const endDate = now.toISOString();
+  const { startDate, endDate } = parseDateRange(dateRange);
 
   const orders = await fetchAllOrders(config, startDate, endDate);
 
@@ -668,12 +656,7 @@ export async function getOrderStatusBreakdown(
   config: ShopifyConfig,
   dateRange: string = '30d'
 ): Promise<{ name: string; value: number }[]> {
-  const now = new Date();
-  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
-  const days = daysMap[dateRange] || 30;
-
-  const startDate = new Date(now.getTime() - days * 86400000).toISOString();
-  const endDate = now.toISOString();
+  const { startDate, endDate } = parseDateRange(dateRange);
 
   const orders = await fetchAllOrders(config, startDate, endDate);
 
@@ -703,6 +686,12 @@ function parseDateRange(dateRange: string): {
   endDate: string;
   days: number;
 } {
+  // Custom range: "YYYY-MM-DD:YYYY-MM-DD"
+  if (/^\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}$/.test(dateRange)) {
+    const [from, to] = dateRange.split(':');
+    const days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000));
+    return { startDate: from, endDate: to, days };
+  }
   const now = new Date();
   const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
   const days = daysMap[dateRange] || 30;
@@ -1027,14 +1016,9 @@ export async function getAllAnalytics(
   };
   orderStatus: { name: string; value: number }[];
 }> {
-  const now = new Date();
-  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
-  const days = daysMap[dateRange] || 30;
-
-  const currentEnd = now.toISOString();
-  const currentStart = new Date(now.getTime() - days * 86400000).toISOString();
-  const prevEnd = new Date(now.getTime() - days * 86400000).toISOString();
-  const prevStart = new Date(now.getTime() - 2 * days * 86400000).toISOString();
+  const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
+  const prevEnd = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
+  const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
   // Fetch current and previous period orders in parallel — just 2 requests total
   const [currentOrders, prevOrders] = await Promise.all([
@@ -1068,12 +1052,14 @@ export async function getAllAnalytics(
 
   // ── Revenue over time ──
   const byDate: Record<string, { revenue: number; orders: number }> = {};
-  for (let i = 0; i < days; i++) {
-    const d = new Date(now.getTime() - (days - i - 1) * 86400000);
+  const startMs = new Date(currentStart).getTime();
+  for (let i = 0; i <= days; i++) {
+    const d = new Date(startMs + i * 86400000);
     const key = d.toISOString().split('T')[0];
     byDate[key] = { revenue: 0, orders: 0 };
   }
   for (const order of currentOrders) {
+    if ((order.displayFinancialStatus as string) === 'VOIDED') continue;
     const dateKey = (order.createdAt as string).split('T')[0];
     const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
     if (byDate[dateKey]) {
@@ -1228,16 +1214,21 @@ export async function getOrderConversionFunnel(
 ): Promise<ConversionFunnel[]> {
   const orders = await fetchAllOrders(config, startDate, endDate);
 
-  const totalOrders = orders.length;
-  const paidOrders = orders.filter((o) => (o.financial_status as string) === 'paid').length;
-  const fulfilledOrders = orders.filter(
-    (o) => (o.fulfillment_status as string) === 'fulfilled'
+  // Exclude voided orders from funnel (no payment intent)
+  const nonVoidedOrders = orders.filter((o) => (o.displayFinancialStatus as string) !== 'VOIDED');
+  const totalOrders = nonVoidedOrders.length;
+  const paidOrders = nonVoidedOrders.filter((o) => {
+    const fs = (o.displayFinancialStatus as string) || '';
+    return fs === 'PAID' || fs === 'PARTIALLY_PAID' || fs === 'PARTIALLY_REFUNDED';
+  }).length;
+  const fulfilledOrders = nonVoidedOrders.filter(
+    (o) => (o.displayFulfillmentStatus as string) === 'FULFILLED'
   ).length;
-  const partialOrders = orders.filter(
-    (o) => (o.fulfillment_status as string) === 'partial'
+  const partialOrders = nonVoidedOrders.filter(
+    (o) => (o.displayFulfillmentStatus as string) === 'PARTIAL'
   ).length;
-  const refundedOrders = orders.filter(
-    (o) => (o.financial_status as string) === 'refunded'
+  const refundedOrders = nonVoidedOrders.filter(
+    (o) => (o.displayFinancialStatus as string) === 'REFUNDED'
   ).length;
 
   const funnel: ConversionFunnel[] = [

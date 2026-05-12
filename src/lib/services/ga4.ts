@@ -583,12 +583,13 @@ export async function getProductConversionFunnel(
       dateRanges: [{ startDate, endDate }],
       metrics: [{ name: 'screenPageViews' }],
       dimensions: [{ name: 'pagePath' }],
-      filters: [
-        {
+      dimensionFilter: {
+        filter: {
           fieldName: 'pagePath',
           stringFilter: { matchType: 'CONTAINS', value: 'product' },
         },
-      ],
+      },
+      limit: 1000,
     }),
     runReport(accessToken, config.propertyId, {
       dateRanges: [{ startDate, endDate }],
@@ -600,7 +601,8 @@ export async function getProductConversionFunnel(
     }),
   ]);
 
-  const views = val(viewData.rows?.[0]?.metricValues, 0);
+  // Sum all product page views across all matching paths
+  const views = (viewData.rows ?? []).reduce((sum, row) => sum + val(row.metricValues, 0), 0);
   const carts = val(cartData.rows?.[0]?.metricValues, 0);
   const purchases = val(purchaseData.rows?.[0]?.metricValues, 0);
 

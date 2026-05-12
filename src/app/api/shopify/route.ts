@@ -106,6 +106,9 @@ export async function GET(request: Request) {
     const cached = cacheGet(cacheKey);
     if (cached) return NextResponse.json(cached);
 
+    // Build effective date range string: custom "YYYY-MM-DD:YYYY-MM-DD" takes precedence
+    const effectiveDateRange = fromParam && toParam ? `${fromParam}:${toParam}` : dateRange;
+
     // ── Fetch fresh data ──────────────────────────────────────────────────────
     let result: unknown;
 
@@ -113,21 +116,21 @@ export async function GET(request: Request) {
       case 'shop':
         result = await shopify.getShopInfo(config); break;
       case 'kpis':
-        result = await shopify.getKPIs(config, dateRange); break;
+        result = await shopify.getKPIs(config, effectiveDateRange); break;
       case 'revenue':
-        result = await shopify.getRevenueOverTime(config, dateRange); break;
+        result = await shopify.getRevenueOverTime(config, effectiveDateRange); break;
       case 'products':
-        result = await shopify.getTopProducts(config, dateRange); break;
+        result = await shopify.getTopProducts(config, effectiveDateRange); break;
       case 'orders':
         result = await shopify.getRecentOrders(config); break;
       case 'customers':
-        result = await shopify.getCustomerSegments(config, dateRange); break;
+        result = await shopify.getCustomerSegments(config, effectiveDateRange); break;
       case 'order-status':
-        result = await shopify.getOrderStatusBreakdown(config, dateRange); break;
+        result = await shopify.getOrderStatusBreakdown(config, effectiveDateRange); break;
       case 'combined':
-        result = await shopify.getAllAnalytics(config, dateRange); break;
+        result = await shopify.getAllAnalytics(config, effectiveDateRange); break;
       case 'advanced':
-        result = await shopify.getAdvancedCROMetrics(config, dateRange); break;
+        result = await shopify.getAdvancedCROMetrics(config, effectiveDateRange); break;
       case 'conversion-funnel':
         result = await shopify.getOrderConversionFunnel(config, startDate, endDate); break;
       case 'test':

@@ -152,7 +152,7 @@ export async function getCampaigns(config: MetaConfig, dateRange: string): Promi
     date_preset: datePreset,
     fields: 'campaign_id,campaign_name,spend,impressions,clicks,ctr,cpc,actions,action_values',
     level: 'campaign',
-    limit: '50',
+    limit: '500',
   });
 
   if (!data.data) return [];

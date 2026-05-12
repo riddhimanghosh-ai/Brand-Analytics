@@ -98,21 +98,22 @@ export async function getCampaigns(config: TikTokConfig, range = '30d'): Promise
     const data = await tiktokGet('/report/integrated/get/', config, {
       advertiser_id: config.advertiserId,
       report_type: 'BASIC',
-      dimensions: JSON.stringify(['campaign_id', 'campaign_name']),
-      metrics: JSON.stringify(['spend', 'impressions', 'clicks', 'conversion', 'value', 'video_play_actions', 'campaign_name', 'status']),
+      dimensions: JSON.stringify(['campaign_id']),
+      metrics: JSON.stringify(['spend', 'impressions', 'clicks', 'conversion', 'value', 'video_play_actions']),
       start_date,
       end_date,
-      page_size: '20',
+      page_size: '100',
     });
 
     return (data?.list || []).map((item: Record<string, Record<string, string>>) => {
       const m = item.metrics || {};
+      const d = item.dimensions || {};
       const spend = parseFloat(m.spend || '0');
       const value = parseFloat(m.value || '0');
       return {
-        id: item.dimensions?.campaign_id || '',
-        name: m.campaign_name || item.dimensions?.campaign_name || 'Unknown',
-        status: m.status || 'ACTIVE',
+        id: d.campaign_id || '',
+        name: d.campaign_name || 'Unknown',
+        status: 'ACTIVE',
         spend,
         impressions: parseInt(m.impressions || '0', 10),
         clicks: parseInt(m.clicks || '0', 10),
