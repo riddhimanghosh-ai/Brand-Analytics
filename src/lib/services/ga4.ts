@@ -284,7 +284,8 @@ export async function getKPIs(config: GA4Config, dateRange: string): Promise<GA4
     .toISOString()
     .split('T')[0];
 
-  const [current, prev] = await Promise.all([
+  // GA4 limit: max 10 metrics per request — split into 2 parallel calls
+  const [current, currentExtra, prev] = await Promise.all([
     runReport(accessToken, config.propertyId, {
       dateRanges: [{ startDate, endDate }],
       metrics: [
@@ -298,6 +299,11 @@ export async function getKPIs(config: GA4Config, dateRange: string): Promise<GA4
         { name: 'transactions' },
         { name: 'purchaseRevenue' },
         { name: 'sessionConversionRate' },
+      ],
+    }),
+    runReport(accessToken, config.propertyId, {
+      dateRanges: [{ startDate, endDate }],
+      metrics: [
         { name: 'addToCarts' },
         { name: 'checkouts' },
       ],
@@ -314,6 +320,7 @@ export async function getKPIs(config: GA4Config, dateRange: string): Promise<GA4
   ]);
 
   const c = current.rows?.[0]?.metricValues ?? [];
+  const cx = currentExtra.rows?.[0]?.metricValues ?? [];
   const p = prev.rows?.[0]?.metricValues ?? [];
 
   return {
@@ -327,8 +334,8 @@ export async function getKPIs(config: GA4Config, dateRange: string): Promise<GA4
     transactions: val(c, 7),
     revenue: val(c, 8),
     conversionRate: val(c, 9) * 100,
-    addToCarts: val(c, 10),
-    checkouts: val(c, 11),
+    addToCarts: val(cx, 0),
+    checkouts: val(cx, 1),
     prevSessions: val(p, 0),
     prevUsers: val(p, 1),
     prevTransactions: val(p, 2),
