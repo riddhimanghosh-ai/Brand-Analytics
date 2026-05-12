@@ -145,6 +145,8 @@ export default function ShopifyDashboard({
 }) {
   const [slug, setSlug] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('overview');
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null);
   const { from, to } = useGlobalDateRange();
 
   // Main data
@@ -167,6 +169,35 @@ export default function ShopifyDashboard({
   useEffect(() => {
     paramsPromise.then((p) => setSlug(p.slug));
   }, [paramsPromise]);
+
+  // Refresh: clear server cache then re-fetch
+  const handleRefresh = async () => {
+    if (!slug || refreshing) return;
+    setRefreshing(true);
+    await fetch(`/api/shopify?slug=${slug}&action=refresh`);
+    setLastRefreshed(new Date());
+    setRefreshing(false);
+    // Trigger re-fetch by toggling a dummy dep — simplest approach is to just re-run the effect
+    setLoading(true);
+    setError(null);
+    Promise.allSettled([
+      fetch(`/api/shopify?slug=${slug}&from=${from}&to=${to}&action=combined`).then((r) => r.json()),
+      fetch(`/api/shopify?slug=${slug}&action=orders`).then((r) => r.json()),
+      fetch(`/api/shopify?slug=${slug}&from=${from}&to=${to}&action=conversion-funnel`).then((r) => r.json()),
+    ]).then(([combinedRes, ordersRes, funnelRes]) => {
+      if (combinedRes.status === 'fulfilled') {
+        const data = combinedRes.value;
+        if (data?.kpis) setKpis(data.kpis);
+        if (Array.isArray(data?.revenue)) setRevenue(data.revenue);
+        if (Array.isArray(data?.products)) setProducts(data.products);
+        if (data?.customers) setCustomers(data.customers);
+        if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
+      }
+      if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
+      if (funnelRes.status === 'fulfilled') setConversionFunnel(Array.isArray(funnelRes.value) ? funnelRes.value : []);
+      setLoading(false);
+    });
+  };
 
   // Fetch main data — single combined call + orders separately
   useEffect(() => {
@@ -1243,6 +1274,26 @@ export default function ShopifyDashboard({
             {slug && <span className="badge violet" style={{ fontSize: '0.75rem' }}>{slug}</span>}
           </h1>
 
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            title="Clear cache and reload fresh data from Shopify"
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 14px', borderRadius: '8px', border: '1px solid var(--glass-border)',
+              background: 'var(--bg-elevated)', color: 'var(--text-secondary)',
+              fontSize: '13px', fontWeight: '500', cursor: refreshing ? 'wait' : 'pointer',
+              opacity: refreshing ? 0.7 : 1, transition: 'all 0.15s',
+            }}
+          >
+            <span style={{ display: 'inline-block', animation: refreshing ? 'spin 1s linear infinite' : 'none' }}>🔄</span>
+            {refreshing ? 'Refreshing...' : 'Refresh data'}
+            {lastRefreshed && !refreshing && (
+              <span style={{ fontSize: '11px', color: 'var(--text-dim)', marginLeft: '2px' }}>
+                · {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </button>
           <DateRangeDropdown />
         </div>
 

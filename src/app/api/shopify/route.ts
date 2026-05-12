@@ -13,6 +13,28 @@ import {
   demoShopifyConversionFunnel,
 } from '@/lib/demo-data';
 
+// ── In-memory cache (1 hr TTL) ────────────────────────────────────────────────
+const TTL_MS = 60 * 60 * 1000; // 1 hour
+const cache = new Map<string, { data: unknown; expiresAt: number }>();
+
+function cacheGet(key: string): unknown | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) { cache.delete(key); return null; }
+  return entry.data;
+}
+
+function cacheSet(key: string, data: unknown) {
+  cache.set(key, { data, expiresAt: Date.now() + TTL_MS });
+}
+
+function cacheClear(slug: string) {
+  for (const key of cache.keys()) {
+    if (key.startsWith(`${slug}:`)) cache.delete(key);
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 function getDateRangeForShopify(
   range: string,
   fromParam?: string | null,
@@ -73,43 +95,53 @@ export async function GET(request: Request) {
 
     const { startDate, endDate } = getDateRangeForShopify(dateRange, fromParam, toParam);
 
+    // ── Refresh: clear all cache for this brand ───────────────────────────────
+    if (action === 'refresh') {
+      cacheClear(slug);
+      return NextResponse.json({ ok: true, message: 'Cache cleared' });
+    }
+
+    // Cache key includes slug + action + date range
+    const cacheKey = `${slug}:${action}:${fromParam ?? dateRange}:${toParam ?? ''}`;
+    const cached = cacheGet(cacheKey);
+    if (cached) return NextResponse.json(cached);
+
+    // ── Fetch fresh data ──────────────────────────────────────────────────────
+    let result: unknown;
+
     switch (action) {
       case 'shop':
-        return NextResponse.json(await shopify.getShopInfo(config));
-
+        result = await shopify.getShopInfo(config); break;
       case 'kpis':
-        return NextResponse.json(await shopify.getKPIs(config, dateRange));
-
+        result = await shopify.getKPIs(config, dateRange); break;
       case 'revenue':
-        return NextResponse.json(await shopify.getRevenueOverTime(config, dateRange));
-
+        result = await shopify.getRevenueOverTime(config, dateRange); break;
       case 'products':
-        return NextResponse.json(await shopify.getTopProducts(config, dateRange));
-
+        result = await shopify.getTopProducts(config, dateRange); break;
       case 'orders':
-        return NextResponse.json(await shopify.getRecentOrders(config));
-
+        result = await shopify.getRecentOrders(config); break;
       case 'customers':
-        return NextResponse.json(await shopify.getCustomerSegments(config, dateRange));
-
+        result = await shopify.getCustomerSegments(config, dateRange); break;
       case 'order-status':
-        return NextResponse.json(await shopify.getOrderStatusBreakdown(config, dateRange));
-
+        result = await shopify.getOrderStatusBreakdown(config, dateRange); break;
       case 'combined':
-        return NextResponse.json(await shopify.getAllAnalytics(config, dateRange));
-
+        result = await shopify.getAllAnalytics(config, dateRange); break;
       case 'advanced':
-        return NextResponse.json(await shopify.getAdvancedCROMetrics(config, dateRange));
-
+        result = await shopify.getAdvancedCROMetrics(config, dateRange); break;
       case 'conversion-funnel':
-        return NextResponse.json(await shopify.getOrderConversionFunnel(config, startDate, endDate));
-
+        result = await shopify.getOrderConversionFunnel(config, startDate, endDate); break;
       case 'test':
-        return NextResponse.json(await shopify.testConnection(config));
-
+        result = await shopify.testConnection(config); break;
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
+
+    // Don't cache 'test' or 'orders' (recent orders always fresh)
+    if (action !== 'test' && action !== 'orders') {
+      cacheSet(cacheKey, result);
+    }
+
+    return NextResponse.json(result);
   } catch (error) {
     console.error('Shopify API error:', error);
     return NextResponse.json(
