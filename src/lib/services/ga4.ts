@@ -383,7 +383,7 @@ export async function getTrafficChannels(
       { name: 'sessions' },
       { name: 'activeUsers' },
       { name: 'bounceRate' },
-      { name: 'conversions' },
+      { name: 'transactions' },   // purchase transactions only (not all key events)
       { name: 'purchaseRevenue' },
     ],
     orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
@@ -393,7 +393,7 @@ export async function getTrafficChannels(
     channel: dims[0] || 'Unknown',
     sessions: metrics[0],
     users: metrics[1],
-    bounceRate: metrics[2] * 100,
+    bounceRate: metrics[2] * 100,  // GA4 returns 0-1, multiply to get %
     conversions: metrics[3],
     revenue: metrics[4],
   }));
@@ -435,17 +435,17 @@ export async function getTopPages(
     dimensions: [{ name: 'pagePath' }],
     metrics: [
       { name: 'screenPageViews' },
-      { name: 'averageSessionDuration' },
+      { name: 'averageEngagementTime' }, // page-level engagement time (not session duration)
       { name: 'bounceRate' },
     ],
     orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
-    limit: 15,
+    limit: 20,
   });
 
   return parseRows(data).map(({ dims, metrics }) => ({
     page: dims[0],
     pageviews: metrics[0],
-    avgTimeOnPage: metrics[1],
+    avgTimeOnPage: metrics[1],         // seconds of engagement on this page
     bounceRate: metrics[2] * 100,
   }));
 }
@@ -485,11 +485,11 @@ export async function getLandingPages(
     metrics: [
       { name: 'sessions' },
       { name: 'bounceRate' },
-      { name: 'conversions' },
+      { name: 'transactions' },    // purchase transactions only
       { name: 'purchaseRevenue' },
     ],
     orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
-    limit: 20,
+    limit: 25,
   });
 
   return parseRows(data).map(({ dims, metrics }) => ({
@@ -530,29 +530,22 @@ export async function getConversionFunnel(
   const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
-  const [sessionsData, cartData, checkoutData, purchaseData] = await Promise.all([
-    runReport(accessToken, config.propertyId, {
-      dateRanges: [{ startDate, endDate }],
-      metrics: [{ name: 'sessions' }],
-    }),
-    runReport(accessToken, config.propertyId, {
-      dateRanges: [{ startDate, endDate }],
-      metrics: [{ name: 'addToCarts' }],
-    }),
-    runReport(accessToken, config.propertyId, {
-      dateRanges: [{ startDate, endDate }],
-      metrics: [{ name: 'checkouts' }],
-    }),
-    runReport(accessToken, config.propertyId, {
-      dateRanges: [{ startDate, endDate }],
-      metrics: [{ name: 'transactions' }],
-    }),
-  ]);
+  // All 4 metrics in 1 request (well within GA4's 10-metric limit)
+  const data = await runReport(accessToken, config.propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    metrics: [
+      { name: 'sessions' },
+      { name: 'addToCarts' },
+      { name: 'checkouts' },
+      { name: 'transactions' },
+    ],
+  });
 
-  const sessions = val(sessionsData.rows?.[0]?.metricValues, 0);
-  const carts = val(cartData.rows?.[0]?.metricValues, 0);
-  const checkouts = val(checkoutData.rows?.[0]?.metricValues, 0);
-  const purchases = val(purchaseData.rows?.[0]?.metricValues, 0);
+  const m = data.rows?.[0]?.metricValues ?? [];
+  const sessions  = val(m, 0);
+  const carts     = val(m, 1);
+  const checkouts = val(m, 2);
+  const purchases = val(m, 3);
 
   const funnel: GA4ConversionFunnel[] = [
     {
