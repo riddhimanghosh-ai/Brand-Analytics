@@ -39,6 +39,7 @@ interface BrandData {
   geminiConnected?: boolean;
   tiktokConnected?: boolean;
   klaviyoConnected?: boolean;
+  competitors?: Array<{ name: string; pageId: string }> | null;
 }
 
 // ── Shopify OAuth connect component ──
@@ -122,6 +123,120 @@ function parseAccountsParam(raw: string | null): { id: string; name: string }[] 
     const [id, encodedName] = item.split('|');
     return { id, name: decodeURIComponent(encodedName ?? id) };
   });
+}
+
+// ── Competitor Tracking Card ──────────────────────────────────────────────────
+function CompetitorTrackingCard({
+  brand,
+  onUpdate,
+  params,
+}: {
+  brand: BrandData;
+  onUpdate: (competitors: Array<{ name: string; pageId: string }>) => void;
+  params: { slug: string } | null;
+}) {
+  const [newName, setNewName] = useState('');
+  const [newPageId, setNewPageId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const competitors: Array<{ name: string; pageId: string }> = (brand.competitors as Array<{ name: string; pageId: string }>) || [];
+
+  const persist = async (updated: Array<{ name: string; pageId: string }>) => {
+    if (!params) return;
+    setSaving(true);
+    try {
+      await fetch(`/api/brands/${params.slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ competitors: updated }),
+      });
+      onUpdate(updated);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const add = async () => {
+    if (!newName.trim() || !newPageId.trim()) return;
+    const updated = [...competitors, { name: newName.trim(), pageId: newPageId.trim() }];
+    await persist(updated);
+    setNewName('');
+    setNewPageId('');
+  };
+
+  const remove = async (idx: number) => {
+    const updated = competitors.filter((_, i) => i !== idx);
+    await persist(updated);
+  };
+
+  return (
+    <div className="form-card">
+      <div className="form-card-title">🔍 Competitor Tracking</div>
+      <div className="form-card-desc">
+        Track competitor ads via the Meta Ad Library. Add their Facebook Page ID to monitor their active ads.
+      </div>
+
+      {/* Add row */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+        <input
+          className="form-input"
+          style={{ flex: '1', minWidth: '140px' }}
+          placeholder="Brand name (e.g. Nykaa)"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+        />
+        <input
+          className="form-input mono"
+          style={{ flex: '1', minWidth: '160px' }}
+          placeholder="Facebook Page ID (e.g. 123456789)"
+          value={newPageId}
+          onChange={(e) => setNewPageId(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && add()}
+        />
+        <button
+          className="btn btn-primary"
+          onClick={add}
+          disabled={saving || !newName.trim() || !newPageId.trim()}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {saving ? '⏳' : '+ Add'}
+        </button>
+      </div>
+
+      {/* Saved competitors */}
+      {competitors.length === 0 ? (
+        <div style={{ fontSize: '13px', color: 'var(--text-dim)', padding: '12px 0' }}>
+          No competitors added yet. Add a competitor above to start tracking their ads.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {competitors.map((c, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: '12px',
+              padding: '10px 12px', background: 'var(--bg-hover)',
+              borderRadius: '8px', border: '1px solid var(--glass-border)',
+            }}>
+              <span style={{ flex: 1, fontWeight: 600, fontSize: '14px' }}>{c.name}</span>
+              <span className="mono" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{c.pageId}</span>
+              <button
+                onClick={() => remove(i)}
+                disabled={saving}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', fontSize: '16px', lineHeight: 1, padding: '2px 4px' }}
+                title="Remove"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
+        💡 Find a page ID: go to the brand&apos;s Facebook page → right-click → View Page Source → search for <code style={{ fontFamily: 'monospace', background: 'rgba(59,130,246,0.1)', padding: '1px 4px', borderRadius: '3px' }}>page_id</code>. Requires Meta Ads to be connected.
+      </div>
+    </div>
+  );
 }
 
 export default function SettingsPage({ params: paramsPromise }: { params: Promise<{ slug: string }> }) {
@@ -541,6 +656,9 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             <input className="form-input mono" type="password" value={(brand as unknown as Record<string,string>).klaviyoApiKey || ''} onChange={(e) => updateField('klaviyoApiKey', e.target.value)} placeholder="pk_..." />
           </div>
         </ConnectionAccordion>
+
+        {/* ── Competitor Tracking ── */}
+        <CompetitorTrackingCard brand={brand} onUpdate={(competitors) => setBrand({ ...brand, competitors })} params={params} />
 
         {/* Save */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>

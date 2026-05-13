@@ -28,6 +28,7 @@ export interface BrandData {
   pinterestAdAccountId?: string | null;
   customDashboard?: string | null;
   savedMetrics?: { name: string; query: string; chartType: string }[];
+  competitors?: Array<{ name: string; pageId: string }> | null;
   createdAt: string;
   updatedAt: string;
 }

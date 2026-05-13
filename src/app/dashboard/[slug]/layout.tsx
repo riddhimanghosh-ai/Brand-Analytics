@@ -143,6 +143,13 @@ export default async function DashboardLayout({
             Social Comments
           </NavLink>
 
+          <div className="nav-section-label">Competitive Intel</div>
+
+          <NavLink href={`/dashboard/${slug}/competitors`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
+            <span className="nav-icon">🔍</span>
+            Competitor Ads
+          </NavLink>
+
           <div className="nav-section-label">Tools</div>
 
           <NavLink href={`/dashboard/${slug}/metrics`} disabled={!connections.shopify} disabledPlatform="Shopify">

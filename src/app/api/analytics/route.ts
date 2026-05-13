@@ -38,6 +38,13 @@ export async function GET(request: Request) {
         case 'events': return NextResponse.json(demoGA4Events);
         case 'conversion-funnel': return NextResponse.json(demoGA4ConversionFunnel);
         case 'product-funnel': return NextResponse.json(demoGA4ProductFunnel);
+        case 'source-medium': return NextResponse.json([]);
+        case 'new-returning': return NextResponse.json([]);
+        case 'cities': return NextResponse.json([]);
+        case 'browsers': return NextResponse.json([]);
+        case 'os': return NextResponse.json([]);
+        case 'campaigns': return NextResponse.json([]);
+        case 'item-purchases': return NextResponse.json([]);
         default: return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
       }
     }
@@ -74,6 +81,20 @@ export async function GET(request: Request) {
         return NextResponse.json(await ga4.getConversionFunnel(config, dateRange));
       case 'product-funnel':
         return NextResponse.json(await ga4.getProductConversionFunnel(config, dateRange));
+      case 'source-medium':
+        return NextResponse.json(await ga4.getSourceMedium(config, dateRange));
+      case 'new-returning':
+        return NextResponse.json(await ga4.getNewVsReturning(config, dateRange));
+      case 'cities':
+        return NextResponse.json(await ga4.getCities(config, dateRange));
+      case 'browsers':
+        return NextResponse.json(await ga4.getBrowsers(config, dateRange));
+      case 'os':
+        return NextResponse.json(await ga4.getOperatingSystems(config, dateRange));
+      case 'campaigns':
+        return NextResponse.json(await ga4.getCampaigns(config, dateRange));
+      case 'item-purchases':
+        return NextResponse.json(await ga4.getItemPurchases(config, dateRange));
       default:
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }

@@ -439,15 +439,41 @@ export async function getTopPages(
       { name: 'bounceRate' },
     ],
     orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
-    limit: 20,
+    limit: 80, // fetch extra for post-normalization merging
   });
 
-  return parseRows(data).map(({ dims, metrics }) => ({
-    page: dims[0],
-    pageviews: metrics[0],
-    avgTimeOnPage: metrics[1],         // seconds of engagement on this page
-    bounceRate: metrics[2] * 100,
-  }));
+  // Normalize: strip query string from page paths and aggregate
+  const aggregated = new Map<string, { pageviews: number; weightedTime: number; bouncedViews: number }>();
+
+  for (const { dims, metrics } of parseRows(data)) {
+    const basePath = (dims[0] || '/').split('?')[0].split('#')[0] || '/';
+    const pageviews = metrics[0];
+    const avgTime = metrics[1];
+    const bounceRate = metrics[2]; // fraction 0–1
+
+    const existing = aggregated.get(basePath);
+    if (existing) {
+      existing.weightedTime += avgTime * pageviews;
+      existing.bouncedViews += bounceRate * pageviews;
+      existing.pageviews += pageviews;
+    } else {
+      aggregated.set(basePath, {
+        pageviews,
+        weightedTime: avgTime * pageviews,
+        bouncedViews: bounceRate * pageviews,
+      });
+    }
+  }
+
+  return Array.from(aggregated.entries())
+    .map(([page, v]) => ({
+      page,
+      pageviews: v.pageviews,
+      avgTimeOnPage: v.pageviews > 0 ? v.weightedTime / v.pageviews : 0,
+      bounceRate: v.pageviews > 0 ? (v.bouncedViews / v.pageviews) * 100 : 0,
+    }))
+    .sort((a, b) => b.pageviews - a.pageviews)
+    .slice(0, 20);
 }
 
 export async function getTopCountries(
@@ -479,6 +505,7 @@ export async function getLandingPages(
   const accessToken = await getAccessToken(config);
   const { startDate, endDate } = getDateRange(dateRange);
 
+  // Fetch more rows than needed so we can aggregate after normalizing paths
   const data = await runReport(accessToken, config.propertyId, {
     dateRanges: [{ startDate, endDate }],
     dimensions: [{ name: 'landingPage' }],
@@ -489,16 +516,50 @@ export async function getLandingPages(
       { name: 'purchaseRevenue' },
     ],
     orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
-    limit: 25,
+    limit: 100, // fetch extra to handle merging of query-param variants
   });
 
-  return parseRows(data).map(({ dims, metrics }) => ({
-    page: dims[0] || '/',
-    sessions: metrics[0],
-    bounceRate: metrics[1] * 100,
-    conversions: metrics[2],
-    revenue: metrics[3],
-  }));
+  // Normalize: strip query string and fragment from landing page paths,
+  // then aggregate sessions/bounces/conversions/revenue per base path.
+  const aggregated = new Map<string, { sessions: number; bounceSessions: number; conversions: number; revenue: number }>();
+
+  for (const { dims, metrics } of parseRows(data)) {
+    const rawPath = dims[0] || '/';
+    // Strip query string (?...) and fragment (#...) — keep only the path
+    const basePath = rawPath.split('?')[0].split('#')[0] || '/';
+
+    const sessions = metrics[0];
+    const bounceRate = metrics[1]; // already a fraction (0–1) from GA4
+    const conversions = metrics[2];
+    const revenue = metrics[3];
+
+    const existing = aggregated.get(basePath);
+    if (existing) {
+      existing.bounceSessions += bounceRate * sessions; // weighted bounce count
+      existing.sessions += sessions;
+      existing.conversions += conversions;
+      existing.revenue += revenue;
+    } else {
+      aggregated.set(basePath, {
+        sessions,
+        bounceSessions: bounceRate * sessions,
+        conversions,
+        revenue,
+      });
+    }
+  }
+
+  // Convert back to array, compute weighted bounce rate, sort by sessions desc, top 25
+  return Array.from(aggregated.entries())
+    .map(([page, v]) => ({
+      page,
+      sessions: v.sessions,
+      bounceRate: v.sessions > 0 ? (v.bounceSessions / v.sessions) * 100 : 0,
+      conversions: v.conversions,
+      revenue: v.revenue,
+    }))
+    .sort((a, b) => b.sessions - a.sessions)
+    .slice(0, 25);
 }
 
 export async function getKeyEvents(
@@ -627,4 +688,255 @@ export async function getProductConversionFunnel(
   ];
 
   return funnel;
+}
+
+// ── New interfaces ────────────────────────────────────────────────────────────
+
+export interface GA4SourceMedium {
+  sourceMedium: string;
+  sessions: number;
+  users: number;
+  bounceRate: number;
+  conversions: number;
+  revenue: number;
+}
+
+export interface GA4NewReturning {
+  type: string;
+  sessions: number;
+  users: number;
+  conversions: number;
+  revenue: number;
+}
+
+export interface GA4City {
+  city: string;
+  country: string;
+  sessions: number;
+  users: number;
+}
+
+export interface GA4Browser {
+  browser: string;
+  sessions: number;
+  percentage: number;
+}
+
+export interface GA4OS {
+  os: string;
+  sessions: number;
+  percentage: number;
+}
+
+export interface GA4Campaign {
+  campaign: string;
+  sessions: number;
+  users: number;
+  bounceRate: number;
+  conversions: number;
+  revenue: number;
+}
+
+export interface GA4ItemPurchase {
+  itemName: string;
+  itemsPurchased: number;
+  itemRevenue: number;
+  avgPrice: number;
+}
+
+// ── New functions ─────────────────────────────────────────────────────────────
+
+export async function getSourceMedium(
+  config: GA4Config,
+  dateRange: string
+): Promise<GA4SourceMedium[]> {
+  const accessToken = await getAccessToken(config);
+  const { startDate, endDate } = getDateRange(dateRange);
+
+  const data = await runReport(accessToken, config.propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: 'sessionSourceMedium' }],
+    metrics: [
+      { name: 'sessions' },
+      { name: 'activeUsers' },
+      { name: 'bounceRate' },
+      { name: 'transactions' },
+      { name: 'purchaseRevenue' },
+    ],
+    orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+    limit: 25,
+  });
+
+  return parseRows(data).map(({ dims, metrics }) => ({
+    sourceMedium: dims[0] || '(not set)',
+    sessions: metrics[0],
+    users: metrics[1],
+    bounceRate: metrics[2] * 100,
+    conversions: metrics[3],
+    revenue: metrics[4],
+  }));
+}
+
+export async function getNewVsReturning(
+  config: GA4Config,
+  dateRange: string
+): Promise<GA4NewReturning[]> {
+  const accessToken = await getAccessToken(config);
+  const { startDate, endDate } = getDateRange(dateRange);
+
+  const data = await runReport(accessToken, config.propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: 'newVsReturning' }],
+    metrics: [
+      { name: 'sessions' },
+      { name: 'activeUsers' },
+      { name: 'transactions' },
+      { name: 'purchaseRevenue' },
+    ],
+    orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+  });
+
+  return parseRows(data).map(({ dims, metrics }) => ({
+    type: dims[0] === 'new' ? 'New Users' : 'Returning Users',
+    sessions: metrics[0],
+    users: metrics[1],
+    conversions: metrics[2],
+    revenue: metrics[3],
+  }));
+}
+
+export async function getCities(
+  config: GA4Config,
+  dateRange: string
+): Promise<GA4City[]> {
+  const accessToken = await getAccessToken(config);
+  const { startDate, endDate } = getDateRange(dateRange);
+
+  const data = await runReport(accessToken, config.propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: 'city' }, { name: 'country' }],
+    metrics: [{ name: 'sessions' }, { name: 'activeUsers' }],
+    orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+    limit: 20,
+  });
+
+  return parseRows(data)
+    .filter(({ dims }) => dims[0] && dims[0] !== '(not set)')
+    .map(({ dims, metrics }) => ({
+      city: dims[0],
+      country: dims[1] || '',
+      sessions: metrics[0],
+      users: metrics[1],
+    }));
+}
+
+export async function getBrowsers(
+  config: GA4Config,
+  dateRange: string
+): Promise<GA4Browser[]> {
+  const accessToken = await getAccessToken(config);
+  const { startDate, endDate } = getDateRange(dateRange);
+
+  const data = await runReport(accessToken, config.propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: 'browser' }],
+    metrics: [{ name: 'sessions' }],
+    orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+    limit: 10,
+  });
+
+  const rows = parseRows(data);
+  const total = rows.reduce((s, r) => s + r.metrics[0], 0);
+
+  return rows.map(({ dims, metrics }) => ({
+    browser: dims[0] || 'Unknown',
+    sessions: metrics[0],
+    percentage: total > 0 ? (metrics[0] / total) * 100 : 0,
+  }));
+}
+
+export async function getOperatingSystems(
+  config: GA4Config,
+  dateRange: string
+): Promise<GA4OS[]> {
+  const accessToken = await getAccessToken(config);
+  const { startDate, endDate } = getDateRange(dateRange);
+
+  const data = await runReport(accessToken, config.propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: 'operatingSystem' }],
+    metrics: [{ name: 'sessions' }],
+    orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+    limit: 10,
+  });
+
+  const rows = parseRows(data);
+  const total = rows.reduce((s, r) => s + r.metrics[0], 0);
+
+  return rows.map(({ dims, metrics }) => ({
+    os: dims[0] || 'Unknown',
+    sessions: metrics[0],
+    percentage: total > 0 ? (metrics[0] / total) * 100 : 0,
+  }));
+}
+
+export async function getCampaigns(
+  config: GA4Config,
+  dateRange: string
+): Promise<GA4Campaign[]> {
+  const accessToken = await getAccessToken(config);
+  const { startDate, endDate } = getDateRange(dateRange);
+
+  const data = await runReport(accessToken, config.propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: 'sessionCampaignName' }],
+    metrics: [
+      { name: 'sessions' },
+      { name: 'activeUsers' },
+      { name: 'bounceRate' },
+      { name: 'transactions' },
+      { name: 'purchaseRevenue' },
+    ],
+    orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+    limit: 25,
+  });
+
+  return parseRows(data)
+    .filter(({ dims }) => dims[0] && dims[0] !== '(not set)' && dims[0].toLowerCase() !== 'none')
+    .map(({ dims, metrics }) => ({
+      campaign: dims[0],
+      sessions: metrics[0],
+      users: metrics[1],
+      bounceRate: metrics[2] * 100,
+      conversions: metrics[3],
+      revenue: metrics[4],
+    }));
+}
+
+export async function getItemPurchases(
+  config: GA4Config,
+  dateRange: string
+): Promise<GA4ItemPurchase[]> {
+  const accessToken = await getAccessToken(config);
+  const { startDate, endDate } = getDateRange(dateRange);
+
+  const data = await runReport(accessToken, config.propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: 'itemName' }],
+    metrics: [
+      { name: 'itemsPurchased' },
+      { name: 'itemRevenue' },
+    ],
+    orderBys: [{ metric: { metricName: 'itemRevenue' }, desc: true }],
+    limit: 25,
+  });
+
+  return parseRows(data)
+    .filter(({ dims }) => dims[0] && dims[0] !== '(not set)')
+    .map(({ dims, metrics }) => ({
+      itemName: dims[0],
+      itemsPurchased: metrics[0],
+      itemRevenue: metrics[1],
+      avgPrice: metrics[0] > 0 ? metrics[1] / metrics[0] : 0,
+    }));
 }
