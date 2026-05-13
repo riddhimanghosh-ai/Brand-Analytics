@@ -8,6 +8,8 @@ interface Props {
   propertyId?: string | null;
   /** Passed from URL param after OAuth callback when user has multiple GA4 properties */
   pendingProperties?: { id: string; name: string }[];
+  /** True when OAuth succeeded but no properties were found automatically */
+  needsManualPropertyId?: boolean;
   onPropertySelected?: (propertyId: string) => void;
 }
 
@@ -16,6 +18,7 @@ export function GA4Connect({
   isConnected,
   propertyId,
   pendingProperties = [],
+  needsManualPropertyId = false,
   onPropertySelected,
 }: Props) {
   const [selecting, setSelecting] = useState(false);
@@ -121,6 +124,67 @@ export function GA4Connect({
             </button>
           </div>
         )}
+      </div>
+    );
+  }
+
+  // OAuth succeeded but no properties were auto-detected — ask for manual ID
+  if (needsManualPropertyId && !isConnected) {
+    return (
+      <div>
+        <div style={{
+          padding: '14px 16px', borderRadius: '8px',
+          background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)',
+          marginBottom: '16px',
+        }}>
+          <div style={{ fontWeight: '600', fontSize: '14px', color: '#f59e0b', marginBottom: '4px' }}>
+            ✅ Google account connected — enter your GA4 Property ID
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+            We couldn&apos;t auto-detect any GA4 properties for this Google account. This usually means the
+            Google account used doesn&apos;t have direct access to the GA4 property, or the property is
+            in a different Google account.
+            <br /><br />
+            Find your Property ID in <strong>GA4 → Admin → Property Settings</strong> (it&apos;s a numeric ID like <code>123456789</code>).
+            Make sure to also add this Google account as a <strong>Viewer</strong> in GA4 → Admin → Property Access Management.
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <input
+            className="form-input mono"
+            style={{ flex: 1, margin: 0 }}
+            placeholder="e.g. 123456789"
+            value={manualId}
+            onChange={e => setManualId(e.target.value)}
+          />
+          <button
+            onClick={async () => {
+              const clean = manualId.trim();
+              if (!clean) return;
+              setSelecting(true);
+              try {
+                await fetch(`/api/brands/${slug}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ ga4PropertyId: clean }),
+                });
+                onPropertySelected?.(clean);
+              } finally {
+                setSelecting(false);
+              }
+            }}
+            disabled={!manualId.trim() || selecting}
+            className="btn btn-primary"
+          >
+            {selecting ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+        <button
+          onClick={() => window.location.href = `/api/auth/ga4?slug=${encodeURIComponent(slug)}`}
+          style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}
+        >
+          Try connecting with a different Google account
+        </button>
       </div>
     );
   }

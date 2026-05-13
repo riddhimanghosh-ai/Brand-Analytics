@@ -146,6 +146,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
+  // No properties found — token saved but user must enter Property ID manually
+  if (properties.length === 0) {
+    return NextResponse.redirect(
+      `${APP_URL}/dashboard/${slug}/settings?ga4=connected&ga4_properties=none`
+    );
+  }
+
   return NextResponse.redirect(
     `${APP_URL}/dashboard/${slug}/settings?ga4=connected`
   );

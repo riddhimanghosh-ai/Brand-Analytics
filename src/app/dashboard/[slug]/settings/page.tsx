@@ -269,8 +269,12 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   const [googleAdsPendingAccounts, setGoogleAdsPendingAccounts] = useState(() =>
     parseAccountsParam(searchParams.get('google_ads_accounts'))
   );
+  const ga4PropertiesParam = searchParams.get('ga4_properties');
+  const ga4NeedsManualPropertyId = ga4ConnectedViaOAuth && ga4PropertiesParam === 'none';
   const [ga4PendingProperties, setGa4PendingProperties] = useState(() =>
-    parseAccountsParam(searchParams.get('ga4_properties'))
+    ga4PropertiesParam && ga4PropertiesParam !== 'none'
+      ? parseAccountsParam(ga4PropertiesParam)
+      : []
   );
 
   useEffect(() => {
@@ -488,6 +492,7 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             isConnected={isConnected.ga4}
             propertyId={brand.ga4PropertyId}
             pendingProperties={ga4PendingProperties}
+            needsManualPropertyId={ga4NeedsManualPropertyId}
             onPropertySelected={(id) => {
               setBrand(b => b ? { ...b, ga4PropertyId: id } : b);
               setGa4PendingProperties([]);
