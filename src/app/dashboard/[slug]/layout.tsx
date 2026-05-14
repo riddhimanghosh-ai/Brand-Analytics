@@ -141,7 +141,7 @@ export default async function DashboardLayout({
           <NavLink href={`/dashboard/${slug}/tiktok`} disabled={!connections.tiktok} disabledPlatform="TikTok">
             <span className="nav-icon">🎵</span>
             TikTok Ads
-            {connections.tiktok && <span className="nav-badge">Live</span>}
+            {connections.tiktok ? <span className="nav-badge">Live</span> : <span style={{ fontSize: '9px', fontWeight: '600', color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', padding: '1px 5px', marginLeft: 'auto', whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Coming soon</span>}
           </NavLink>
 
           <NavLink href={`/dashboard/${slug}/klaviyo`} disabled={!connections.klaviyo} disabledPlatform="Klaviyo">

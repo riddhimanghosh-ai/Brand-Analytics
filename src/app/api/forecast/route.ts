@@ -2,6 +2,9 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as shopify from '@/lib/services/shopify';
 import { getDemoForecast } from '@/lib/demo-data';
+import { requireBrandAccess } from '@/lib/auth';
+
+export const maxDuration = 60;
 
 function linearRegression(values: number[]): { slope: number; intercept: number } {
   const n = values.length;
@@ -41,6 +44,9 @@ export async function GET(request: Request) {
     const horizon = parseInt(searchParams.get('horizon') || '30', 10);
 
     if (!slug) return NextResponse.json({ error: 'slug required' }, { status: 400 });
+
+    const { denied } = await requireBrandAccess(slug);
+    if (denied) return denied;
 
     // ── Demo mode ──────────────────────────────────────────────────────────
     if (slug === 'demo') {

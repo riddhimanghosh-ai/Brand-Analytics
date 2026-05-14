@@ -85,13 +85,15 @@ function cleanCustomerId(id: string): string {
   return id.replace(/-/g, '');
 }
 
+/** Returns the full WHERE date fragment — e.g. "DURING LAST_30_DAYS" or "BETWEEN '2024-04-01' AND '2024-05-14'" */
 function periodClause(dateRange: string): string {
-  return (
-    ({ '7d': 'LAST_7_DAYS', '30d': 'LAST_30_DAYS', '90d': 'LAST_90_DAYS' } as Record<
-      string,
-      string
-    >)[dateRange] ?? 'LAST_30_DAYS'
-  );
+  // Custom range: "YYYY-MM-DD:YYYY-MM-DD"
+  if (/^\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}$/.test(dateRange)) {
+    const [from, to] = dateRange.split(':');
+    return `BETWEEN '${from}' AND '${to}'`;
+  }
+  const preset = ({ '7d': 'LAST_7_DAYS', '30d': 'LAST_30_DAYS', '90d': 'LAST_90_DAYS' } as Record<string, string>)[dateRange] ?? 'LAST_30_DAYS';
+  return `DURING ${preset}`;
 }
 
 type AdsRow = Record<string, Record<string, string | number>>;
@@ -172,7 +174,7 @@ export async function getKPIs(
       metrics.conversions,
       metrics.conversions_value
     FROM customer
-    WHERE segments.date DURING ${period}
+    WHERE segments.date ${period}
   `;
 
   const results = await search(config, accessToken, query);
@@ -227,7 +229,7 @@ export async function getCampaigns(
       metrics.conversions,
       metrics.conversions_value
     FROM campaign
-    WHERE segments.date DURING ${period}
+    WHERE segments.date ${period}
       AND campaign.status != 'REMOVED'
     ORDER BY metrics.cost_micros DESC
     LIMIT 50
@@ -272,7 +274,7 @@ export async function getSpendOverTime(
       metrics.clicks,
       metrics.conversions
     FROM customer
-    WHERE segments.date DURING ${period}
+    WHERE segments.date ${period}
     ORDER BY segments.date ASC
   `;
 

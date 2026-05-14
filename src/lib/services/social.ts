@@ -40,14 +40,19 @@ export async function getPageComments(config: MetaConfig): Promise<SocialComment
   const comments: SocialComment[] = [];
 
   try {
-    // Get pages managed by this token
-    const pagesData = await metaGet('me/accounts', accessToken, { fields: 'id,name,access_token' });
+    // Get pages managed by this token — requires pages_show_list permission
+    let pagesData: { data?: { id: string; name: string; access_token: string }[] };
+    try {
+      pagesData = await metaGet('me/accounts', accessToken, { fields: 'id,name,access_token' });
+    } catch {
+      // Token lacks pages_show_list — throw descriptive error so UI can guide the user
+      throw new Error('PAGE_ACCESS_REQUIRED');
+    }
     const pages: { id: string; name: string; access_token: string }[] = pagesData.data || [];
 
     if (pages.length === 0) {
-      // Try as page token directly
-      const pageInfo = await metaGet('me', accessToken, { fields: 'id,name' });
-      pages.push({ id: pageInfo.id, name: pageInfo.name, access_token: accessToken });
+      // Token may be a system user token (ads only) — no pages linked.
+      throw new Error('PAGE_ACCESS_REQUIRED');
     }
 
     for (const page of pages.slice(0, 2)) { // Limit to first 2 pages

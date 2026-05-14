@@ -29,7 +29,17 @@ export async function GET(request: Request) {
       adAccountId: brand.metaAdAccountId,
     };
 
-    let comments = await getPageComments(config);
+    let comments;
+    try {
+      comments = await getPageComments(config);
+    } catch (e) {
+      if ((e as Error).message === 'PAGE_ACCESS_REQUIRED') {
+        return NextResponse.json({
+          error: 'Your Meta token does not have Facebook Page access. Go to Settings and generate a token with pages_read_engagement and pages_show_list permissions, or use a Page Access Token.',
+        }, { status: 400 });
+      }
+      throw e;
+    }
 
     if (withSentiment && comments.length > 0) {
       const geminiKey = brand.geminiApiKey || process.env.GEMINI_API_KEY || '';
