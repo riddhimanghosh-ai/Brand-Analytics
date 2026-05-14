@@ -202,6 +202,7 @@ function buildOrderQuery(startDate: string, endDate: string, afterClause: string
           node {
             id
             createdAt
+            cancelledAt
             displayFinancialStatus
             displayFulfillmentStatus
             totalPriceSet { shopMoney { amount currencyCode } }
@@ -1211,10 +1212,12 @@ export async function getAllAnalytics(
     fetchPreviousPeriodSummary(config, prevStart, prevEnd),
   ]);
 
-  console.log(`[getAllAnalytics] fetched ${currentOrders.length} orders for ${currentStart} → ${currentEnd}`);
+  // Filter out cancelled orders — Shopify Analytics excludes these from Total Sales
+  const activeOrders = currentOrders.filter((o) => !(o as { cancelledAt?: string | null }).cancelledAt);
+  console.log(`[getAllAnalytics] fetched ${currentOrders.length} orders (${currentOrders.length - activeOrders.length} cancelled) for ${currentStart} → ${currentEnd}`);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
-  const currentMetrics = computeMetrics(currentOrders);
+  const currentMetrics = computeMetrics(activeOrders);
 
   const kpis: ShopifyKPIs = {
     totalRevenue: currentMetrics.totalRevenue,
@@ -1243,7 +1246,7 @@ export async function getAllAnalytics(
     const key = new Date(startMs + i * 86_400_000).toISOString().split('T')[0];
     byDate[key] = { revenue: 0, orders: 0 };
   }
-  for (const order of currentOrders) {
+  for (const order of activeOrders) {
     if ((order.displayFinancialStatus as string) === 'VOIDED') continue;
     const dateKey = (order.createdAt as string).split('T')[0];
     const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
@@ -1263,7 +1266,7 @@ export async function getAllAnalytics(
 
   // ── Products ───────────────────────────────────────────────────────────────
   const productMap: Record<string, ShopifyProduct> = {};
-  for (const order of currentOrders) {
+  for (const order of activeOrders) {
     const lineItems = order.lineItems as {
       edges: Array<{
         node: {
@@ -1294,7 +1297,7 @@ export async function getAllAnalytics(
   let newCount = 0, returningCount = 0, newRevenue = 0, returningRevenue = 0;
   const customerMap: Record<string, { customer: Record<string, unknown>; totalSpent: number; orderCount: number }> = {};
 
-  for (const order of currentOrders) {
+  for (const order of activeOrders) {
     const cust = order.customer as { id: string; firstName: string; lastName: string; email: string; numberOfOrders: number; createdAt: string; tags: string[] } | null;
     const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
     if (cust?.id) {
@@ -1321,14 +1324,14 @@ export async function getAllAnalytics(
 
   // ── Order status ───────────────────────────────────────────────────────────
   const statusMap: Record<string, number> = {};
-  for (const order of currentOrders) {
+  for (const order of activeOrders) {
     const s = (order.displayFulfillmentStatus as string) || 'UNFULFILLED';
     statusMap[s] = (statusMap[s] || 0) + 1;
   }
   const orderStatus = Object.entries(statusMap).map(([name, value]) => ({ name, value }));
 
   // ── Conversion funnel ──────────────────────────────────────────────────────
-  const nonVoided     = currentOrders.filter((o) => (o.displayFinancialStatus as string) !== 'VOIDED');
+  const nonVoided     = activeOrders.filter((o) => (o.displayFinancialStatus as string) !== 'VOIDED');
   const funnelTotal   = nonVoided.length;
   const funnelPaid    = nonVoided.filter((o) => { const f = (o.displayFinancialStatus as string) || ''; return f === 'PAID' || f === 'PARTIALLY_PAID' || f === 'PARTIALLY_REFUNDED'; }).length;
   const funnelFulfilled = nonVoided.filter((o) => (o.displayFulfillmentStatus as string) === 'FULFILLED').length;
