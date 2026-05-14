@@ -41,14 +41,10 @@ export default async function CROPage({ params }: { params: Promise<{ slug: stri
   const newRevenue    = kpis?.newCustomerRevenue      ?? 0;
   const returnRevenue = kpis?.returningCustomerRevenue?? 0;
 
-  // Purchase frequency = orders / customers in this period (annualized ×12/1month)
+  // Purchase frequency = orders / unique customers in this period (real data only)
   const purchaseFrequency = totalCustomers > 0
     ? parseFloat((totalOrders / totalCustomers).toFixed(2))
     : 0;
-  // LTV = AOV × annualized purchase frequency × 2.5 yr customer lifespan
-  const annualizedFreq = purchaseFrequency * 12; // monthly → yearly
-  const avgLifespan = 2.5;
-  const ltv = Math.round(aov * annualizedFreq * avgLifespan);
 
   // Conversion funnel from order data
   const shopifyFunnel = combined?.conversionFunnel ?? [];
@@ -157,12 +153,6 @@ export default async function CROPage({ params }: { params: Promise<{ slug: stri
             delta: 'Avg revenue per completed order',
             positive: revenuePerOrder >= 500,
           },
-          {
-            label: 'Est. Customer LTV',
-            value: ltv > 0 ? `₹${fmt(ltv)}` : '—',
-            delta: `AOV × ${annualizedFreq.toFixed(1)}×/yr × ${avgLifespan}yr`,
-            positive: true,
-          },
         ].map(m => (
           <div key={m.label} style={{ background: 'var(--bg-secondary)', borderRadius: '8px', padding: '16px' }}>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '6px' }}>{m.label}</div>
@@ -194,27 +184,6 @@ export default async function CROPage({ params }: { params: Promise<{ slug: stri
         <Benchmark label="Avg Order Value" value={`₹${fmt(Math.round(aov))}`} benchmark=">₹800" good={aov >= 800} />
       </div>
 
-      {/* ── Customer LTV Breakdown ── */}
-      <div style={{ background: 'var(--bg-secondary)', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
-        <div style={{ fontSize: '16px', fontWeight: '600', marginBottom: '4px' }}>Customer Lifetime Value (LTV)</div>
-        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '16px' }}>LTV = AOV × Annual Purchase Frequency × Customer Lifespan</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
-          {[
-            { label: 'Avg Order Value', value: `₹${fmt(Math.round(aov))}` },
-            { label: 'Purchases / Year', value: `${annualizedFreq.toFixed(1)}×` },
-            { label: 'Avg Lifespan', value: `${avgLifespan} yrs` },
-            { label: 'Est. LTV', value: ltv > 0 ? `₹${fmt(ltv)}` : '—', highlight: true },
-          ].map(item => (
-            <div key={item.label} style={{ background: (item as {highlight?: boolean}).highlight ? 'rgba(59,130,246,0.1)' : 'var(--bg-elevated)', borderRadius: '8px', padding: '14px', border: (item as {highlight?: boolean}).highlight ? '1px solid #3b82f6' : '1px solid var(--border-color)' }}>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '4px' }}>{item.label}</div>
-              <div style={{ fontSize: '22px', fontWeight: '700', color: (item as {highlight?: boolean}).highlight ? '#3b82f6' : 'var(--text-primary)' }}>{item.value}</div>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
-          💡 To improve LTV: increase AOV with bundles/upsells, improve repeat rate with email flows, extend customer lifespan with loyalty programs.
-        </div>
-      </div>
 
       {/* ── Revenue Split ── */}
       {(newRevenue > 0 || returnRevenue > 0) && (
@@ -253,14 +222,14 @@ export default async function CROPage({ params }: { params: Promise<{ slug: stri
               : 'Connect Shopify to see personalised insights.'}
           </div>
         </div>
-        <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '8px', padding: '14px 16px' }}>
-          <div style={{ fontSize: '13px', fontWeight: '600', color: '#22c55e', marginBottom: '4px' }}>✓ LTV Improvement Plan</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-            {ltv > 0
-              ? `Current estimated LTV ₹${fmt(ltv)} can reach ₹${fmt(Math.round(ltv * 1.4))} (+40%) with: post-purchase email flows, loyalty/points program, subscription offerings, and win-back campaigns for at-risk customers.`
-              : 'Connect Shopify to see personalised insights.'}
+        {repeatRate > 0 && (
+          <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '8px', padding: '14px 16px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#22c55e', marginBottom: '4px' }}>✓ Retention Improvement Plan</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+              {`${repeatRate.toFixed(1)}% repeat rate across ${fmt(totalCustomers)} customers. Getting ${Math.round(totalCustomers * 0.05)} more customers to reorder adds ₹${fmt(Math.round(totalCustomers * 0.05 * aov))} revenue. Launch post-purchase email flows, loyalty/points program, and win-back campaigns.`}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
