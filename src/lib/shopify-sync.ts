@@ -2,11 +2,20 @@
  * Shopify Incremental Order Sync
  *
  * Caches per-day aggregated order data in MongoDB (`shopify_order_cache`).
- * Historical days are cached indefinitely. Today is always re-fetched because
- * it's a partial day and new orders keep coming in.
+ * Historical days are cached indefinitely (TTL = 400 days). Today is always
+ * re-fetched because it's a partial day and new orders keep coming in.
  *
- * On a warm cache (day 2+) the "combined" analytics call fetches only today's
- * orders (~1 page, <1s) instead of the full 90-day history (~92 pages, ~40s).
+ * Storage estimate (compact schema):
+ *   ~11 KB/day per brand  →  4 MB/brand/year  →  40 MB for 10 brands/year
+ *   Well within a 512 MB free-tier cluster.
+ *
+ * Customer data is stored in two forms:
+ *   - allCustomerIds[]        — just IDs, for unique-customer deduplication
+ *   - returningCustomerIds[]  — IDs of customers with lifetimeOrders > 1
+ *   - topCustomers[]          — full data for top-20 spenders that day only
+ *
+ * This avoids storing full objects for every customer (the original naive schema
+ * used ~250 bytes × 100 customers/day = 25 KB/day for customers alone).
  */
 
 import type { ShopifyKPIs, ShopifyProduct, RevenueDataPoint, ShopifyCustomer } from '@/types';
@@ -23,14 +32,14 @@ export interface DayProductEntry {
   imageUrl: string | null;
 }
 
-export interface DayCustomerEntry {
+export interface DayTopCustomer {
   id: string;
   email: string;
   firstName: string;
   lastName: string;
   totalSpent: number;   // spent in THIS day
   orderCount: number;   // orders placed in THIS day
-  lifetimeOrders: number; // customer.numberOfOrders snapshot at sync time
+  lifetimeOrders: number;
   createdAt: string;
   tags: string[];
 }
@@ -40,21 +49,26 @@ export interface DayCacheEntry {
   date: string;           // YYYY-MM-DD
   syncedAt: string;       // ISO timestamp
   isPartialDay: boolean;  // true = today (more orders may arrive later)
+  expiresAt: Date;        // TTL field — MongoDB auto-deletes after 400 days
 
   orderCount: number;      // all orders including VOIDED
   nonVoidedCount: number;  // orders excluding VOIDED (used for KPIs)
-  revenue: number;         // sum of totalPrice for non-VOIDED orders
-  refunded: number;        // sum of totalRefunded for non-VOIDED orders
-  totalItems: number;      // sum of lineItem quantities
+  revenue: number;
+  refunded: number;
+  totalItems: number;
 
   newCustomerRevenue: number;
   returningCustomerRevenue: number;
 
-  financialStatusCounts: Record<string, number>;   // e.g. { PAID: 45, REFUNDED: 2 }
-  fulfillmentStatusCounts: Record<string, number>; // e.g. { FULFILLED: 40, UNFULFILLED: 7 }
+  financialStatusCounts: Record<string, number>;
+  fulfillmentStatusCounts: Record<string, number>;
 
   products: DayProductEntry[];
-  customers: DayCustomerEntry[];
+
+  // Compact customer storage (saves ~60% vs storing full objects for everyone)
+  allCustomerIds: string[];        // every customer ID that ordered today (for unique count)
+  returningCustomerIds: string[];  // subset: customers with lifetimeOrders > 1
+  topCustomers: DayTopCustomer[];  // full data for top-20 spenders today only
 }
 
 // ── MongoDB helpers ────────────────────────────────────────────────────────────
@@ -67,7 +81,10 @@ async function getCacheCollection() {
   const col = db.collection<DayCacheEntry>('shopify_order_cache');
 
   if (!indexCreated) {
+    // Unique index for upserts
     await col.createIndex({ slug: 1, date: 1 }, { unique: true });
+    // TTL index — MongoDB removes documents 400 days after their creation
+    await col.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
     indexCreated = true;
   }
 
@@ -130,9 +147,13 @@ export function generateDatesInRange(startDate: string, endDate: string): string
   return dates;
 }
 
+/** TTL = 400 days from today */
+function makeTTL(): Date {
+  return new Date(Date.now() + 400 * 86_400_000);
+}
+
 // ── Build cache entries from raw Shopify orders ───────────────────────────────
 
-/** Group an array of raw orders by date and build DayCacheEntry objects */
 export function buildDayCacheEntries(
   slug: string,
   orders: Array<Record<string, unknown>>,
@@ -145,7 +166,6 @@ export function buildDayCacheEntries(
     if (!byDate.has(date)) byDate.set(date, []);
     byDate.get(date)!.push(order);
   }
-
   return Array.from(byDate.entries()).map(([date, dayOrders]) =>
     buildDayEntry(slug, date, dayOrders, date === today),
   );
@@ -160,13 +180,16 @@ export function emptyDayCacheEntry(
     slug, date,
     syncedAt: new Date().toISOString(),
     isPartialDay,
+    expiresAt: makeTTL(),
     orderCount: 0, nonVoidedCount: 0,
     revenue: 0, refunded: 0, totalItems: 0,
     newCustomerRevenue: 0, returningCustomerRevenue: 0,
     financialStatusCounts: {},
     fulfillmentStatusCounts: {},
     products: [],
-    customers: [],
+    allCustomerIds: [],
+    returningCustomerIds: [],
+    topCustomers: [],
   };
 }
 
@@ -186,7 +209,13 @@ function buildDayEntry(
   const financialStatusCounts: Record<string, number> = {};
   const fulfillmentStatusCounts: Record<string, number> = {};
   const productMap = new Map<string, DayProductEntry>();
-  const customerMap = new Map<string, DayCustomerEntry>();
+
+  // Full customer map used to pick top-20; others → ID-only arrays
+  const customerSpend = new Map<string, {
+    id: string; email: string; firstName: string; lastName: string;
+    totalSpent: number; orderCount: number; lifetimeOrders: number;
+    createdAt: string; tags: string[];
+  }>();
 
   for (const order of orders) {
     orderCount++;
@@ -209,37 +238,29 @@ function buildDayEntry(
     refunded += refund;
 
     const customer = order.customer as {
-      id: string;
-      numberOfOrders: number;
-      firstName?: string;
-      lastName?: string;
-      email?: string;
-      createdAt?: string;
-      tags?: string[];
+      id: string; numberOfOrders: number;
+      firstName?: string; lastName?: string; email?: string;
+      createdAt?: string; tags?: string[];
     } | null;
 
     if (customer?.id) {
       const isReturning = (customer.numberOfOrders || 0) > 1;
-      if (isReturning) {
-        returningCustomerRevenue += price;
-      } else {
-        newCustomerRevenue += price;
-      }
+      if (isReturning) returningCustomerRevenue += price;
+      else newCustomerRevenue += price;
 
-      if (!customerMap.has(customer.id)) {
-        customerMap.set(customer.id, {
+      if (!customerSpend.has(customer.id)) {
+        customerSpend.set(customer.id, {
           id: customer.id,
           email: customer.email || '',
           firstName: customer.firstName || '',
           lastName: customer.lastName || '',
-          totalSpent: 0,
-          orderCount: 0,
+          totalSpent: 0, orderCount: 0,
           lifetimeOrders: customer.numberOfOrders || 0,
           createdAt: customer.createdAt || '',
           tags: customer.tags || [],
         });
       }
-      const c = customerMap.get(customer.id)!;
+      const c = customerSpend.get(customer.id)!;
       c.totalSpent += price;
       c.orderCount += 1;
     }
@@ -247,8 +268,7 @@ function buildDayEntry(
     const lineItems = order.lineItems as {
       edges: Array<{
         node: {
-          title: string;
-          quantity: number;
+          title: string; quantity: number;
           originalUnitPriceSet?: { shopMoney: { amount: string } };
           product: { id: string; title: string; featuredImage?: { url: string } } | null;
         };
@@ -260,7 +280,6 @@ function buildDayEntry(
         const node = li.node;
         const qty = node.quantity || 0;
         totalItems += qty;
-
         const productId = node.product?.id || node.title;
         const productTitle = node.product?.title || node.title;
         const unitPrice = parseFloat(node.originalUnitPriceSet?.shopMoney?.amount || '0');
@@ -268,11 +287,8 @@ function buildDayEntry(
 
         if (!productMap.has(productId)) {
           productMap.set(productId, {
-            id: productId,
-            title: productTitle,
-            revenue: 0,
-            unitsSold: 0,
-            orders: 0,
+            id: productId, title: productTitle,
+            revenue: 0, unitsSold: 0, orders: 0,
             averagePrice: unitPrice,
             imageUrl: node.product?.featuredImage?.url || null,
           });
@@ -285,17 +301,31 @@ function buildDayEntry(
     }
   }
 
+  // Build compact customer arrays
+  const allCustomerValues = Array.from(customerSpend.values());
+  const allCustomerIds = allCustomerValues.map((c) => c.id);
+  const returningCustomerIds = allCustomerValues
+    .filter((c) => c.lifetimeOrders > 1)
+    .map((c) => c.id);
+  // Top-20 spenders → full data stored; everyone else → ID only (already in allCustomerIds)
+  const topCustomers: DayTopCustomer[] = allCustomerValues
+    .sort((a, b) => b.totalSpent - a.totalSpent)
+    .slice(0, 20);
+
   return {
     slug, date,
     syncedAt: new Date().toISOString(),
     isPartialDay,
+    expiresAt: makeTTL(),
     orderCount, nonVoidedCount,
     revenue, refunded, totalItems,
     newCustomerRevenue, returningCustomerRevenue,
     financialStatusCounts,
     fulfillmentStatusCounts,
     products: Array.from(productMap.values()),
-    customers: Array.from(customerMap.values()),
+    allCustomerIds,
+    returningCustomerIds,
+    topCustomers,
   };
 }
 
@@ -320,7 +350,7 @@ export function computeFromCache(
   endDate: string,
   days: number,
 ): CachedAnalyticsResult {
-  // ── Revenue chart: initialise every day in range to zero ──
+  // Revenue chart: initialise every day in range to zero
   const revenueByDate: Record<string, { revenue: number; orders: number }> = {};
   const startMs = new Date(startDate + 'T00:00:00Z').getTime();
   for (let i = 0; i <= days; i++) {
@@ -328,7 +358,6 @@ export function computeFromCache(
     revenueByDate[key] = { revenue: 0, orders: 0 };
   }
 
-  // ── Totals ──
   let totalRevenue = 0;
   let totalOrders = 0;
   let totalRefunded = 0;
@@ -336,22 +365,21 @@ export function computeFromCache(
   let newCustRevenue = 0;
   let returningCustRevenue = 0;
 
-  // ── Customer deduplication ──
+  // Sets for cross-day customer deduplication
   const allCustomerIds = new Set<string>();
   const returningCustomerIds = new Set<string>();
 
-  // ── Status aggregates ──
   const financialStatusCounts: Record<string, number> = {};
   const fulfillmentStatusCounts: Record<string, number> = {};
 
-  // ── Product aggregation across days ──
   const productMap = new Map<string, DayProductEntry>();
 
-  // ── Customer aggregation across days ──
-  const customerMap = new Map<string, { data: DayCustomerEntry; totalSpent: number; orderCount: number }>();
+  // Top-customer aggregation (only from the top-20-per-day stored objects)
+  const topCustomerMap = new Map<string, {
+    data: DayTopCustomer; totalSpent: number; orderCount: number;
+  }>();
 
   for (const entry of entries) {
-    // Revenue chart
     if (revenueByDate[entry.date]) {
       revenueByDate[entry.date].revenue += entry.revenue;
       revenueByDate[entry.date].orders += entry.nonVoidedCount;
@@ -371,7 +399,6 @@ export function computeFromCache(
       fulfillmentStatusCounts[s] = (fulfillmentStatusCounts[s] || 0) + c;
     }
 
-    // Products
     for (const p of entry.products) {
       if (!productMap.has(p.id)) {
         productMap.set(p.id, { ...p, revenue: 0, unitsSold: 0, orders: 0 });
@@ -382,18 +409,18 @@ export function computeFromCache(
       pm.orders += p.orders;
     }
 
-    // Customers
-    for (const c of entry.customers) {
-      allCustomerIds.add(c.id);
-      if (c.lifetimeOrders > 1) returningCustomerIds.add(c.id);
+    // Customer deduplication using compact ID arrays
+    for (const id of entry.allCustomerIds) allCustomerIds.add(id);
+    for (const id of entry.returningCustomerIds) returningCustomerIds.add(id);
 
-      if (!customerMap.has(c.id)) {
-        customerMap.set(c.id, { data: c, totalSpent: 0, orderCount: 0 });
+    // Aggregate top-customer spend across days
+    for (const c of entry.topCustomers) {
+      if (!topCustomerMap.has(c.id)) {
+        topCustomerMap.set(c.id, { data: c, totalSpent: 0, orderCount: 0 });
       }
-      const cm = customerMap.get(c.id)!;
+      const cm = topCustomerMap.get(c.id)!;
       cm.totalSpent += c.totalSpent;
       cm.orderCount += c.orderCount;
-      // Keep the most up-to-date customer record
       if (c.lifetimeOrders > cm.data.lifetimeOrders) cm.data = c;
     }
   }
@@ -401,7 +428,6 @@ export function computeFromCache(
   const uniqueCustomers = allCustomerIds.size;
   const repeatCustomers = returningCustomerIds.size;
 
-  // ── Revenue time series ──
   const revenue = Object.entries(revenueByDate)
     .map(([date, data]) => ({
       date,
@@ -411,38 +437,27 @@ export function computeFromCache(
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // ── Products ──
   const sortedProducts = Array.from(productMap.values()).sort((a, b) => b.revenue - a.revenue);
   const topProductName = sortedProducts[0]?.title || 'N/A';
   const products: ShopifyProduct[] = sortedProducts.slice(0, 15).map((p) => ({
-    id: p.id,
-    title: p.title,
-    totalRevenue: p.revenue,
-    totalUnitsSold: p.unitsSold,
-    totalOrders: p.orders,
-    averagePrice: p.averagePrice,
+    id: p.id, title: p.title,
+    totalRevenue: p.revenue, totalUnitsSold: p.unitsSold,
+    totalOrders: p.orders, averagePrice: p.averagePrice,
     imageUrl: p.imageUrl,
   }));
 
-  // ── Top customers ──
-  const topCustomers: ShopifyCustomer[] = Array.from(customerMap.values())
+  const topCustomers: ShopifyCustomer[] = Array.from(topCustomerMap.values())
     .sort((a, b) => b.totalSpent - a.totalSpent)
     .slice(0, 10)
     .map(({ data, totalSpent, orderCount }) => ({
-      id: data.id,
-      email: data.email,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      ordersCount: orderCount,
-      totalSpent,
-      createdAt: data.createdAt,
-      tags: data.tags,
+      id: data.id, email: data.email,
+      firstName: data.firstName, lastName: data.lastName,
+      ordersCount: orderCount, totalSpent,
+      createdAt: data.createdAt, tags: data.tags,
     }));
 
-  // ── Order status ──
   const orderStatus = Object.entries(fulfillmentStatusCounts).map(([name, value]) => ({ name, value }));
 
-  // ── Conversion funnel ──
   const paidOrders =
     (financialStatusCounts['PAID'] || 0) +
     (financialStatusCounts['PARTIALLY_PAID'] || 0) +
@@ -454,19 +469,16 @@ export function computeFromCache(
   const conversionFunnel = [
     { stage: 'Total Orders', count: totalOrders, dropoffRate: 0 },
     {
-      stage: 'Paid',
-      count: paidOrders,
+      stage: 'Paid', count: paidOrders,
       dropoffRate: totalOrders > 0 ? ((totalOrders - paidOrders) / totalOrders) * 100 : 0,
     },
     {
-      stage: 'Fulfilled',
-      count: fulfilledOrders,
+      stage: 'Fulfilled', count: fulfilledOrders,
       dropoffRate: paidOrders > 0 ? ((paidOrders - fulfilledOrders) / paidOrders) * 100 : 0,
     },
     { stage: 'Refunded', count: refundedOrders, dropoffRate: 0 },
   ];
 
-  // ── KPIs (prev* fields filled in by caller after fetchPreviousPeriodSummary) ──
   const kpis: ShopifyKPIs = {
     totalRevenue,
     totalOrders,
@@ -481,6 +493,7 @@ export function computeFromCache(
     newCustomerRevenue: newCustRevenue,
     topSellingProduct: topProductName,
     averageFulfillmentDays: 0,
+    // prev* filled in by getAllAnalytics after fetchPreviousPeriodSummary
     prevTotalRevenue: 0,
     prevTotalOrders: 0,
     prevAverageOrderValue: 0,
@@ -488,9 +501,7 @@ export function computeFromCache(
   };
 
   return {
-    kpis,
-    revenue,
-    products,
+    kpis, revenue, products,
     customers: {
       newVsReturning: [
         { name: 'New Customers', value: uniqueCustomers - repeatCustomers },
