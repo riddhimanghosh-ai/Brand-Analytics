@@ -140,19 +140,22 @@ export async function createBrand(data: any) {
 export async function updateBrand(slug: string, data: any) {
   try {
     const collection = await getBrandsCollection();
-    // Strip undefined and null values so we never accidentally overwrite
-    // existing DB fields (e.g. shopifyAccessToken) with nothing.
-    const cleanData = Object.fromEntries(
-      Object.entries(data).filter(([, v]) => v !== undefined && v !== null && v !== '')
-    );
+    // Only strip undefined — null and '' are EXPLICIT clears (used by disconnect).
+    // The API route already filters to "fields explicitly provided in body" so
+    // there's no risk of accidentally clearing fields the caller didn't touch.
+    const entries = Object.entries(data).filter(([, v]) => v !== undefined);
+    const toSet: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+    const toUnset: Record<string, ''> = {};
+    for (const [k, v] of entries) {
+      if (v === null || v === '') toUnset[k] = '';
+      else toSet[k] = v;
+    }
+    const updateOp: Record<string, unknown> = { $set: toSet };
+    if (Object.keys(toUnset).length > 0) updateOp.$unset = toUnset;
+
     const result = await collection.findOneAndUpdate(
       { slug },
-      {
-        $set: {
-          ...cleanData,
-          updatedAt: new Date().toISOString(),
-        },
-      },
+      updateOp,
       { returnDocument: 'after' }
     );
 

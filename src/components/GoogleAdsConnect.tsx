@@ -21,6 +21,7 @@ export function GoogleAdsConnect({
   const [selecting, setSelecting] = useState(false);
   const [manualId, setManualId] = useState('');
   const [showManual, setShowManual] = useState(false);
+  const [editingId, setEditingId] = useState(false);
 
   const handleConnect = () => {
     window.location.href = `/api/auth/google-ads?slug=${encodeURIComponent(slug)}`;
@@ -152,17 +153,59 @@ export function GoogleAdsConnect({
               )}
             </div>
           </div>
-          <button
-            onClick={handleDisconnect}
-            style={{
-              padding: '6px 14px', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.3)',
-              background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '12px',
-              cursor: 'pointer', fontWeight: '500',
-            }}
-          >
-            Disconnect
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {customerId && (
+              <button
+                onClick={() => { setEditingId(v => !v); setManualId(customerId || ''); }}
+                style={{
+                  padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--glass-border)',
+                  background: 'var(--bg-elevated)', color: 'var(--text-primary)', fontSize: '12px',
+                  cursor: 'pointer', fontWeight: '500',
+                }}
+              >
+                {editingId ? 'Cancel' : 'Change ID'}
+              </button>
+            )}
+            <button
+              onClick={handleDisconnect}
+              style={{
+                padding: '6px 14px', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.3)',
+                background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '12px',
+                cursor: 'pointer', fontWeight: '500',
+              }}
+            >
+              Disconnect
+            </button>
+          </div>
         </div>
+
+        {/* Inline edit for changing Customer ID without full disconnect */}
+        {editingId && customerId && (
+          <div style={{ marginTop: '12px', background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', border: '1px solid var(--glass-border)' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
+              Change Google Ads Customer ID
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+              Enter the new Customer ID (digits only, no hyphens).
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                className="form-input mono"
+                style={{ flex: 1, margin: 0 }}
+                placeholder="1234567890"
+                value={manualId}
+                onChange={e => setManualId(e.target.value)}
+              />
+              <button
+                onClick={async () => { await handleManualId(); setEditingId(false); window.location.reload(); }}
+                disabled={!manualId.trim() || selecting}
+                className="btn btn-primary"
+              >
+                {selecting ? 'Saving…' : 'Update'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Show Customer ID input when token is saved but no ID yet */}
         {!customerId && (

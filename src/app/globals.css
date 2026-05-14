@@ -82,10 +82,23 @@
   --glass-highlight: rgba(255, 255, 255, 0.9);
 
   --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --text-dim: #94a3b8;
+  --text-secondary: #334155;
+  --text-muted: #475569;
+  --text-dim: #64748b;
 
+  /* Darker accents for better contrast on light backgrounds (WCAG AA compliant) */
+  --accent-blue: #1d4ed8;       /* blue-700 */
+  --accent-violet: #6d28d9;     /* violet-700 */
+  --accent-cyan: #0e7490;       /* cyan-700 */
+  --accent-emerald: #047857;    /* emerald-700 */
+  --accent-amber: #b45309;      /* amber-700 */
+  --accent-rose: #be123c;       /* rose-700 */
+  --accent-pink: #be185d;       /* pink-700 */
+
+  --gradient-primary: linear-gradient(135deg, #1d4ed8, #6d28d9);
+  --gradient-success: linear-gradient(135deg, #047857, #0e7490);
+  --gradient-warning: linear-gradient(135deg, #b45309, #c2410c);
+  --gradient-danger: linear-gradient(135deg, #be123c, #be185d);
   --gradient-surface: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(240, 244, 248, 0.95));
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
