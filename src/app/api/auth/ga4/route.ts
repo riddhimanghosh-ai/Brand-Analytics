@@ -15,9 +15,10 @@ export async function GET(request: NextRequest) {
     return new NextResponse('GOOGLE_CLIENT_ID not configured on server', { status: 500 });
   }
 
-  // Use the request origin so this works in both local dev and production
-  const origin = `${new URL(request.url).protocol}//${new URL(request.url).host}`;
-  const redirectUri = `${origin}/api/auth/ga4/callback`;
+  const reqUrl = new URL(request.url);
+  const host  = request.headers.get('x-forwarded-host') || reqUrl.host;
+  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0] || reqUrl.protocol.replace(':', '');
+  const redirectUri = `${proto}://${host}/api/auth/ga4/callback`;
 
   const params = new URLSearchParams({
     client_id: clientId,

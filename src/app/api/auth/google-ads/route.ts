@@ -4,7 +4,9 @@ import { NextRequest, NextResponse } from 'next/server';
 // Starts the Google Ads OAuth flow.
 export async function GET(request: NextRequest) {
   const reqUrl = new URL(request.url);
-  const APP_URL = `${reqUrl.protocol}//${reqUrl.host}`;
+  const host  = request.headers.get('x-forwarded-host') || reqUrl.host;
+  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0] || reqUrl.protocol.replace(':', '');
+  const APP_URL = `${proto}://${host}`;
   const { searchParams } = reqUrl;
   const slug = searchParams.get('slug')?.trim();
 

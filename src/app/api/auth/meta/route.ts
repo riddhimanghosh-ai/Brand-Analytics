@@ -15,9 +15,11 @@ export async function GET(request: NextRequest) {
     return new NextResponse('META_APP_ID not configured on server', { status: 500 });
   }
 
-  // Use the request origin so this works in both local dev and production
-  const origin = `${new URL(request.url).protocol}//${new URL(request.url).host}`;
-  const redirectUri = `${origin}/api/auth/meta/callback`;
+  // On AWS Lambda/Amplify, request.url shows internal localhost — use
+  // x-forwarded-host + x-forwarded-proto to get the real public URL instead.
+  const host  = request.headers.get('x-forwarded-host') || new URL(request.url).host;
+  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0] || new URL(request.url).protocol.replace(':', '');
+  const redirectUri = `${proto}://${host}/api/auth/meta/callback`;
 
   const params = new URLSearchParams({
     client_id: appId,
