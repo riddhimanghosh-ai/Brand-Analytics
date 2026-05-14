@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     client_id: appId,
     redirect_uri: redirectUri,
     // ads_read covers ad metrics; page scopes needed for Social Comments feature
-    scope: 'ads_read,ads_management,business_management,pages_show_list,pages_read_engagement,instagram_basic',
+    scope: 'ads_read,ads_management,business_management,pages_show_list,pages_read_engagement,instagram_content_publish',
     response_type: 'code',
     state: slug,
   });
