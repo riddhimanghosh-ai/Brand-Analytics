@@ -2,7 +2,7 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as shopify from '@/lib/services/shopify';
 import { getDemoForecast } from '@/lib/demo-data';
-import { requireBrandAccess } from '@/lib/auth';
+import { requireBrandAccess } from '@/lib/auth-server';
 
 export const maxDuration = 60;
 

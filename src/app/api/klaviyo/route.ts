@@ -2,7 +2,7 @@ import { getBrand } from '@/lib/mongodb-store';
 import { getKPIs, getCampaigns, getFlows } from '@/lib/services/klaviyo';
 import { NextResponse } from 'next/server';
 import { demoKlaviyoKPIs, demoKlaviyoCampaigns, demoKlaviyoFlows } from '@/lib/demo-data';
-import { requireBrandAccess } from '@/lib/auth';
+import { requireBrandAccess } from '@/lib/auth-server';
 
 export const maxDuration = 60;
 

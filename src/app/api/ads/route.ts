@@ -2,7 +2,7 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
-import { requireBrandAccess } from '@/lib/auth';
+import { requireBrandAccess } from '@/lib/auth-server';
 import {
   demoMetaKPIs, demoMetaCampaigns, demoMetaSpend,
   demoGoogleAdsKPIs, demoGoogleAdsCampaigns, demoGoogleAdsSpend,

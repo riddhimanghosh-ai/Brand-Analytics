@@ -1,7 +1,7 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as ga4 from '@/lib/services/ga4';
-import { requireBrandAccess } from '@/lib/auth';
+import { requireBrandAccess } from '@/lib/auth-server';
 
 export const maxDuration = 60;
 import {

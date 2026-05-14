@@ -2,7 +2,7 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as shopify from '@/lib/services/shopify';
 import { cacheGet, cacheSet, cacheInvalidate } from '@/lib/analytics-cache';
-import { requireBrandAccess } from '@/lib/auth';
+import { requireBrandAccess } from '@/lib/auth-server';
 
 // Tell Next.js / Amplify Lambda to allow up to 120s for this route.
 // High-volume stores (10k+ orders/90d) need ~50s to paginate all orders
