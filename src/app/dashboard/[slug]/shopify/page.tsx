@@ -163,7 +163,7 @@ export default function ShopifyDashboard({
   const [advancedLoading, setAdvancedLoading] = useState(true);
 
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<'throttled' | 'connection' | null>(null);
+  const [error, setError] = useState<{ type: 'throttled' | 'connection'; message?: string } | null>(null);
 
   // Resolve params promise
   useEffect(() => {
@@ -187,11 +187,16 @@ export default function ShopifyDashboard({
     ]).then(([combinedRes, ordersRes, funnelRes]) => {
       if (combinedRes.status === 'fulfilled') {
         const data = combinedRes.value;
-        if (data?.kpis) setKpis(data.kpis);
-        if (Array.isArray(data?.revenue)) setRevenue(data.revenue);
-        if (Array.isArray(data?.products)) setProducts(data.products);
-        if (data?.customers) setCustomers(data.customers);
-        if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
+        if (data?.error) {
+          const msg: string = data.error || '';
+          setError({ type: msg.includes('THROTTLED') || msg.includes('throttle') ? 'throttled' : 'connection', message: msg });
+        } else {
+          if (data?.kpis) setKpis(data.kpis);
+          if (Array.isArray(data?.revenue)) setRevenue(data.revenue);
+          if (Array.isArray(data?.products)) setProducts(data.products);
+          if (data?.customers) setCustomers(data.customers);
+          if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
+        }
       }
       if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
       if (funnelRes.status === 'fulfilled') setConversionFunnel(Array.isArray(funnelRes.value) ? funnelRes.value : []);
@@ -215,9 +220,9 @@ export default function ShopifyDashboard({
         if (data?.error) {
           const msg: string = data.error || '';
           if (msg.includes('THROTTLED') || msg.includes('throttle') || msg.includes('rate limit')) {
-            setError('throttled');
+            setError({ type: 'throttled', message: msg });
           } else {
-            setError('connection');
+            setError({ type: 'connection', message: msg });
           }
         } else {
           if (data?.kpis) setKpis(data.kpis);
@@ -227,7 +232,7 @@ export default function ShopifyDashboard({
           if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
         }
       } else {
-        setError('connection');
+        setError({ type: 'connection', message: 'Network request failed' });
       }
       if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
       if (funnelRes.status === 'fulfilled') setConversionFunnel(Array.isArray(funnelRes.value) ? funnelRes.value : []);
@@ -1324,10 +1329,19 @@ export default function ShopifyDashboard({
           <div className="connection-required">
             <span className="cr-icon">⚠️</span>
             <p>
-              {error === 'throttled'
+              {error.type === 'throttled'
                 ? 'Taking longer than expected — please refresh'
                 : 'Shopify connection error'}
             </p>
+            {error.message && (
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                {error.message}
+              </p>
+            )}
+            <a href={`/dashboard/${error.message?.includes('not connected') ? '' : ''}/settings`}
+               style={{ marginTop: '8px', fontSize: '13px', color: 'var(--accent-blue)' }}>
+              Go to Settings to reconnect →
+            </a>
           </div>
         )}
 

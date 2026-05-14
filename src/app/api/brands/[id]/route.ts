@@ -33,7 +33,7 @@ export async function PUT(
     // masked API response returns as null/undefined.
     const allowedFields = [
       'name', 'logoUrl', 'shopifyStoreUrl', 'shopifyAccessToken',
-      'ga4PropertyId', 'ga4ServiceAccountJson',
+      'ga4PropertyId', 'ga4ServiceAccountJson', 'ga4RefreshToken',
       'metaAppId', 'metaAppSecret', 'metaAccessToken', 'metaAdAccountId',
       'googleAdsDevToken', 'googleAdsClientId', 'googleAdsClientSecret',
       'googleAdsRefreshToken', 'googleAdsCustomerId',
@@ -41,7 +41,7 @@ export async function PUT(
       'tiktokAccessToken', 'tiktokAdvertiserId',
       'klaviyoApiKey',
       'pinterestAccessToken', 'pinterestAdAccountId',
-      'customDashboard',
+      'customDashboard', 'savedMetrics', 'competitors',
     ];
     const updates = Object.fromEntries(
       allowedFields
