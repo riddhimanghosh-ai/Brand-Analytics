@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
-    // read_insights was removed by Meta — ads_read covers ad metrics
-    scope: 'ads_read,ads_management,business_management',
+    // ads_read covers ad metrics; page scopes needed for Social Comments feature
+    scope: 'ads_read,ads_management,business_management,pages_show_list,pages_read_engagement,instagram_basic',
     response_type: 'code',
     state: slug,
   });
