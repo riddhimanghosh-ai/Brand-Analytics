@@ -52,6 +52,24 @@ export interface ConversionFunnel {
 }
 
 // ---------------------------------------------------------------------------
+// GraphQL rate-limit bucket tracker (proactive pacing — avoids THROTTLED errors)
+// ---------------------------------------------------------------------------
+// Shopify's GraphQL bucket: 2000 points max, restores 100 points/second.
+// Our order query costs ~68 points per page. Two concurrent streams (current +
+// previous period) can drain the bucket in seconds on a fast Lambda.
+//
+// Solution: track `currentlyAvailable` from every response's cost extensions,
+// and pause BEFORE firing the next request if the bucket is low. This ensures
+// we never hit the THROTTLED error regardless of network speed.
+// ---------------------------------------------------------------------------
+
+const graphqlBucket = new Map<string, number>(); // storeUrl → currentlyAvailable
+
+function getBucketAvailable(storeUrl: string): number {
+  return graphqlBucket.get(storeUrl) ?? 2000;
+}
+
+// ---------------------------------------------------------------------------
 // Internal GraphQL helper
 // ---------------------------------------------------------------------------
 
@@ -59,9 +77,27 @@ async function shopifyGraphQL(
   config: ShopifyConfig,
   query: string,
   variables?: Record<string, unknown>,
-  retries = 3
+  retries = 5
 ): Promise<Record<string, unknown>> {
   const url = `https://${config.storeUrl}/admin/api/${API_VERSION}/graphql.json`;
+
+  // ── Proactive rate limiting ───────────────────────────────────────────────
+  // Check bucket BEFORE firing. If it's below 150 points (≈2 page-queries),
+  // wait long enough to restore at least 225 points so the next request succeeds
+  // even if a concurrent stream also fires.
+  const COST_PER_REQUEST = 75; // measured ~68; use 75 as safety margin
+  const BUCKET_MIN = 150;
+  const available = getBucketAvailable(config.storeUrl);
+  if (available < BUCKET_MIN) {
+    const pointsNeeded = BUCKET_MIN + COST_PER_REQUEST - available;
+    const waitMs = Math.ceil((pointsNeeded / 100) * 1000) + 250; // +250ms buffer
+    await new Promise((r) => setTimeout(r, waitMs));
+    // Optimistically update bucket estimate after waiting
+    graphqlBucket.set(
+      config.storeUrl,
+      Math.min(2000, (graphqlBucket.get(config.storeUrl) ?? 0) + (waitMs / 1000) * 100)
+    );
+  }
 
   const response = await fetch(url, {
     method: 'POST',
@@ -79,13 +115,27 @@ async function shopifyGraphQL(
 
   const json = await response.json();
 
-  // Handle Shopify rate limiting — retry with backoff
+  // ── Update bucket state from Shopify's cost extensions ───────────────────
+  const throttleStatus = (json.extensions as {
+    cost?: { throttleStatus?: { currentlyAvailable?: number } };
+  } | undefined)?.cost?.throttleStatus;
+  if (throttleStatus?.currentlyAvailable !== undefined) {
+    graphqlBucket.set(config.storeUrl, throttleStatus.currentlyAvailable);
+  }
+
+  // ── Handle throttling with exponential backoff (last-resort safety net) ──
   if (json.errors) {
     const isThrottled = json.errors.some(
       (e: { extensions?: { code?: string } }) => e.extensions?.code === 'THROTTLED'
     );
     if (isThrottled && retries > 0) {
-      await new Promise((r) => setTimeout(r, 1500));
+      graphqlBucket.set(config.storeUrl, 0); // bucket is empty — update state
+      // Exponential backoff: 2s, 4s, 8s, 16s
+      const attempt = 6 - retries; // retries starts at 5 → attempt 1,2,3,4,5
+      const wait = Math.min(2000 * Math.pow(2, attempt - 1), 16000);
+      await new Promise((r) => setTimeout(r, wait));
+      // Bucket partially restored after wait
+      graphqlBucket.set(config.storeUrl, (wait / 1000) * 100);
       return shopifyGraphQL(config, query, variables, retries - 1);
     }
     throw new Error(`Shopify GraphQL error: ${JSON.stringify(json.errors)}`);
@@ -139,8 +189,7 @@ async function fetchOrdersWindow(
 ): Promise<Array<Record<string, unknown>>> {
   const orders: Array<Record<string, unknown>> = [];
   let cursor: string | null = null;
-  // No page cap — fetches all orders in this window.
-  // Windows are kept small (≤3 days) so each completes in ~2-3s.
+  // No page cap — paginates until hasNextPage=false, returning every order.
   for (;;) {
     const afterClause = cursor ? `, after: "${cursor}"` : '';
     const data = await shopifyGraphQL(config, buildOrderQuery(startDate, endDate, afterClause));
@@ -157,42 +206,23 @@ async function fetchOrdersWindow(
 }
 
 /**
- * Fetch ALL orders for a date range using parallel window fetching.
- * Splits range into ~3-day windows (up to 10 parallel) — no order cap.
- * Each window fetches completely, all windows run at the same time.
+ * Fetch ALL orders for a date range — fully sequential, no data missed.
  *
- * 30d range → 10 windows of 3 days → ~300 orders/window → 2 pages each
- * All 10 run in parallel → ~2-3s total on Lambda. No data is missed.
+ * We deliberately use a single window (no parallelism) to keep the GraphQL
+ * request rate low enough that bucket tracking in shopifyGraphQL() can keep
+ * us well under Shopify's 2000-point limit without ever hitting THROTTLED.
+ *
+ * Concurrency happens at the getKPIs / getAllAnalytics level where the current
+ * period and previous period are fetched in parallel (2 streams max). Each
+ * stream is sequential internally, which means at most 2 simultaneous GraphQL
+ * requests at any moment — a safe rate for the 2000-point bucket.
  */
 async function fetchAllOrders(
   config: ShopifyConfig,
   startDate: string,
   endDate: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const start = new Date(startDate).getTime();
-  const end   = new Date(endDate).getTime();
-  const totalDays = Math.round((end - start) / 86_400_000) + 1;
-
-  // 4 parallel windows — sweet spot between speed and Shopify rate limits.
-  // More than 4-5 concurrent streams triggers throttling (1.5s retry each).
-  // No per-window order cap — each window paginates fully.
-  const numWindows = Math.min(4, totalDays);
-  const windowDays = Math.ceil(totalDays / numWindows);
-
-  const windows: { start: string; end: string }[] = [];
-  for (let i = 0; i < numWindows; i++) {
-    const wStart = new Date(start + i * windowDays * 86_400_000);
-    const wEnd   = new Date(Math.min(start + (i + 1) * windowDays * 86_400_000- 86_400_000, end));
-    windows.push({
-      start: wStart.toISOString().split('T')[0],
-      end:   wEnd.toISOString().split('T')[0],
-    });
-  }
-
-  const results = await Promise.all(
-    windows.map(w => fetchOrdersWindow(config, w.start, w.end))
-  );
-  return results.flat();
+  return fetchOrdersWindow(config, startDate, endDate);
 }
 
 // ---------------------------------------------------------------------------
