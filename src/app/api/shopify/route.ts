@@ -1,6 +1,7 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as shopify from '@/lib/services/shopify';
+import { cacheGet, cacheSet, cacheInvalidate } from '@/lib/analytics-cache';
 
 // Tell Next.js / Amplify Lambda to allow up to 120s for this route.
 // High-volume stores (10k+ orders/90d) need ~50s to paginate all orders
@@ -17,28 +18,6 @@ import {
   demoShopifyAdvanced,
   demoShopifyConversionFunnel,
 } from '@/lib/demo-data';
-
-// ── In-memory cache (1 hr TTL) ────────────────────────────────────────────────
-const TTL_MS = 60 * 60 * 1000; // 1 hour
-const cache = new Map<string, { data: unknown; expiresAt: number }>();
-
-function cacheGet(key: string): unknown | null {
-  const entry = cache.get(key);
-  if (!entry) return null;
-  if (Date.now() > entry.expiresAt) { cache.delete(key); return null; }
-  return entry.data;
-}
-
-function cacheSet(key: string, data: unknown) {
-  cache.set(key, { data, expiresAt: Date.now() + TTL_MS });
-}
-
-function cacheClear(slug: string) {
-  for (const key of cache.keys()) {
-    if (key.startsWith(`${slug}:`)) cache.delete(key);
-  }
-}
-// ─────────────────────────────────────────────────────────────────────────────
 
 function getDateRangeForShopify(
   range: string,
@@ -101,26 +80,27 @@ export async function GET(request: Request) {
 
     const { startDate, endDate } = getDateRangeForShopify(dateRange, fromParam, toParam);
 
-    // ── Refresh: clear in-memory cache AND MongoDB order cache for this brand ─
+    // ── Refresh: invalidate MongoDB cache for this brand ──────────────────────
     if (action === 'refresh') {
-      cacheClear(slug);
-      // Also clear the MongoDB incremental order cache so fresh data is fetched
-      try {
-        const { clearCachedDays } = await import('@/lib/shopify-sync');
-        await clearCachedDays(slug);
-      } catch (e) {
-        console.error('Failed to clear MongoDB order cache:', e);
-      }
+      await cacheInvalidate(slug);
       return NextResponse.json({ ok: true, message: 'Cache cleared' });
     }
 
-    // Cache key includes slug + action + date range
-    const cacheKey = `${slug}:${action}:${fromParam ?? dateRange}:${toParam ?? ''}`;
-    const cached = cacheGet(cacheKey);
-    if (cached) return NextResponse.json(cached);
+    // Actions that should never be cached
+    const noCache = action === 'test' || action === 'orders' || action === 'shop';
 
-    // Build effective date range string: custom "YYYY-MM-DD:YYYY-MM-DD" takes precedence
+    // Build effective date range string
     const effectiveDateRange = fromParam && toParam ? `${fromParam}:${toParam}` : dateRange;
+
+    // ── Check MongoDB cache first ─────────────────────────────────────────────
+    if (!noCache) {
+      const cached = await cacheGet(slug, action, effectiveDateRange);
+      if (cached) {
+        console.log(`[shopify-cache] HIT ${slug}:${action}:${effectiveDateRange}`);
+        return NextResponse.json(cached);
+      }
+      console.log(`[shopify-cache] MISS ${slug}:${action}:${effectiveDateRange} — fetching from Shopify`);
+    }
 
     // ── Fetch fresh data ──────────────────────────────────────────────────────
     let result: unknown;
@@ -152,9 +132,9 @@ export async function GET(request: Request) {
         return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
     }
 
-    // Don't cache 'test' or 'orders' (recent orders always fresh)
-    if (action !== 'test' && action !== 'orders') {
-      cacheSet(cacheKey, result);
+    // Store result in MongoDB cache
+    if (!noCache) {
+      await cacheSet(slug, action, effectiveDateRange, result);
     }
 
     return NextResponse.json(result);
