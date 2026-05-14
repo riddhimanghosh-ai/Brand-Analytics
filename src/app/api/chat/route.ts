@@ -104,9 +104,11 @@ export async function POST(request: Request) {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    const apiKey = process.env.GROQ_API_KEY || brand.geminiApiKey || process.env.GEMINI_API_KEY;
+    // Groq is the primary AI provider — use only GROQ_API_KEY env var.
+    // brand.geminiApiKey is a Gemini key and must NOT be sent to Groq.
+    const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey) {
-      return NextResponse.json({ error: 'No AI API key configured' }, { status: 400 });
+      return NextResponse.json({ error: 'AI not configured. Add GROQ_API_KEY to environment variables.' }, { status: 400 });
     }
 
     // Detect intent — only fetch what's relevant
