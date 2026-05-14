@@ -1,4 +1,3 @@
-'use server';
 import { ConversionFunnel } from '@/components/ConversionFunnel';
 import { CROCharts } from '@/components/CROCharts';
 import { getBrand } from '@/lib/mongodb-store';

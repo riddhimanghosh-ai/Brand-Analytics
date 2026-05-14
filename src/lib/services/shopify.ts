@@ -291,16 +291,17 @@ async function fetchAllOrders(
   endDate: string,
 ): Promise<Array<Record<string, unknown>>> {
   const chunks = chunkDateRange(startDate, endDate, 7);
+  const raw: Array<Record<string, unknown>> = [];
   if (chunks.length === 1) {
-    // Fast path for short ranges (≤7 days)
-    return fetchOrdersWindow(config, startDate, endDate);
+    raw.push(...await fetchOrdersWindow(config, startDate, endDate));
+  } else {
+    for (const [cs, ce] of chunks) {
+      raw.push(...await fetchOrdersWindow(config, cs, ce));
+    }
   }
-  const all: Array<Record<string, unknown>> = [];
-  for (const [cs, ce] of chunks) {
-    const orders = await fetchOrdersWindow(config, cs, ce);
-    all.push(...orders);
-  }
-  return all;
+  // Exclude cancelled orders — Shopify Analytics excludes these from all metrics.
+  // cancelledAt is fetched in buildOrderQuery.
+  return raw.filter(o => !o.cancelledAt);
 }
 
 // ---------------------------------------------------------------------------
@@ -1212,12 +1213,10 @@ export async function getAllAnalytics(
     fetchPreviousPeriodSummary(config, prevStart, prevEnd),
   ]);
 
-  // Filter out cancelled orders — Shopify Analytics excludes these from Total Sales
-  const activeOrders = currentOrders.filter((o) => !(o as { cancelledAt?: string | null }).cancelledAt);
-  console.log(`[getAllAnalytics] fetched ${currentOrders.length} orders (${currentOrders.length - activeOrders.length} cancelled) for ${currentStart} → ${currentEnd}`);
+  console.log(`[getAllAnalytics] fetched ${currentOrders.length} active (non-cancelled) orders for ${currentStart} → ${currentEnd}`);
 
   // ── KPIs ──────────────────────────────────────────────────────────────────
-  const currentMetrics = computeMetrics(activeOrders);
+  const currentMetrics = computeMetrics(currentOrders);
 
   const kpis: ShopifyKPIs = {
     totalRevenue: currentMetrics.totalRevenue,
@@ -1246,7 +1245,7 @@ export async function getAllAnalytics(
     const key = new Date(startMs + i * 86_400_000).toISOString().split('T')[0];
     byDate[key] = { revenue: 0, orders: 0 };
   }
-  for (const order of activeOrders) {
+  for (const order of currentOrders) {
     if ((order.displayFinancialStatus as string) === 'VOIDED') continue;
     const dateKey = (order.createdAt as string).split('T')[0];
     const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
@@ -1266,7 +1265,7 @@ export async function getAllAnalytics(
 
   // ── Products ───────────────────────────────────────────────────────────────
   const productMap: Record<string, ShopifyProduct> = {};
-  for (const order of activeOrders) {
+  for (const order of currentOrders) {
     const lineItems = order.lineItems as {
       edges: Array<{
         node: {
@@ -1297,7 +1296,7 @@ export async function getAllAnalytics(
   let newCount = 0, returningCount = 0, newRevenue = 0, returningRevenue = 0;
   const customerMap: Record<string, { customer: Record<string, unknown>; totalSpent: number; orderCount: number }> = {};
 
-  for (const order of activeOrders) {
+  for (const order of currentOrders) {
     const cust = order.customer as { id: string; firstName: string; lastName: string; email: string; numberOfOrders: number; createdAt: string; tags: string[] } | null;
     const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
     if (cust?.id) {
@@ -1324,14 +1323,14 @@ export async function getAllAnalytics(
 
   // ── Order status ───────────────────────────────────────────────────────────
   const statusMap: Record<string, number> = {};
-  for (const order of activeOrders) {
+  for (const order of currentOrders) {
     const s = (order.displayFulfillmentStatus as string) || 'UNFULFILLED';
     statusMap[s] = (statusMap[s] || 0) + 1;
   }
   const orderStatus = Object.entries(statusMap).map(([name, value]) => ({ name, value }));
 
   // ── Conversion funnel ──────────────────────────────────────────────────────
-  const nonVoided     = activeOrders.filter((o) => (o.displayFinancialStatus as string) !== 'VOIDED');
+  const nonVoided     = currentOrders.filter((o) => (o.displayFinancialStatus as string) !== 'VOIDED');
   const funnelTotal   = nonVoided.length;
   const funnelPaid    = nonVoided.filter((o) => { const f = (o.displayFinancialStatus as string) || ''; return f === 'PAID' || f === 'PARTIALLY_PAID' || f === 'PARTIALLY_REFUNDED'; }).length;
   const funnelFulfilled = nonVoided.filter((o) => (o.displayFulfillmentStatus as string) === 'FULFILLED').length;
