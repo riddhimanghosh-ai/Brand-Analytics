@@ -1,12 +1,19 @@
 import { getBrands, createBrand } from '@/lib/mongodb-store';
 import { maskBrand, maskBrands } from '@/lib/mask-brand';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { randomUUID } from 'crypto';
+import { verifySession, filterBrandsForUser, COOKIE_NAME } from '@/lib/auth';
 
 export async function GET() {
   try {
-    const brands = await getBrands();
-    return NextResponse.json(maskBrands(brands));
+    const cookieStore = await cookies();
+    const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const allBrands = await getBrands();
+    const visible = filterBrandsForUser(allBrands, user);
+    return NextResponse.json(maskBrands(visible));
   } catch (error) {
     console.error('Error fetching brands:', error);
     return NextResponse.json({ error: 'Failed to fetch brands' }, { status: 500 });

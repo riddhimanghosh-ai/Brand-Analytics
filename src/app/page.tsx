@@ -1,7 +1,9 @@
 import { getBrands } from '@/lib/mongodb-store';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { BrandCard } from '@/components/BrandCard';
+import { verifySession, filterBrandsForUser, COOKIE_NAME } from '@/lib/auth';
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic';
@@ -10,13 +12,20 @@ export const revalidate = 0;
 export default async function HomePage() {
   let brands: any[] = [];
 
+  // Resolve current user from session cookie
+  const cookieStore = await cookies();
+  const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+
   // Fetch brands — redirect() throws a special error that must NOT be caught
   const allBrands = await getBrands().catch((error) => {
     console.error('Error fetching brands:', error);
     return [] as typeof brands;
   });
 
-  brands = allBrands.map((brand) => ({
+  // Scope brands to the current user
+  const visibleBrands = filterBrandsForUser(allBrands, user);
+
+  brands = visibleBrands.map((brand) => ({
     id: brand.id,
     name: brand.name,
     slug: brand.slug,

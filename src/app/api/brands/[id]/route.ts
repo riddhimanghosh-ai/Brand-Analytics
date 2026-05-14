@@ -1,6 +1,13 @@
 import { getBrand, updateBrand, deleteBrand } from '@/lib/mongodb-store';
 import { maskBrand } from '@/lib/mask-brand';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { verifySession, canAccessBrand, COOKIE_NAME } from '@/lib/auth';
+
+async function getUser() {
+  const cookieStore = await cookies();
+  return verifySession(cookieStore.get(COOKIE_NAME)?.value);
+}
 
 export async function GET(
   _request: Request,
@@ -8,6 +15,10 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const user = await getUser();
+    if (!canAccessBrand(user, id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const brand = await getBrand(id);
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
@@ -26,6 +37,10 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
+    const user = await getUser();
+    if (!canAccessBrand(user, id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     const body = await request.json();
 
     // Only forward fields that were explicitly provided in the request body.
@@ -65,6 +80,11 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    const user = await getUser();
+    // Only admins (allowedBrands === null) can delete brands
+    if (!user || user.allowedBrands !== null) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
     await deleteBrand(id);
     return NextResponse.json({ success: true });
   } catch (error) {

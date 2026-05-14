@@ -1,8 +1,10 @@
 import { getBrand, getBrands } from '@/lib/mongodb-store';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { ChatPanel } from '@/components/ChatPanel';
 import { NavLink } from '@/components/NavLink';
 import { SidebarToggle } from '@/components/SidebarToggle';
+import { verifySession, canAccessBrand, filterBrandsForUser, COOKIE_NAME } from '@/lib/auth';
 
 export default async function DashboardLayout({
   children,
@@ -12,14 +14,24 @@ export default async function DashboardLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const brand = await getBrand(slug);
 
+  // Resolve current user & enforce brand-scope (middleware already does this,
+  // but a server-side check here defends against any edge case where middleware
+  // doesn't run e.g. internal routes).
+  const cookieStore = await cookies();
+  const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+  if (!canAccessBrand(user, slug)) {
+    redirect('/');
+  }
+
+  const brand = await getBrand(slug);
   if (!brand) {
     redirect('/');
   }
 
   const allBrandsData = await getBrands();
-  const allBrands = allBrandsData.map((b) => ({ name: b.name, slug: b.slug }));
+  const visibleBrands = filterBrandsForUser(allBrandsData, user);
+  const allBrands = visibleBrands.map((b) => ({ name: b.name, slug: b.slug }));
 
   const isDemoMode = slug === 'demo';
   const connections = isDemoMode

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-const SESSION_SECRET = 'brand-analytics-session-v1';
+import { verifySession, canAccessBrand, COOKIE_NAME } from '@/lib/auth';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -11,11 +10,22 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check session cookie
-  const session = request.cookies.get('ba_session');
-  if (!session || session.value !== SESSION_SECRET) {
+  // Resolve user from signed session cookie
+  const token = request.cookies.get(COOKIE_NAME)?.value;
+  const user = verifySession(token);
+  if (!user) {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Enforce per-user brand scope on dashboard pages
+  const dashMatch = pathname.match(/^\/dashboard\/([^/]+)/);
+  if (dashMatch) {
+    const slug = decodeURIComponent(dashMatch[1]);
+    if (!canAccessBrand(user, slug)) {
+      // Redirect non-admins back to home (their brand list page)
+      return NextResponse.redirect(new URL('/', request.url));
+    }
   }
 
   return NextResponse.next();
