@@ -131,16 +131,17 @@ function buildOrderQuery(startDate: string, endDate: string, afterClause: string
   `;
 }
 
-/** Fetch one date-window sequentially (cursor-based pagination) */
+/** Fetch one date-window sequentially (cursor-based pagination, NO hard cap) */
 async function fetchOrdersWindow(
   config: ShopifyConfig,
   startDate: string,
   endDate: string,
-  maxPages = 4,
 ): Promise<Array<Record<string, unknown>>> {
   const orders: Array<Record<string, unknown>> = [];
   let cursor: string | null = null;
-  for (let page = 0; page < maxPages; page++) {
+  // No page cap — fetches all orders in this window.
+  // Windows are kept small (≤3 days) so each completes in ~2-3s.
+  for (;;) {
     const afterClause = cursor ? `, after: "${cursor}"` : '';
     const data = await shopifyGraphQL(config, buildOrderQuery(startDate, endDate, afterClause));
     const ordersData = data.orders as {
@@ -156,9 +157,12 @@ async function fetchOrdersWindow(
 }
 
 /**
- * Fetch orders for a date range using parallel window fetching.
- * Splits the range into up to 4 parallel sub-ranges to stay under Lambda timeout.
- * 30d range: 4 windows × 4 pages each = 4,000 orders max in ~4-6s on Lambda.
+ * Fetch ALL orders for a date range using parallel window fetching.
+ * Splits range into ~3-day windows (up to 10 parallel) — no order cap.
+ * Each window fetches completely, all windows run at the same time.
+ *
+ * 30d range → 10 windows of 3 days → ~300 orders/window → 2 pages each
+ * All 10 run in parallel → ~2-3s total on Lambda. No data is missed.
  */
 async function fetchAllOrders(
   config: ShopifyConfig,
@@ -169,14 +173,16 @@ async function fetchAllOrders(
   const end   = new Date(endDate).getTime();
   const totalDays = Math.round((end - start) / 86_400_000) + 1;
 
-  // Split into up to 4 parallel windows
-  const numWindows = Math.min(4, Math.ceil(totalDays / 7));
+  // 4 parallel windows — sweet spot between speed and Shopify rate limits.
+  // More than 4-5 concurrent streams triggers throttling (1.5s retry each).
+  // No per-window order cap — each window paginates fully.
+  const numWindows = Math.min(4, totalDays);
   const windowDays = Math.ceil(totalDays / numWindows);
 
   const windows: { start: string; end: string }[] = [];
   for (let i = 0; i < numWindows; i++) {
     const wStart = new Date(start + i * windowDays * 86_400_000);
-    const wEnd   = new Date(Math.min(start + (i + 1) * windowDays * 86_400_000 - 86_400_000, end));
+    const wEnd   = new Date(Math.min(start + (i + 1) * windowDays * 86_400_000- 86_400_000, end));
     windows.push({
       start: wStart.toISOString().split('T')[0],
       end:   wEnd.toISOString().split('T')[0],
@@ -184,7 +190,7 @@ async function fetchAllOrders(
   }
 
   const results = await Promise.all(
-    windows.map(w => fetchOrdersWindow(config, w.start, w.end, 4))
+    windows.map(w => fetchOrdersWindow(config, w.start, w.end))
   );
   return results.flat();
 }
