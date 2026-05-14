@@ -689,7 +689,7 @@ function hourLabel(hour: number): string {
   return hour < 12 ? `${hour}am` : `${hour - 12}pm`;
 }
 
-/** Parse a dateRange string (e.g. '30d') into { startDate, endDate, days } */
+/** Parse a dateRange string (e.g. '30d' or '1y') into { startDate, endDate, days } */
 function parseDateRange(dateRange: string): {
   startDate: string;
   endDate: string;
@@ -702,10 +702,13 @@ function parseDateRange(dateRange: string): {
     return { startDate: from, endDate: to, days };
   }
   const now = new Date();
-  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '365d': 365 };
-  const days = daysMap[dateRange] || 30;
-  const startDate = new Date(now.getTime() - days * 86400000).toISOString();
-  const endDate = now.toISOString();
+  // '1y' and '365d' both map to 365 days
+  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '1y': 365, '365d': 365 };
+  const days = daysMap[dateRange] ?? 30;
+  // Use start-of-day (UTC) for startDate so the full first day is included
+  const startMs = now.getTime() - days * 86_400_000;
+  const startDate = new Date(startMs).toISOString().split('T')[0]; // YYYY-MM-DD
+  const endDate = now.toISOString().split('T')[0]; // YYYY-MM-DD (includes full current day)
   return { startDate, endDate, days };
 }
 
@@ -1024,6 +1027,7 @@ export async function getAllAnalytics(
     topCustomers: ShopifyCustomer[];
   };
   orderStatus: { name: string; value: number }[];
+  conversionFunnel: ConversionFunnel[];
 }> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
   const prevEnd = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
@@ -1209,7 +1213,24 @@ export async function getAllAnalytics(
   }
   const orderStatus = Object.entries(statusMap).map(([name, value]) => ({ name, value }));
 
-  return { kpis, revenue, products, customers, orderStatus };
+  // ── Conversion Funnel (computed from already-fetched orders — no extra API call) ──
+  const nonVoided = currentOrders.filter((o) => (o.displayFinancialStatus as string) !== 'VOIDED');
+  const funnelTotal = nonVoided.length;
+  const funnelPaid = nonVoided.filter((o) => {
+    const fs = (o.displayFinancialStatus as string) || '';
+    return fs === 'PAID' || fs === 'PARTIALLY_PAID' || fs === 'PARTIALLY_REFUNDED';
+  }).length;
+  const funnelFulfilled = nonVoided.filter((o) => (o.displayFulfillmentStatus as string) === 'FULFILLED').length;
+  const funnelPartial   = nonVoided.filter((o) => (o.displayFulfillmentStatus as string) === 'PARTIAL').length;
+  const funnelRefunded  = nonVoided.filter((o) => (o.displayFinancialStatus as string) === 'REFUNDED').length;
+  const conversionFunnel: ConversionFunnel[] = [
+    { stage: 'Total Orders', count: funnelTotal, dropoffRate: 0 },
+    { stage: 'Paid',         count: funnelPaid,  dropoffRate: funnelTotal > 0 ? ((funnelTotal - funnelPaid) / funnelTotal) * 100 : 0 },
+    { stage: 'Fulfilled',    count: funnelFulfilled + funnelPartial, dropoffRate: funnelPaid > 0 ? ((funnelPaid - (funnelFulfilled + funnelPartial)) / funnelPaid) * 100 : 0 },
+    { stage: 'Refunded',     count: funnelRefunded, dropoffRate: 0 },
+  ];
+
+  return { kpis, revenue, products, customers, orderStatus, conversionFunnel };
 }
 
 // ---------------------------------------------------------------------------

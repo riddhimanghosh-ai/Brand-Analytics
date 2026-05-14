@@ -170,6 +170,53 @@ export default function ShopifyDashboard({
     paramsPromise.then((p) => setSlug(p.slug));
   }, [paramsPromise]);
 
+  // ─── Core fetch helper ───────────────────────────────────────────────────────
+  // Fetches combined data (heavy), then advances sequentially after combined
+  // finishes. This prevents concurrent Lambda invocations draining the same
+  // Shopify GraphQL rate-limit bucket simultaneously.
+  const runFetch = (slugVal: string) => {
+    setLoading(true);
+    setAdvancedLoading(true);
+    setError(null);
+    setAdvanced(null);
+
+    // Step 1: combined (kpis+revenue+products+customers+funnel) + orders (light) in parallel
+    Promise.allSettled([
+      fetch(`/api/shopify?slug=${slugVal}&from=${from}&to=${to}&action=combined`).then((r) => r.json()),
+      fetch(`/api/shopify?slug=${slugVal}&action=orders`).then((r) => r.json()),
+    ]).then(([combinedRes, ordersRes]) => {
+      if (combinedRes.status === 'fulfilled') {
+        const data = combinedRes.value;
+        if (data?.error) {
+          const msg: string = data.error || '';
+          setError({ type: msg.includes('THROTTLED') || msg.includes('throttle') || msg.includes('rate limit') ? 'throttled' : 'connection', message: msg });
+        } else {
+          if (data?.kpis) setKpis(data.kpis);
+          if (Array.isArray(data?.revenue)) setRevenue(data.revenue);
+          if (Array.isArray(data?.products)) setProducts(data.products);
+          if (data?.customers) setCustomers(data.customers);
+          if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
+          // conversionFunnel is now included in the combined response — no separate call needed
+          if (Array.isArray(data?.conversionFunnel)) setConversionFunnel(data.conversionFunnel);
+        }
+      } else {
+        setError({ type: 'connection', message: 'Network request failed' });
+      }
+      if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
+      setLoading(false);
+
+      // Step 2: advanced — fires AFTER combined finishes so it doesn't compete
+      // for the Shopify GraphQL bucket with the combined request.
+      fetch(`/api/shopify?slug=${slugVal}&action=advanced&from=${from}&to=${to}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data?.error) setAdvanced(data);
+          setAdvancedLoading(false);
+        })
+        .catch(() => setAdvancedLoading(false));
+    });
+  };
+
   // Refresh: clear server cache then re-fetch
   const handleRefresh = async () => {
     if (!slug || refreshing) return;
@@ -177,82 +224,14 @@ export default function ShopifyDashboard({
     await fetch(`/api/shopify?slug=${slug}&action=refresh`);
     setLastRefreshed(new Date());
     setRefreshing(false);
-    // Trigger re-fetch by toggling a dummy dep — simplest approach is to just re-run the effect
-    setLoading(true);
-    setError(null);
-    Promise.allSettled([
-      fetch(`/api/shopify?slug=${slug}&from=${from}&to=${to}&action=combined`).then((r) => r.json()),
-      fetch(`/api/shopify?slug=${slug}&action=orders`).then((r) => r.json()),
-      fetch(`/api/shopify?slug=${slug}&from=${from}&to=${to}&action=conversion-funnel`).then((r) => r.json()),
-    ]).then(([combinedRes, ordersRes, funnelRes]) => {
-      if (combinedRes.status === 'fulfilled') {
-        const data = combinedRes.value;
-        if (data?.error) {
-          const msg: string = data.error || '';
-          setError({ type: msg.includes('THROTTLED') || msg.includes('throttle') ? 'throttled' : 'connection', message: msg });
-        } else {
-          if (data?.kpis) setKpis(data.kpis);
-          if (Array.isArray(data?.revenue)) setRevenue(data.revenue);
-          if (Array.isArray(data?.products)) setProducts(data.products);
-          if (data?.customers) setCustomers(data.customers);
-          if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
-        }
-      }
-      if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
-      if (funnelRes.status === 'fulfilled') setConversionFunnel(Array.isArray(funnelRes.value) ? funnelRes.value : []);
-      setLoading(false);
-    });
+    runFetch(slug);
   };
 
-  // Fetch main data — single combined call + orders separately
+  // Fetch on mount and when date range changes
   useEffect(() => {
     if (!slug) return;
-    setLoading(true);
-    setError(null);
-
-    Promise.allSettled([
-      fetch(`/api/shopify?slug=${slug}&from=${from}&to=${to}&action=combined`).then((r) => r.json()),
-      fetch(`/api/shopify?slug=${slug}&action=orders`).then((r) => r.json()),
-      fetch(`/api/shopify?slug=${slug}&from=${from}&to=${to}&action=conversion-funnel`).then((r) => r.json()),
-    ]).then(([combinedRes, ordersRes, funnelRes]) => {
-      if (combinedRes.status === 'fulfilled') {
-        const data = combinedRes.value;
-        if (data?.error) {
-          const msg: string = data.error || '';
-          if (msg.includes('THROTTLED') || msg.includes('throttle') || msg.includes('rate limit')) {
-            setError({ type: 'throttled', message: msg });
-          } else {
-            setError({ type: 'connection', message: msg });
-          }
-        } else {
-          if (data?.kpis) setKpis(data.kpis);
-          if (Array.isArray(data?.revenue)) setRevenue(data.revenue);
-          if (Array.isArray(data?.products)) setProducts(data.products);
-          if (data?.customers) setCustomers(data.customers);
-          if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
-        }
-      } else {
-        setError({ type: 'connection', message: 'Network request failed' });
-      }
-      if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
-      if (funnelRes.status === 'fulfilled') setConversionFunnel(Array.isArray(funnelRes.value) ? funnelRes.value : []);
-      setLoading(false);
-    });
-  }, [slug, from, to]);
-
-  // Fetch advanced data separately
-  useEffect(() => {
-    if (!slug) return;
-    setAdvancedLoading(true);
-    setAdvanced(null);
-
-    fetch(`/api/shopify?slug=${slug}&action=advanced&from=${from}&to=${to}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data?.error) setAdvanced(data);
-        setAdvancedLoading(false);
-      })
-      .catch(() => setAdvancedLoading(false));
+    runFetch(slug);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, from, to]);
 
   // ─── Derived values ─────────────────────────────────────────────────────────
