@@ -1,3 +1,8 @@
+// Google Ads API version. Current stable: v21 (as of 2026).
+// Google deprecates major versions roughly every 12 months — check
+// https://developers.google.com/google-ads/api/docs/release-notes
+const API_VERSION = 'v21';
+
 export interface GoogleAdsConfig {
   devToken: string;
   clientId: string;
@@ -91,7 +96,7 @@ async function search(
 ): Promise<AdsRow[]> {
   const cid = cleanCustomerId(config.customerId);
   const res = await fetch(
-    `https://googleads.googleapis.com/v17/customers/${cid}/googleAds:search`,
+    `https://googleads.googleapis.com/${API_VERSION}/customers/${cid}/googleAds:search`,
     {
       method: 'POST',
       headers: {
@@ -104,8 +109,17 @@ async function search(
   );
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Google Ads API error (${res.status}): ${err}`);
+    const raw = await res.text();
+    // Try to extract a clean JSON error message; fall back to a brief HTML strip.
+    let msg = raw;
+    try {
+      const parsed = JSON.parse(raw);
+      msg = parsed?.error?.message ?? parsed?.[0]?.error?.message ?? raw;
+    } catch {
+      // Not JSON — likely Google's HTML 404 page. Strip tags and trim.
+      msg = raw.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 300);
+    }
+    throw new Error(`Google Ads API error (${res.status}): ${msg}`);
   }
 
   const data = (await res.json()) as { results?: AdsRow[] };
