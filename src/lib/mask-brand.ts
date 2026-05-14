@@ -60,7 +60,7 @@ export function maskBrand(brand: BrandData): MaskedBrand {
     shopifyConnected: !!(brand.shopifyStoreUrl && shopifyAccessToken),
     ga4Connected: !!(brand.ga4PropertyId && (ga4ServiceAccountJson || ga4RefreshToken)),
     metaConnected: !!(brand.metaAdAccountId && metaAccessToken),
-    googleAdsConnected: !!(brand.googleAdsCustomerId && googleAdsRefreshToken),
+    googleAdsConnected: !!googleAdsRefreshToken, // token = OAuth done; customer ID can be added after
     geminiConnected: !!geminiApiKey,
     tiktokConnected: !!(brand.tiktokAdvertiserId && tiktokAccessToken),
     klaviyoConnected: !!klaviyoApiKey,

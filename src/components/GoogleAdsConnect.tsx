@@ -132,32 +132,65 @@ export function GoogleAdsConnect({
 
   if (isConnected) {
     return (
-      <div style={{
-        padding: '14px 16px', borderRadius: '8px',
-        background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '24px' }}>✅</span>
-          <div>
-            <div style={{ fontWeight: '600', color: '#22c55e', fontSize: '14px' }}>Connected</div>
-            {customerId && (
-              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', fontFamily: 'monospace' }}>
-                Customer ID: {customerId}
+      <div>
+        <div style={{
+          padding: '14px 16px', borderRadius: '8px',
+          background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px',
+          marginBottom: customerId ? '0' : '12px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '24px' }}>✅</span>
+            <div>
+              <div style={{ fontWeight: '600', color: '#22c55e', fontSize: '14px' }}>
+                {customerId ? 'Connected' : 'Authorized — Customer ID needed'}
               </div>
-            )}
+              {customerId && (
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px', fontFamily: 'monospace' }}>
+                  Customer ID: {customerId}
+                </div>
+              )}
+            </div>
           </div>
+          <button
+            onClick={handleDisconnect}
+            style={{
+              padding: '6px 14px', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.3)',
+              background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '12px',
+              cursor: 'pointer', fontWeight: '500',
+            }}
+          >
+            Disconnect
+          </button>
         </div>
-        <button
-          onClick={handleDisconnect}
-          style={{
-            padding: '6px 14px', borderRadius: '6px', border: '1px solid rgba(239,68,68,0.3)',
-            background: 'rgba(239,68,68,0.08)', color: '#ef4444', fontSize: '12px',
-            cursor: 'pointer', fontWeight: '500',
-          }}
-        >
-          Disconnect
-        </button>
+
+        {/* Show Customer ID input when token is saved but no ID yet */}
+        {!customerId && (
+          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', border: '1px solid var(--glass-border)' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '6px' }}>
+              Enter your Google Ads Customer ID
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+              Find it in Google Ads → top right corner (format: 123-456-7890). Enter digits only.
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input
+                className="form-input mono"
+                style={{ flex: 1, margin: 0 }}
+                placeholder="1234567890"
+                value={manualId}
+                onChange={e => setManualId(e.target.value)}
+              />
+              <button
+                onClick={handleManualId}
+                disabled={!manualId.trim() || selecting}
+                className="btn btn-primary"
+              >
+                {selecting ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
