@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { MetricChart } from '@/components/MetricChart';
+import { useGlobalDateRange, useDateRangeLabel } from '@/lib/use-date-range';
+import { DateRangeDropdown } from '@/components/DateRangeDropdown';
 
 // ─── Widget Catalog ──────────────────────────────────────────────────────────
 const WIDGET_CATALOG = [
@@ -80,6 +82,9 @@ export default function CustomDashboardPage() {
   const params = useParams();
   const slug = params?.slug as string;
 
+  const { from, to } = useGlobalDateRange();
+  const dateLabel = useDateRangeLabel();
+
   const [widgets, setWidgets] = useState<Widget[]>([]);
   const [savedMetrics, setSavedMetrics] = useState<{ name: string; query: string; chartType: string }[]>([]);
   const [showPicker, setShowPicker] = useState(false);
@@ -106,13 +111,11 @@ export default function CustomDashboardPage() {
       .catch(() => {});
   }, [slug]);
 
-  // Fetch data for all widgets
-  useEffect(() => {
-    if (widgets.length === 0) return;
+  // Fetch data for all widgets (re-runs when date range changes)
+  const fetchAllWidgets = useCallback(() => {
+    if (widgets.length === 0 || !slug) return;
+    setWidgets(prev => prev.map(w => ({ ...w, loading: true, value: null, metricColumns: undefined, metricRows: undefined })));
     widgets.forEach((widget, i) => {
-      if (!widget.loading && (widget.value !== null || widget.metricColumns)) return;
-
-      // Handle saved metric widgets
       if (widget.savedMetricQuery) {
         fetch('/api/metrics', {
           method: 'POST',
@@ -132,7 +135,8 @@ export default function CustomDashboardPage() {
       const catalog = WIDGET_CATALOG.find(c => c.id === widget.catalogId);
       if (!catalog) return;
 
-      fetch(`${catalog.endpoint}&slug=${slug}`)
+      const url = `${catalog.endpoint}&slug=${slug}&from=${from}&to=${to}`;
+      fetch(url)
         .then(r => r.json())
         .then(data => {
           const value = getNestedValue(data, catalog.path);
@@ -143,7 +147,12 @@ export default function CustomDashboardPage() {
         });
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [widgets.length, slug]);
+  }, [slug, from, to, widgets.length]);
+
+  useEffect(() => {
+    fetchAllWidgets();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, from, to, widgets.length]);
 
   const addWidget = (catalogId: string) => {
     const catalog = WIDGET_CATALOG.find(c => c.id === catalogId);
@@ -248,6 +257,7 @@ export default function CustomDashboardPage() {
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           {savedMsg && <span style={{ fontSize: '13px', color: 'var(--accent-blue)' }}>{savedMsg}</span>}
+          <DateRangeDropdown />
           {widgets.length > 0 && (
             <button onClick={saveLayout} disabled={saving} style={{
               padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--glass-border)',
@@ -323,7 +333,14 @@ export default function CustomDashboardPage() {
               </div>
 
               {/* Label */}
-              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '12px' }}>{widget.label}</div>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '4px' }}>{widget.label}</div>
+
+              {/* Time period */}
+              {!widget.savedMetricQuery && (
+                <div style={{ fontSize: '10px', color: 'var(--text-dim)', marginBottom: '10px', letterSpacing: '0.03em' }}>
+                  📅 {dateLabel}
+                </div>
+              )}
 
               {/* Saved metric widget: show chart */}
               {widget.savedMetricQuery ? (

@@ -24,7 +24,7 @@ export const USERS: User[] = [
   // Admin — sees everything
   { username: 'Riddhiman', password: 'BrandAnalytics1234', allowedBrands: null },
   // Hira-only user
-  { username: 'HIRAX', password: 'HIRA@1234', allowedBrands: ['hira'] },
+  { username: 'hira', password: 'HIRA@1234', allowedBrands: ['hira'] },
 ];
 
 export function findUser(username: string, password: string): User | null {

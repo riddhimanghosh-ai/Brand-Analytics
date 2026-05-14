@@ -160,6 +160,7 @@ export default async function DashboardLayout({
           <NavLink href={`/dashboard/${slug}/competitors`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
             <span className="nav-icon">🔍</span>
             Competitor Ads
+            <span style={{ fontSize: '9px', fontWeight: '600', color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', padding: '1px 5px', marginLeft: 'auto', whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Coming soon</span>
           </NavLink>
 
           <div className="nav-section-label">Tools</div>

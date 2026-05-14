@@ -196,7 +196,7 @@ async function runShopifyQL(
 function buildOrderQuery(startDate: string, endDate: string, afterClause: string) {
   return `
     {
-      orders(first: 250, query: "created_at:>='${startDate}' AND created_at:<='${endDate}'"${afterClause}, sortKey: CREATED_AT) {
+      orders(first: 250, query: "created_at:>='${startDate}T00:00:00' AND created_at:<='${endDate}T23:59:59'"${afterClause}, sortKey: CREATED_AT) {
         edges {
           cursor
           node {
@@ -356,7 +356,7 @@ async function fetchPreviousPeriodSummary(
   // Step 2: fetch one page (250 orders) as an AOV sample
   const sampleQuery = `
     {
-      orders(first: 250, query: "created_at:>='${startDate}' AND created_at:<='${endDate}'", sortKey: CREATED_AT) {
+      orders(first: 250, query: "created_at:>='${startDate}T00:00:00' AND created_at:<='${endDate}T23:59:59'", sortKey: CREATED_AT) {
         edges {
           node {
             totalPriceSet { shopMoney { amount } }
