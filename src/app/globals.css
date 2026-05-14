@@ -19,11 +19,11 @@
   --glass-border: rgba(255, 255, 255, 0.06);
   --glass-highlight: rgba(255, 255, 255, 0.03);
 
-  /* Text */
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-dim: #475569;
+  /* Text — bumped up for WCAG AA contrast on dark backgrounds */
+  --text-primary: #f8fafc;     /* slate-50, ~16:1 contrast */
+  --text-secondary: #cbd5e1;   /* slate-300, ~11:1 */
+  --text-muted: #94a3b8;       /* slate-400, ~6:1 — WCAG AA for body */
+  --text-dim: #64748b;         /* slate-500, ~4.5:1 — for least important text only */
 
   /* Accent */
   --accent-blue: #3b82f6;
@@ -81,10 +81,11 @@
   --glass-border: rgba(0, 0, 0, 0.08);
   --glass-highlight: rgba(255, 255, 255, 0.9);
 
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #475569;
-  --text-dim: #64748b;
+  /* Light theme text — bumped for WCAG AA contrast on light backgrounds */
+  --text-primary: #020617;     /* slate-950, ~18:1 */
+  --text-secondary: #1e293b;   /* slate-800, ~13:1 */
+  --text-muted: #334155;       /* slate-700, ~9:1 — was 475569 (only 7:1) */
+  --text-dim: #475569;         /* slate-600, ~7:1 */
 
   /* Darker accents for better contrast on light backgrounds (WCAG AA compliant) */
   --accent-blue: #1d4ed8;       /* blue-700 */
