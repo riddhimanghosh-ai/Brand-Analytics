@@ -9,6 +9,8 @@ import type {
 interface ShopifyConfig {
   storeUrl: string;
   accessToken: string;
+  /** Brand slug — when provided, enables incremental MongoDB-backed order caching */
+  slug?: string;
 }
 
 const API_VERSION = '2024-10';
@@ -168,6 +170,7 @@ function buildOrderQuery(startDate: string, endDate: string, afterClause: string
                 node {
                   title
                   quantity
+                  originalUnitPriceSet { shopMoney { amount } }
                   product { id title }
                 }
               }
@@ -1127,9 +1130,74 @@ export async function getAllAnalytics(
   const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
   const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
+  // ── Incremental sync path (requires brand slug for MongoDB cache key) ────────
+  if (config.slug) {
+    const {
+      loadCachedDays, saveDays,
+      buildDayCacheEntries, emptyDayCacheEntry,
+      generateDatesInRange, computeFromCache,
+    } = await import('../shopify-sync');
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // Parallelise: load cache + start previous-period summary at the same time
+    const [cachedEntries, prevSummary] = await Promise.all([
+      loadCachedDays(config.slug, currentStart, currentEnd),
+      fetchPreviousPeriodSummary(config, prevStart, prevEnd),
+    ]);
+
+    // Only fully-synced historical days count as "cached" — today is always re-fetched
+    const cachedDateSet = new Set(
+      cachedEntries.filter((e) => !e.isPartialDay).map((e) => e.date),
+    );
+
+    const allDates = generateDatesInRange(currentStart, currentEnd);
+    const datesToFetch = allDates.filter((d) => !cachedDateSet.has(d));
+
+    let allEntries = cachedEntries.filter((e) => !e.isPartialDay); // start with stable cache
+
+    if (datesToFetch.length > 0) {
+      // Fetch the smallest contiguous window that covers all missing dates
+      const fetchStart = datesToFetch[0];
+      const fetchEnd   = datesToFetch[datesToFetch.length - 1];
+
+      console.log(
+        `[shopify-sync] ${config.slug}: fetching ${datesToFetch.length} missing days ` +
+        `(${fetchStart} → ${fetchEnd}, today=${today})`,
+      );
+
+      const freshOrders = await fetchOrdersWindow(config, fetchStart, fetchEnd);
+      const newEntries  = buildDayCacheEntries(config.slug, freshOrders, today);
+
+      // Create empty entries for dates that had zero orders
+      const fetchedDates = new Set(newEntries.map((e) => e.date));
+      const emptyEntries = datesToFetch
+        .filter((d) => !fetchedDates.has(d))
+        .map((d) => emptyDayCacheEntry(config.slug!, d, d === today));
+
+      await saveDays(config.slug, [...newEntries, ...emptyEntries]);
+
+      // Merge: fresh entries override anything we already had for those dates
+      const freshMap = new Map([...newEntries, ...emptyEntries].map((e) => [e.date, e]));
+      allEntries = allDates
+        .map((d) => freshMap.get(d) ?? cachedEntries.find((e) => e.date === d))
+        .filter(Boolean) as typeof cachedEntries;
+    } else {
+      console.log(`[shopify-sync] ${config.slug}: all ${allDates.length} days cached — skipping Shopify fetch`);
+      // Use full cached list (already includes today's partial entry if it exists)
+      allEntries = cachedEntries;
+    }
+
+    const result = computeFromCache(allEntries, currentStart, currentEnd, days);
+    result.kpis.prevTotalRevenue    = prevSummary.totalRevenue;
+    result.kpis.prevTotalOrders     = prevSummary.totalOrders;
+    result.kpis.prevAverageOrderValue = prevSummary.averageOrderValue;
+    result.kpis.prevTotalCustomers  = prevSummary.uniqueCustomers;
+    return result;
+  }
+
+  // ── Original (non-incremental) path — used when slug is not available ────────
   // Fetch current period fully + previous period via fast summary (count + 1 page sample).
-  // This halves Lambda time: fetching the previous period fully (~46 pages, 3128 pts) is
-  // replaced by 2 requests — REST count.json + 1 GraphQL page — taking ~1s instead of ~20s.
   const [currentOrders, prevSummary] = await Promise.all([
     fetchAllOrders(config, currentStart, currentEnd),
     fetchPreviousPeriodSummary(config, prevStart, prevEnd),

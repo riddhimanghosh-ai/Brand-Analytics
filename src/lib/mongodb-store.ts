@@ -60,6 +60,11 @@ async function connectDb() {
   return g._mongoDb;
 }
 
+/** Expose the DB instance for other modules (e.g. shopify-sync) to create their own collections */
+export async function getDb(): Promise<Db> {
+  return connectDb();
+}
+
 async function getBrandsCollection(): Promise<Collection> {
   const db = await connectDb();
   return db.collection('brands');

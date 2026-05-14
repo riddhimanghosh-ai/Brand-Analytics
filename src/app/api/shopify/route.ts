@@ -96,13 +96,21 @@ export async function GET(request: Request) {
     const config = {
       storeUrl: brand.shopifyStoreUrl,
       accessToken: brand.shopifyAccessToken,
+      slug, // enables incremental MongoDB order cache in getAllAnalytics
     };
 
     const { startDate, endDate } = getDateRangeForShopify(dateRange, fromParam, toParam);
 
-    // ── Refresh: clear all cache for this brand ───────────────────────────────
+    // ── Refresh: clear in-memory cache AND MongoDB order cache for this brand ─
     if (action === 'refresh') {
       cacheClear(slug);
+      // Also clear the MongoDB incremental order cache so fresh data is fetched
+      try {
+        const { clearCachedDays } = await import('@/lib/shopify-sync');
+        await clearCachedDays(slug);
+      } catch (e) {
+        console.error('Failed to clear MongoDB order cache:', e);
+      }
       return NextResponse.json({ ok: true, message: 'Cache cleared' });
     }
 
