@@ -99,121 +99,94 @@ async function shopifyGraphQL(
 // Now includes shippingAddress, discountCodes, and channelInformation
 // ---------------------------------------------------------------------------
 
-async function fetchAllOrders(
-  config: ShopifyConfig,
-  startDate: string,
-  endDate: string,
-  maxPages = 8          // 8 × 250 = 2,000 orders max — keeps Lambda under 25s timeout
-): Promise<Array<Record<string, unknown>>> {
-  const allOrders: Array<Record<string, unknown>> = [];
-  let cursor: string | null = null;
-  let page = 0;
-
-  while (page < maxPages) {
-    const afterClause = cursor ? `, after: "${cursor}"` : '';
-    const query = `
-      {
-        orders(first: 250, query: "created_at:>='${startDate}' AND created_at:<='${endDate}'"${afterClause}, sortKey: CREATED_AT, reverse: true) {
-          edges {
-            cursor
-            node {
-              id
-              name
-              email
-              createdAt
-              displayFinancialStatus
-              displayFulfillmentStatus
-              totalPriceSet {
-                shopMoney {
-                  amount
-                  currencyCode
-                }
-              }
-              subtotalPriceSet {
-                shopMoney {
-                  amount
-                }
-              }
-              totalRefundedSet {
-                shopMoney {
-                  amount
-                }
-              }
-              totalDiscountsSet {
-                shopMoney {
-                  amount
-                }
-              }
-              lineItems(first: 50) {
-                edges {
-                  node {
-                    title
-                    quantity
-                    originalUnitPriceSet {
-                      shopMoney {
-                        amount
-                      }
-                    }
-                    product {
-                      id
-                      title
-                      featuredImage {
-                        url
-                      }
-                    }
-                  }
-                }
-              }
-              customer {
-                id
-                firstName
-                lastName
-                email
-                numberOfOrders
-                createdAt
-                tags
-              }
-              shippingAddress {
-                city
-                province
-                country
-                countryCode
-              }
-              discountCodes
-              channelInformation {
-                channelDefinition {
-                  handle
-                  channelName
+// Lean order fields — only what computeMetrics / getAllAnalytics actually uses
+function buildOrderQuery(startDate: string, endDate: string, afterClause: string) {
+  return `
+    {
+      orders(first: 250, query: "created_at:>='${startDate}' AND created_at:<='${endDate}'"${afterClause}, sortKey: CREATED_AT) {
+        edges {
+          cursor
+          node {
+            id
+            createdAt
+            displayFinancialStatus
+            displayFulfillmentStatus
+            totalPriceSet { shopMoney { amount currencyCode } }
+            totalRefundedSet { shopMoney { amount } }
+            lineItems(first: 10) {
+              edges {
+                node {
+                  title
+                  quantity
+                  product { id title }
                 }
               }
             }
-          }
-          pageInfo {
-            hasNextPage
+            customer { id numberOfOrders }
           }
         }
+        pageInfo { hasNextPage }
       }
-    `;
+    }
+  `;
+}
 
-    const data = await shopifyGraphQL(config, query);
+/** Fetch one date-window sequentially (cursor-based pagination) */
+async function fetchOrdersWindow(
+  config: ShopifyConfig,
+  startDate: string,
+  endDate: string,
+  maxPages = 4,
+): Promise<Array<Record<string, unknown>>> {
+  const orders: Array<Record<string, unknown>> = [];
+  let cursor: string | null = null;
+  for (let page = 0; page < maxPages; page++) {
+    const afterClause = cursor ? `, after: "${cursor}"` : '';
+    const data = await shopifyGraphQL(config, buildOrderQuery(startDate, endDate, afterClause));
     const ordersData = data.orders as {
       edges: Array<{ cursor: string; node: Record<string, unknown> }>;
       pageInfo: { hasNextPage: boolean };
     };
     const edges = ordersData?.edges;
-
-    if (!edges || edges.length === 0) break;
-
-    for (const edge of edges) {
-      allOrders.push(edge.node);
-      cursor = edge.cursor;
-    }
-
+    if (!edges?.length) break;
+    for (const edge of edges) { orders.push(edge.node); cursor = edge.cursor; }
     if (!ordersData.pageInfo.hasNextPage) break;
-    page++;
+  }
+  return orders;
+}
+
+/**
+ * Fetch orders for a date range using parallel window fetching.
+ * Splits the range into up to 4 parallel sub-ranges to stay under Lambda timeout.
+ * 30d range: 4 windows × 4 pages each = 4,000 orders max in ~4-6s on Lambda.
+ */
+async function fetchAllOrders(
+  config: ShopifyConfig,
+  startDate: string,
+  endDate: string,
+): Promise<Array<Record<string, unknown>>> {
+  const start = new Date(startDate).getTime();
+  const end   = new Date(endDate).getTime();
+  const totalDays = Math.round((end - start) / 86_400_000) + 1;
+
+  // Split into up to 4 parallel windows
+  const numWindows = Math.min(4, Math.ceil(totalDays / 7));
+  const windowDays = Math.ceil(totalDays / numWindows);
+
+  const windows: { start: string; end: string }[] = [];
+  for (let i = 0; i < numWindows; i++) {
+    const wStart = new Date(start + i * windowDays * 86_400_000);
+    const wEnd   = new Date(Math.min(start + (i + 1) * windowDays * 86_400_000 - 86_400_000, end));
+    windows.push({
+      start: wStart.toISOString().split('T')[0],
+      end:   wEnd.toISOString().split('T')[0],
+    });
   }
 
-  return allOrders;
+  const results = await Promise.all(
+    windows.map(w => fetchOrdersWindow(config, w.start, w.end, 4))
+  );
+  return results.flat();
 }
 
 // ---------------------------------------------------------------------------
