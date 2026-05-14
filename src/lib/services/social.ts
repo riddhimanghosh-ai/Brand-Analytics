@@ -41,13 +41,10 @@ export async function getPageComments(config: MetaConfig): Promise<SocialComment
 
   try {
     // Get pages managed by this token — requires pages_show_list permission
-    let pagesData: { data?: { id: string; name: string; access_token: string }[] };
-    try {
-      pagesData = await metaGet('me/accounts', accessToken, { fields: 'id,name,access_token' });
-    } catch {
-      // Token lacks pages_show_list — throw descriptive error so UI can guide the user
-      throw new Error('PAGE_ACCESS_REQUIRED');
-    }
+    const pagesData: { data?: { id: string; name: string; access_token: string }[] } =
+      await metaGet('me/accounts', accessToken, { fields: 'id,name,access_token' }).catch(() => {
+        throw new Error('PAGE_ACCESS_REQUIRED');
+      });
     const pages: { id: string; name: string; access_token: string }[] = pagesData.data || [];
 
     if (pages.length === 0) {
