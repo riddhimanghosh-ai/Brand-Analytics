@@ -1192,30 +1192,50 @@ export async function getAllAnalytics(
     if (datesToFetch.length > 0) {
       const fetchStart = datesToFetch[0];
       const fetchEnd   = datesToFetch[datesToFetch.length - 1];
+      const datesToFetchSet = new Set(datesToFetch);
 
       console.log(
         `[shopify-sync] ${config.slug}: fetching ${datesToFetch.length} missing days ` +
         `(${fetchStart} → ${fetchEnd}, today=${today})`,
       );
 
-      // Chunk into 7-day windows to avoid Shopify's ~5K cursor-pagination limit
-      const freshOrders: Array<Record<string, unknown>> = [];
+      // ── Per-chunk progressive sync ──────────────────────────────────────────
+      // Save each 7-day chunk to MongoDB immediately after fetching it.
+      // If we approach the Lambda time budget (90s), we stop gracefully —
+      // remaining dates stay "missing" and are fetched on the next page load.
+      // This means every load makes progress until all history is cached.
+      const BUDGET_MS = 90_000; // stop before hitting the 120s Lambda limit
+      const syncStart = Date.now();
+
+      const allFreshOrders: Array<Record<string, unknown>> = [];
+
       for (const [cs, ce] of chunkDateRange(fetchStart, fetchEnd, 7)) {
+        if (Date.now() - syncStart > BUDGET_MS) {
+          console.log(
+            `[shopify-sync] ${config.slug}: 90s budget reached after ${allFreshOrders.length} orders — ` +
+            `will continue next load`,
+          );
+          break; // remaining chunks will be "missing" and fetched next time
+        }
+
         const chunk = await fetchOrdersWindow(config, cs, ce);
-        freshOrders.push(...chunk);
+        allFreshOrders.push(...chunk);
+
+        // Save this chunk's entries to MongoDB immediately (preserves progress on timeout)
+        const chunkEntries = buildDayCacheEntries(config.slug!, chunk, today);
+        const chunkFetched = new Set(chunkEntries.map((e) => e.date));
+        // Also save empty entries for zero-order days within this completed chunk
+        const chunkDates = generateDatesInRange(cs, ce);
+        const emptyChunkEntries = chunkDates
+          .filter((d) => datesToFetchSet.has(d) && !chunkFetched.has(d))
+          .map((d) => emptyDayCacheEntry(config.slug!, d, d === today));
+        await saveDays(config.slug!, [...chunkEntries, ...emptyChunkEntries]);
       }
-      const newEntries  = buildDayCacheEntries(config.slug, freshOrders, today);
 
-      // Create empty entries for dates that had zero orders
-      const fetchedDates = new Set(newEntries.map((e) => e.date));
-      const emptyEntries = datesToFetch
-        .filter((d) => !fetchedDates.has(d))
-        .map((d) => emptyDayCacheEntry(config.slug!, d, d === today));
-
-      await saveDays(config.slug, [...newEntries, ...emptyEntries]);
+      const newEntries = buildDayCacheEntries(config.slug, allFreshOrders, today);
 
       // Merge: fresh entries override anything we already had for those dates
-      const freshMap = new Map([...newEntries, ...emptyEntries].map((e) => [e.date, e]));
+      const freshMap = new Map(newEntries.map((e) => [e.date, e]));
       allEntries = allDates
         .map((d) => freshMap.get(d) ?? cachedEntries.find((e) => e.date === d))
         .filter(Boolean) as typeof cachedEntries;
