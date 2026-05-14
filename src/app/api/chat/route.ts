@@ -104,7 +104,7 @@ export async function POST(request: Request) {
     }
     // ────────────────────────────────────────────────────────────────────────
 
-    const apiKey = brand.geminiApiKey || process.env.GEMINI_API_KEY;
+    const apiKey = process.env.GROQ_API_KEY || brand.geminiApiKey || process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return NextResponse.json({ error: 'No AI API key configured' }, { status: 400 });
     }

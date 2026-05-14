@@ -1,17 +1,13 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { ChatMessage } from '@/types';
+
+const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions';
+const MODEL    = 'llama-3.3-70b-versatile';
 
 export async function streamChat(
   apiKey: string,
   messages: ChatMessage[],
   brandContext: string
 ): Promise<ReadableStream<Uint8Array>> {
-  const genAI = new GoogleGenerativeAI(apiKey);
-
-  // Try gemini-2.0-flash first; fall back to gemini-2.0-flash-lite (higher free quota)
-  // if the primary model hits rate limits.
-  const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' });
-
   const systemPrompt = `You are a concise e-commerce analyst. Answer using ONLY the data below. No fluff.
 
 ${brandContext}
@@ -33,59 +29,81 @@ FORMAT:
 
 If you don't have the data: "No data for that. I have: [list what's available]."`;
 
-
-  // Inject system context as the first user/model exchange in history.
-  // This approach avoids system_instruction API compatibility issues entirely
-  // and works reliably across all Gemini model versions.
-  const systemHistory = [
-    {
-      role: 'user' as const,
-      parts: [{ text: `Context for this session:\n\n${systemPrompt}` }],
-    },
-    {
-      role: 'model' as const,
-      parts: [{
-        text: `Understood. I'll answer with exact numbers from the data, keep responses under 5 bullets, and say "No data" if something isn't available. Ready.`,
-      }],
-    },
-  ];
-
-  const history = [
-    ...systemHistory,
-    ...messages.slice(0, -1).map((m) => ({
-      role: m.role === 'user' ? ('user' as const) : ('model' as const),
-      parts: [{ text: m.content }],
+  const groqMessages = [
+    { role: 'system', content: systemPrompt },
+    ...messages.map((m) => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: m.content,
     })),
   ];
 
-  const chat = model.startChat({ history });
-
-  const lastMessage = messages[messages.length - 1];
-  const result = await chat.sendMessageStream(lastMessage.content);
-
   const encoder = new TextEncoder();
+
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        for await (const chunk of result.stream) {
-          const text = chunk.text();
-          if (text) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+        const res = await fetch(GROQ_API, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: MODEL,
+            messages: groqMessages,
+            stream: true,
+            max_tokens: 1024,
+            temperature: 0.3,
+          }),
+        });
+
+        if (!res.ok) {
+          const err = await res.text();
+          let friendly = `AI error (${res.status})`;
+          if (res.status === 401) friendly = '❌ Invalid Groq API key. Please update it in Settings → AI Consultant.';
+          else if (res.status === 429) friendly = '⚠️ Groq rate limit reached. Please wait a moment and try again.';
+          else if (err) friendly = `AI error: ${err}`;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: friendly })}\n\n`));
+          controller.close();
+          return;
+        }
+
+        // Parse OpenAI-compatible SSE stream from Groq
+        const reader = res.body!.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed || !trimmed.startsWith('data: ')) continue;
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') continue;
+
+            try {
+              const parsed = JSON.parse(data);
+              const text = parsed.choices?.[0]?.delta?.content;
+              if (text) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
+              }
+            } catch {
+              // skip malformed chunks
+            }
           }
         }
+
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
       } catch (error) {
-        const raw = (error as Error).message || '';
-        let friendly = raw;
-        if (raw.includes('429') || raw.toLowerCase().includes('quota') || raw.toLowerCase().includes('too many requests')) {
-          friendly = '⚠️ Gemini API rate limit reached. Your free tier quota is exhausted for now. Please wait a minute and try again, or upgrade your Gemini API key at aistudio.google.com for higher limits.';
-        } else if (raw.includes('API_KEY_INVALID') || raw.includes('invalid api key')) {
-          friendly = '❌ Invalid Gemini API key. Please update it in Settings → AI Consultant.';
-        }
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: friendly })}\n\n`)
-        );
+        const msg = (error as Error).message || 'Unknown error';
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: `AI error: ${msg}` })}\n\n`));
         controller.close();
       }
     },
