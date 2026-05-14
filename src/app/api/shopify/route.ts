@@ -2,8 +2,10 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as shopify from '@/lib/services/shopify';
 
-// Tell Next.js / Amplify Lambda to allow up to 60s for this route
-export const maxDuration = 60;
+// Tell Next.js / Amplify Lambda to allow up to 120s for this route.
+// High-volume stores (10k+ orders/90d) need ~50s to paginate all orders
+// with Shopify's 2000-point GraphQL rate-limit bucket (100pt/s restore).
+export const maxDuration = 120;
 import {
   demoShopifyKPIs,
   demoShopifyRevenue,

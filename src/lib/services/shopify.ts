@@ -226,6 +226,100 @@ async function fetchAllOrders(
 }
 
 // ---------------------------------------------------------------------------
+// Shopify REST helper (for lightweight endpoints like count.json)
+// ---------------------------------------------------------------------------
+
+async function shopifyREST(
+  config: ShopifyConfig,
+  path: string,
+): Promise<Record<string, unknown>> {
+  const url = `https://${config.storeUrl}/admin/api/${API_VERSION}/${path}`;
+  const response = await fetch(url, {
+    headers: {
+      'X-Shopify-Access-Token': config.accessToken,
+      'Content-Type': 'application/json',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Shopify REST error (${response.status}): ${await response.text()}`);
+  }
+  return response.json();
+}
+
+// ---------------------------------------------------------------------------
+// Previous-period summary via REST count + 1-page GraphQL sample.
+//
+// For the "vs prev" comparison indicators on KPI cards we only need:
+//   totalOrders (exact) — from REST count.json (instant, 0 points)
+//   totalRevenue (estimated) — sample AOV × totalOrders
+//   uniqueCustomers (estimated)
+//
+// This replaces a full paginated previous-period fetch (~46 pages, 3128 pts)
+// with 2 requests (~70 pts total), cutting overall Lambda time in half.
+// ---------------------------------------------------------------------------
+
+async function fetchPreviousPeriodSummary(
+  config: ShopifyConfig,
+  startDate: string,
+  endDate: string,
+): Promise<{ totalOrders: number; totalRevenue: number; averageOrderValue: number; uniqueCustomers: number }> {
+  // Step 1: exact order count via REST (doesn't consume GraphQL bucket)
+  const countData = await shopifyREST(
+    config,
+    `orders/count.json?status=any&created_at_min=${startDate}&created_at_max=${endDate}T23:59:59`,
+  );
+  const totalOrders = (countData as { count?: number }).count ?? 0;
+
+  if (totalOrders === 0) {
+    return { totalOrders: 0, totalRevenue: 0, averageOrderValue: 0, uniqueCustomers: 0 };
+  }
+
+  // Step 2: fetch one page (250 orders) as an AOV sample
+  const sampleQuery = `
+    {
+      orders(first: 250, query: "created_at:>='${startDate}' AND created_at:<='${endDate}'", sortKey: CREATED_AT) {
+        edges {
+          node {
+            totalPriceSet { shopMoney { amount } }
+            displayFinancialStatus
+            customer { id }
+          }
+        }
+      }
+    }
+  `;
+  const data = await shopifyGraphQL(config, sampleQuery);
+  const edges = (data.orders as { edges: Array<{ node: Record<string, unknown> }> }).edges ?? [];
+
+  let sampleRevenue = 0;
+  const sampleCustomers = new Set<string>();
+  let samplePaidCount = 0;
+
+  for (const { node } of edges) {
+    if ((node.displayFinancialStatus as string) === 'VOIDED') continue;
+    sampleRevenue += parseFloat(
+      (node.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0'
+    );
+    samplePaidCount++;
+    const cust = node.customer as { id: string } | null;
+    if (cust?.id) sampleCustomers.add(cust.id);
+  }
+
+  const sampleAOV = samplePaidCount > 0 ? sampleRevenue / samplePaidCount : 0;
+  // Extrapolate revenue and unique-customer count from sample
+  const estimatedRevenue = sampleAOV * totalOrders;
+  const customerRatio = samplePaidCount > 0 ? sampleCustomers.size / samplePaidCount : 0;
+  const estimatedCustomers = Math.round(customerRatio * totalOrders);
+
+  return {
+    totalOrders,
+    totalRevenue: estimatedRevenue,
+    averageOrderValue: sampleAOV,
+    uniqueCustomers: estimatedCustomers,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Public: testConnection
 // ---------------------------------------------------------------------------
 
@@ -358,16 +452,16 @@ export async function getKPIs(
   dateRange: string = '30d'
 ): Promise<ShopifyKPIs> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
-  const prevEnd = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
+  const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
   const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
-  const [currentOrders, prevOrders] = await Promise.all([
+  // Fetch current period fully + previous period via fast summary (count + 1 page sample)
+  const [currentOrders, prevSummary] = await Promise.all([
     fetchAllOrders(config, currentStart, currentEnd),
-    fetchAllOrders(config, prevStart, prevEnd),
+    fetchPreviousPeriodSummary(config, prevStart, prevEnd),
   ]);
 
   const currentMetrics = computeMetrics(currentOrders);
-  const prevMetrics = computeMetrics(prevOrders);
 
   return {
     totalRevenue: currentMetrics.totalRevenue,
@@ -383,10 +477,10 @@ export async function getKPIs(
     newCustomerRevenue: currentMetrics.newCustomerRevenue,
     topSellingProduct: currentMetrics.topProduct,
     averageFulfillmentDays: 0,
-    prevTotalRevenue: prevMetrics.totalRevenue,
-    prevTotalOrders: prevMetrics.totalOrders,
-    prevAverageOrderValue: prevMetrics.averageOrderValue,
-    prevTotalCustomers: prevMetrics.uniqueCustomers,
+    prevTotalRevenue: prevSummary.totalRevenue,
+    prevTotalOrders: prevSummary.totalOrders,
+    prevAverageOrderValue: prevSummary.averageOrderValue,
+    prevTotalCustomers: prevSummary.uniqueCustomers,
   };
 }
 
@@ -1030,18 +1124,19 @@ export async function getAllAnalytics(
   conversionFunnel: ConversionFunnel[];
 }> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
-  const prevEnd = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
+  const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
   const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
-  // Fetch current and previous period orders in parallel — just 2 requests total
-  const [currentOrders, prevOrders] = await Promise.all([
+  // Fetch current period fully + previous period via fast summary (count + 1 page sample).
+  // This halves Lambda time: fetching the previous period fully (~46 pages, 3128 pts) is
+  // replaced by 2 requests — REST count.json + 1 GraphQL page — taking ~1s instead of ~20s.
+  const [currentOrders, prevSummary] = await Promise.all([
     fetchAllOrders(config, currentStart, currentEnd),
-    fetchAllOrders(config, prevStart, prevEnd),
+    fetchPreviousPeriodSummary(config, prevStart, prevEnd),
   ]);
 
   // ── KPIs ──
   const currentMetrics = computeMetrics(currentOrders);
-  const prevMetrics = computeMetrics(prevOrders);
 
   const kpis: ShopifyKPIs = {
     totalRevenue: currentMetrics.totalRevenue,
@@ -1057,10 +1152,10 @@ export async function getAllAnalytics(
     newCustomerRevenue: currentMetrics.newCustomerRevenue,
     topSellingProduct: currentMetrics.topProduct,
     averageFulfillmentDays: 0,
-    prevTotalRevenue: prevMetrics.totalRevenue,
-    prevTotalOrders: prevMetrics.totalOrders,
-    prevAverageOrderValue: prevMetrics.averageOrderValue,
-    prevTotalCustomers: prevMetrics.uniqueCustomers,
+    prevTotalRevenue: prevSummary.totalRevenue,
+    prevTotalOrders: prevSummary.totalOrders,
+    prevAverageOrderValue: prevSummary.averageOrderValue,
+    prevTotalCustomers: prevSummary.uniqueCustomers,
   };
 
   // ── Revenue over time ──
