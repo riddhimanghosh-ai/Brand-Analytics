@@ -233,7 +233,7 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
 }
 
 // ---- Google Ads Section ----
-function GoogleAdsSection({ slug, from, to, connected }: { slug: string; from: string; to: string; connected: boolean }) {
+function GoogleAdsSection({ slug, from, to, connected, configError }: { slug: string; from: string; to: string; connected: boolean; configError?: string | null }) {
   const [kpis, setKpis] = useState<GoogleAdsKPIs | null>(null);
   const [campaigns, setCampaigns] = useState<GoogleAdsCampaign[]>([]);
   const [spend, setSpend] = useState<GoogleAdsSpendPoint[]>([]);
@@ -268,6 +268,20 @@ function GoogleAdsSection({ slug, from, to, connected }: { slug: string; from: s
         <h3>Google Ads Not Connected</h3>
         <p>Connect your Google Ads account to see search, shopping, and display campaign performance.</p>
         <Link href={`/dashboard/${slug}/settings`} className="btn btn-primary">⚙️ Connect Google Ads</Link>
+      </div>
+    );
+  }
+
+  // Connected (OAuth done) but server is misconfigured — surface the actual error
+  if (configError) {
+    return (
+      <div className="connection-required" style={{ marginTop: '16px' }}>
+        <div className="cr-icon">⚠️</div>
+        <h3>Google Ads — Server Configuration Issue</h3>
+        <p style={{ fontFamily: 'var(--font-mono)', fontSize: '13px', color: 'var(--accent-amber)', maxWidth: '600px' }}>{configError}</p>
+        <p style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>
+          OAuth is complete — but the API can&apos;t fetch data until the env vars above are set in Amplify (and the app is redeployed).
+        </p>
       </div>
     );
   }
@@ -566,7 +580,12 @@ export default function AdsPage({ params: paramsPromise }: { params: Promise<{ s
   const [slug, setSlug] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'meta' | 'google'>('overview');
   const { from, to } = useGlobalDateRange();
-  const [connections, setConnections] = useState({ meta: false, google: false, checked: false });
+  const [connections, setConnections] = useState({
+    meta: false,
+    google: false,
+    googleConfigError: null as string | null,
+    checked: false,
+  });
 
   useEffect(() => {
     paramsPromise.then((p) => {
@@ -575,9 +594,14 @@ export default function AdsPage({ params: paramsPromise }: { params: Promise<{ s
         fetch(`/api/ads?slug=${p.slug}&platform=meta&action=kpis&range=7d`).then((r) => r.json()),
         fetch(`/api/ads?slug=${p.slug}&platform=google&action=kpis&range=7d`).then((r) => r.json()),
       ]).then(([m, g]) => {
+        // "Not connected" = user needs to click Connect (OAuth missing).
+        // Any other error (e.g. server env var missing, API error) means
+        // OAuth is done — surface the actual error instead of hiding it.
+        const googleNotConnected = g.error === 'Google Ads not connected';
         setConnections({
           meta: m.error !== 'Meta Ads not connected',
-          google: g.error !== 'Google Ads not connected',
+          google: !googleNotConnected,
+          googleConfigError: !googleNotConnected && g.error ? g.error : null,
           checked: true,
         });
       });
@@ -626,7 +650,7 @@ export default function AdsPage({ params: paramsPromise }: { params: Promise<{ s
           <MetaSection slug={slug} from={from} to={to} connected={connections.meta} />
         )}
         {activeTab === 'google' && (
-          <GoogleAdsSection slug={slug} from={from} to={to} connected={connections.google} />
+          <GoogleAdsSection slug={slug} from={from} to={to} connected={connections.google} configError={connections.googleConfigError} />
         )}
       </div>
     </>

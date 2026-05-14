@@ -73,20 +73,30 @@ export async function GET(request: Request) {
 
     // ---- Google Ads ----
     if (platform === 'google') {
-      if (
-        !brand.googleAdsDevToken ||
-        !brand.googleAdsCustomerId ||
-        !brand.googleAdsRefreshToken ||
-        !brand.googleAdsClientId ||
-        !brand.googleAdsClientSecret
-      ) {
+      // devToken / clientId / clientSecret live in env vars (shared across all brands)
+      const devToken     = brand.googleAdsDevToken     || process.env.GOOGLE_ADS_DEV_TOKEN;
+      const clientId     = brand.googleAdsClientId     || process.env.GOOGLE_CLIENT_ID;
+      const clientSecret = brand.googleAdsClientSecret || process.env.GOOGLE_CLIENT_SECRET;
+
+      // OAuth state — what the user controls via the Connect button
+      if (!brand.googleAdsRefreshToken || !brand.googleAdsCustomerId) {
         return NextResponse.json({ error: 'Google Ads not connected' }, { status: 400 });
+      }
+      // Server config — what the deployer controls via env vars
+      const missing: string[] = [];
+      if (!devToken)     missing.push('GOOGLE_ADS_DEV_TOKEN');
+      if (!clientId)     missing.push('GOOGLE_CLIENT_ID');
+      if (!clientSecret) missing.push('GOOGLE_CLIENT_SECRET');
+      if (missing.length > 0) {
+        return NextResponse.json({
+          error: `Google Ads server config incomplete — missing env vars: ${missing.join(', ')}`,
+        }, { status: 500 });
       }
 
       const config: googleAds.GoogleAdsConfig = {
-        devToken: brand.googleAdsDevToken,
-        clientId: brand.googleAdsClientId,
-        clientSecret: brand.googleAdsClientSecret,
+        devToken,
+        clientId,
+        clientSecret,
         refreshToken: brand.googleAdsRefreshToken,
         customerId: brand.googleAdsCustomerId,
       };
