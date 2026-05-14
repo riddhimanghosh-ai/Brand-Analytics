@@ -9,6 +9,13 @@ export interface GoogleAdsConfig {
   clientSecret: string;
   refreshToken: string;
   customerId: string;
+  /**
+   * Manager Account (MCC) customer ID — required when the developer token
+   * belongs to an MCC and customerId is a client account under it.
+   * Sent as the `login-customer-id` header. Digits only, no hyphens.
+   * Optional: omit when the dev token is on the customer account itself.
+   */
+  loginCustomerId?: string;
 }
 
 export interface GoogleAdsKPIs {
@@ -95,15 +102,23 @@ async function search(
   query: string
 ): Promise<AdsRow[]> {
   const cid = cleanCustomerId(config.customerId);
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${accessToken}`,
+    'developer-token': config.devToken,
+    'Content-Type': 'application/json',
+  };
+  // When the dev token comes from a Manager Account (MCC), Google requires
+  // the login-customer-id header pointing at the MCC. Without it, queries
+  // against a client account fail with USER_PERMISSION_DENIED.
+  if (config.loginCustomerId) {
+    headers['login-customer-id'] = cleanCustomerId(config.loginCustomerId);
+  }
+
   const res = await fetch(
     `https://googleads.googleapis.com/${API_VERSION}/customers/${cid}/googleAds:search`,
     {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'developer-token': config.devToken,
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ query }),
     }
   );

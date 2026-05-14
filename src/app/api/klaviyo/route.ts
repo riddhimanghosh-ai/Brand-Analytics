@@ -2,15 +2,19 @@ import { getBrand } from '@/lib/mongodb-store';
 import { getKPIs, getCampaigns, getFlows } from '@/lib/services/klaviyo';
 import { NextResponse } from 'next/server';
 import { demoKlaviyoKPIs, demoKlaviyoCampaigns, demoKlaviyoFlows } from '@/lib/demo-data';
+import { requireBrandAccess } from '@/lib/auth';
+
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get('slug');
 
-    if (!slug) return NextResponse.json({ error: 'slug required' }, { status: 400 });
+    const { denied } = await requireBrandAccess(slug);
+    if (denied) return denied;
 
-    const brand = await getBrand(slug);
+    const brand = await getBrand(slug!);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
 
     // ── Demo mode ──────────────────────────────────────────────────────────

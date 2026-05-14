@@ -76,3 +76,42 @@ export function filterBrandsForUser<T extends { slug: string }>(brands: T[], use
 }
 
 export { COOKIE_NAME };
+
+/**
+ * Server-side helper: extract user from cookies and check brand access.
+ * Returns { user, denied: NextResponse | null }. If denied is non-null,
+ * the API route should return it immediately.
+ */
+import { NextResponse } from 'next/server';
+import { cookies as nextCookies } from 'next/headers';
+
+export async function requireBrandAccess(slug: string | null): Promise<
+  | { user: User; denied: null }
+  | { user: null; denied: NextResponse }
+> {
+  if (!slug) {
+    return { user: null, denied: NextResponse.json({ error: 'Brand slug required' }, { status: 400 }) };
+  }
+  const cookieStore = await nextCookies();
+  const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+  if (!user) {
+    return { user: null, denied: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+  if (!canAccessBrand(user, slug)) {
+    return { user: null, denied: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+  }
+  return { user, denied: null };
+}
+
+/** Require any authenticated user (no brand scoping) */
+export async function requireUser(): Promise<
+  | { user: User; denied: null }
+  | { user: null; denied: NextResponse }
+> {
+  const cookieStore = await nextCookies();
+  const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+  if (!user) {
+    return { user: null, denied: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
+  }
+  return { user, denied: null };
+}

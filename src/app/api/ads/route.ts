@@ -2,10 +2,13 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
+import { requireBrandAccess } from '@/lib/auth';
 import {
   demoMetaKPIs, demoMetaCampaigns, demoMetaSpend,
   demoGoogleAdsKPIs, demoGoogleAdsCampaigns, demoGoogleAdsSpend,
 } from '@/lib/demo-data';
+
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   try {
@@ -17,11 +20,10 @@ export async function GET(request: Request) {
     const toParam   = searchParams.get('to');
     const dateRange = fromParam && toParam ? `${fromParam}:${toParam}` : (searchParams.get('range') ?? '30d');
 
-    if (!slug) {
-      return NextResponse.json({ error: 'Brand slug required' }, { status: 400 });
-    }
+    const { denied } = await requireBrandAccess(slug);
+    if (denied) return denied;
 
-    const brand = await getBrand(slug);
+    const brand = await getBrand(slug!);
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
@@ -97,6 +99,10 @@ export async function GET(request: Request) {
         devToken,
         clientId,
         clientSecret,
+        // Manager Account ID — required when dev token belongs to an MCC
+        // and customerId is a client under it. Set GOOGLE_ADS_LOGIN_CUSTOMER_ID
+        // env var to your MCC ID (digits only, no hyphens).
+        loginCustomerId: process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || undefined,
         refreshToken: brand.googleAdsRefreshToken,
         customerId: brand.googleAdsCustomerId,
       };

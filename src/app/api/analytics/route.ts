@@ -1,6 +1,9 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as ga4 from '@/lib/services/ga4';
+import { requireBrandAccess } from '@/lib/auth';
+
+export const maxDuration = 60;
 import {
   demoGA4KPIs, demoGA4Sessions, demoGA4Channels, demoGA4Devices,
   demoGA4Pages, demoGA4Countries, demoGA4LandingPages, demoGA4Events,
@@ -16,11 +19,10 @@ export async function GET(request: Request) {
     const toParam   = searchParams.get('to');
     const dateRange = fromParam && toParam ? `${fromParam}:${toParam}` : (searchParams.get('range') ?? '30d');
 
-    if (!slug) {
-      return NextResponse.json({ error: 'Brand slug required' }, { status: 400 });
-    }
+    const { denied } = await requireBrandAccess(slug);
+    if (denied) return denied;
 
-    const brand = await getBrand(slug);
+    const brand = await getBrand(slug!);
     if (!brand) {
       return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
     }
