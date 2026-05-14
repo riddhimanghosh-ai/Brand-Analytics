@@ -140,6 +140,11 @@ export default function ChatPage() {
             if (payload === '[DONE]') break;
             try {
               const parsed = JSON.parse(payload);
+              if (parsed.error) {
+                accumulated = `❌ ${parsed.error}`;
+                flush();
+                break;
+              }
               if (parsed.text) {
                 accumulated += parsed.text;
                 // Batch DOM updates via rAF — prevents per-chunk re-renders that freeze UI
@@ -267,7 +272,7 @@ export default function ChatPage() {
           <div>
             <div style={{ fontWeight: '700', fontSize: '15px' }}>AI Consultant</div>
             <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-              Powered by Gemini 2.0 Flash
+              Powered by Groq · Llama 3.3 70B
             </div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>

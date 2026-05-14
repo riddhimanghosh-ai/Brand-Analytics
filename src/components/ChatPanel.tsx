@@ -100,6 +100,11 @@ export function ChatPanel({ slug, brandName, hasAI = true }: { slug: string; bra
             if (payload === '[DONE]') break;
             try {
               const parsed = JSON.parse(payload);
+              if (parsed.error) {
+                accumulated = `❌ ${parsed.error}`;
+                flush();
+                break;
+              }
               if (parsed.text) {
                 accumulated += parsed.text;
                 if (!rafPending) {

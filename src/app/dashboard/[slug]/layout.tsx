@@ -29,7 +29,7 @@ export default async function DashboardLayout({
         ga4: !!brand.ga4PropertyId,
         metaAds: !!brand.metaAccessToken,
         googleAds: !!brand.googleAdsCustomerId,
-        gemini: !!(brand.geminiApiKey || process.env.GEMINI_API_KEY),
+        gemini: !!(process.env.GROQ_API_KEY || brand.geminiApiKey || process.env.GEMINI_API_KEY),
         tiktok: !!(brand.tiktokAccessToken && brand.tiktokAdvertiserId),
         klaviyo: !!brand.klaviyoApiKey,
       };
