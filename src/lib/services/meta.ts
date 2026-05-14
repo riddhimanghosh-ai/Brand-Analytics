@@ -1,9 +1,9 @@
 const BASE = 'https://graph.facebook.com/v21.0';
 
 const DATE_PRESETS: Record<string, string> = {
-  '7d': 'last_7d',
-  '30d': 'last_30_days',
-  '90d': 'last_90_days',
+  '7d':  'last_7d',
+  '30d': 'last_30d',
+  '90d': 'last_90d',
 };
 
 export interface MetaConfig {
@@ -80,7 +80,7 @@ async function fetchMeta<T>(path: string, params: Record<string, string>): Promi
 
 export async function getKPIs(config: MetaConfig, dateRange: string): Promise<MetaKPIs> {
   const acct = accountId(config.adAccountId);
-  const datePreset = DATE_PRESETS[dateRange] ?? 'last_30_days';
+  const datePreset = DATE_PRESETS[dateRange] ?? 'last_30d';
 
   const data = await fetchMeta<{
     data: Array<{
@@ -133,7 +133,7 @@ export async function getKPIs(config: MetaConfig, dateRange: string): Promise<Me
 
 export async function getCampaigns(config: MetaConfig, dateRange: string): Promise<MetaCampaign[]> {
   const acct = accountId(config.adAccountId);
-  const datePreset = DATE_PRESETS[dateRange] ?? 'last_30_days';
+  const datePreset = DATE_PRESETS[dateRange] ?? 'last_30d';
 
   const data = await fetchMeta<{
     data: Array<{
@@ -182,7 +182,7 @@ export async function getSpendOverTime(
   dateRange: string
 ): Promise<MetaSpendPoint[]> {
   const acct = accountId(config.adAccountId);
-  const datePreset = DATE_PRESETS[dateRange] ?? 'last_30_days';
+  const datePreset = DATE_PRESETS[dateRange] ?? 'last_30d';
 
   const data = await fetchMeta<{
     data: Array<{
