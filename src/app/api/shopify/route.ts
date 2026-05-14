@@ -1,6 +1,9 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as shopify from '@/lib/services/shopify';
+
+// Tell Next.js / Amplify Lambda to allow up to 60s for this route
+export const maxDuration = 60;
 import {
   demoShopifyKPIs,
   demoShopifyRevenue,

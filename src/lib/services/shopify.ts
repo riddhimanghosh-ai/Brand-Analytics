@@ -103,7 +103,7 @@ async function fetchAllOrders(
   config: ShopifyConfig,
   startDate: string,
   endDate: string,
-  maxPages = 100
+  maxPages = 8          // 8 × 250 = 2,000 orders max — keeps Lambda under 25s timeout
 ): Promise<Array<Record<string, unknown>>> {
   const allOrders: Array<Record<string, unknown>> = [];
   let cursor: string | null = null;
