@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const APP_URL = 'https://main.d1rrlzi8cyg90j.amplifyapp.com';
-
 // GET /api/auth/google-ads?slug=brand-slug
 // Starts the Google Ads OAuth flow.
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+  const reqUrl = new URL(request.url);
+  const APP_URL = `${reqUrl.protocol}//${reqUrl.host}`;
+  const { searchParams } = reqUrl;
   const slug = searchParams.get('slug')?.trim();
 
   if (!slug) {

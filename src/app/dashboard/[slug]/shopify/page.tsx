@@ -200,7 +200,10 @@ export default function ShopifyDashboard({
           if (Array.isArray(data?.conversionFunnel)) setConversionFunnel(data.conversionFunnel);
         }
       } else {
-        setError({ type: 'connection', message: 'Network request failed' });
+        // combinedRes.status === 'rejected' — fetch itself failed (network/timeout/non-JSON response)
+        const reason = (combinedRes as PromiseRejectedResult).reason;
+        console.error('[Shopify page] combined fetch rejected:', reason);
+        setError({ type: 'connection', message: String(reason?.message || reason || 'Network request failed') });
       }
       if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
       setLoading(false);

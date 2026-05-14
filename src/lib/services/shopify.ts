@@ -147,6 +147,47 @@ async function shopifyGraphQL(
 }
 
 // ---------------------------------------------------------------------------
+// ShopifyQL helper — runs aggregation queries against Shopify's analytics engine.
+//
+// ShopifyQL returns pre-computed metrics (total revenue, order counts, etc.)
+// directly from Shopify's data warehouse in <1s per query — no pagination,
+// no throttling, no raw order scanning.  Used by getAllAnalytics.
+//
+// Requires the `read_analytics` API scope on the access token.
+// ---------------------------------------------------------------------------
+
+async function runShopifyQL(
+  config: ShopifyConfig,
+  query: string,
+): Promise<Array<Record<string, string>>> {
+  const gql = `{
+    shopifyqlQuery(query: ${JSON.stringify(query)}) {
+      tableData {
+        rowData
+        columns { name dataType }
+      }
+      parseErrors { code message }
+    }
+  }`;
+
+  const data = await shopifyGraphQL(config, gql);
+  const result = data.shopifyqlQuery as {
+    tableData?: { rowData: string[][]; columns: Array<{ name: string }> };
+    parseErrors?: Array<{ code: string; message: string }>;
+  };
+
+  if (result?.parseErrors?.length) {
+    throw new Error(`ShopifyQL: ${result.parseErrors.map((e) => e.message).join('; ')}`);
+  }
+
+  const { rowData = [], columns = [] } = result?.tableData ?? {};
+  const colNames = columns.map((c) => c.name);
+  return rowData.map((row) =>
+    Object.fromEntries(colNames.map((col, i) => [col, row[i] ?? ''])),
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Fetch all pages using cursor-based pagination
 // Now includes shippingAddress, discountCodes, and channelInformation
 // ---------------------------------------------------------------------------
@@ -1141,7 +1182,8 @@ export async function getAdvancedCROMetrics(
 }
 
 // ---------------------------------------------------------------------------
-// Public: getAllAnalytics — fetches orders ONCE and computes all metrics
+// Public: getAllAnalytics — fetches orders via 7-day chunks (avoids Shopify
+// cursor truncation at ~5-6K orders) then computes all metrics in one pass.
 // ---------------------------------------------------------------------------
 
 export async function getAllAnalytics(
@@ -1163,104 +1205,15 @@ export async function getAllAnalytics(
   const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
   const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
-  // ── Incremental sync path (requires brand slug for MongoDB cache key) ────────
-  if (config.slug) {
-    const {
-      loadCachedDays, saveDays,
-      buildDayCacheEntries, emptyDayCacheEntry,
-      generateDatesInRange, computeFromCache,
-    } = await import('../shopify-sync');
-
-    const today = new Date().toISOString().split('T')[0];
-
-    // Parallelise: load cache + start previous-period summary at the same time
-    const [cachedEntries, prevSummary] = await Promise.all([
-      loadCachedDays(config.slug, currentStart, currentEnd),
-      fetchPreviousPeriodSummary(config, prevStart, prevEnd),
-    ]);
-
-    // Only fully-synced historical days count as "cached" — today is always re-fetched
-    const cachedDateSet = new Set(
-      cachedEntries.filter((e) => !e.isPartialDay).map((e) => e.date),
-    );
-
-    const allDates = generateDatesInRange(currentStart, currentEnd);
-    const datesToFetch = allDates.filter((d) => !cachedDateSet.has(d));
-
-    let allEntries = cachedEntries.filter((e) => !e.isPartialDay); // start with stable cache
-
-    if (datesToFetch.length > 0) {
-      const fetchStart = datesToFetch[0];
-      const fetchEnd   = datesToFetch[datesToFetch.length - 1];
-      const datesToFetchSet = new Set(datesToFetch);
-
-      console.log(
-        `[shopify-sync] ${config.slug}: fetching ${datesToFetch.length} missing days ` +
-        `(${fetchStart} → ${fetchEnd}, today=${today})`,
-      );
-
-      // ── Per-chunk progressive sync ──────────────────────────────────────────
-      // Save each 7-day chunk to MongoDB immediately after fetching it.
-      // If we approach the Lambda time budget (90s), we stop gracefully —
-      // remaining dates stay "missing" and are fetched on the next page load.
-      // This means every load makes progress until all history is cached.
-      const BUDGET_MS = 90_000; // stop before hitting the 120s Lambda limit
-      const syncStart = Date.now();
-
-      const allFreshOrders: Array<Record<string, unknown>> = [];
-
-      for (const [cs, ce] of chunkDateRange(fetchStart, fetchEnd, 7)) {
-        if (Date.now() - syncStart > BUDGET_MS) {
-          console.log(
-            `[shopify-sync] ${config.slug}: 90s budget reached after ${allFreshOrders.length} orders — ` +
-            `will continue next load`,
-          );
-          break; // remaining chunks will be "missing" and fetched next time
-        }
-
-        const chunk = await fetchOrdersWindow(config, cs, ce);
-        allFreshOrders.push(...chunk);
-
-        // Save this chunk's entries to MongoDB immediately (preserves progress on timeout)
-        const chunkEntries = buildDayCacheEntries(config.slug!, chunk, today);
-        const chunkFetched = new Set(chunkEntries.map((e) => e.date));
-        // Also save empty entries for zero-order days within this completed chunk
-        const chunkDates = generateDatesInRange(cs, ce);
-        const emptyChunkEntries = chunkDates
-          .filter((d) => datesToFetchSet.has(d) && !chunkFetched.has(d))
-          .map((d) => emptyDayCacheEntry(config.slug!, d, d === today));
-        await saveDays(config.slug!, [...chunkEntries, ...emptyChunkEntries]);
-      }
-
-      const newEntries = buildDayCacheEntries(config.slug, allFreshOrders, today);
-
-      // Merge: fresh entries override anything we already had for those dates
-      const freshMap = new Map(newEntries.map((e) => [e.date, e]));
-      allEntries = allDates
-        .map((d) => freshMap.get(d) ?? cachedEntries.find((e) => e.date === d))
-        .filter(Boolean) as typeof cachedEntries;
-    } else {
-      console.log(`[shopify-sync] ${config.slug}: all ${allDates.length} days cached — skipping Shopify fetch`);
-      // Use full cached list (already includes today's partial entry if it exists)
-      allEntries = cachedEntries;
-    }
-
-    const result = computeFromCache(allEntries, currentStart, currentEnd, days);
-    result.kpis.prevTotalRevenue    = prevSummary.totalRevenue;
-    result.kpis.prevTotalOrders     = prevSummary.totalOrders;
-    result.kpis.prevAverageOrderValue = prevSummary.averageOrderValue;
-    result.kpis.prevTotalCustomers  = prevSummary.uniqueCustomers;
-    return result;
-  }
-
-  // ── Original (non-incremental) path — used when slug is not available ────────
-  // Fetch current period fully + previous period via fast summary (count + 1 page sample).
+  // Fetch current period (chunked 7-day windows) + previous period summary in parallel
   const [currentOrders, prevSummary] = await Promise.all([
     fetchAllOrders(config, currentStart, currentEnd),
     fetchPreviousPeriodSummary(config, prevStart, prevEnd),
   ]);
 
-  // ── KPIs ──
+  console.log(`[getAllAnalytics] fetched ${currentOrders.length} orders for ${currentStart} → ${currentEnd}`);
+
+  // ── KPIs ──────────────────────────────────────────────────────────────────
   const currentMetrics = computeMetrics(currentOrders);
 
   const kpis: ShopifyKPIs = {
@@ -1283,12 +1236,11 @@ export async function getAllAnalytics(
     prevTotalCustomers: prevSummary.uniqueCustomers,
   };
 
-  // ── Revenue over time ──
+  // ── Revenue over time ──────────────────────────────────────────────────────
   const byDate: Record<string, { revenue: number; orders: number }> = {};
   const startMs = new Date(currentStart).getTime();
   for (let i = 0; i <= days; i++) {
-    const d = new Date(startMs + i * 86400000);
-    const key = d.toISOString().split('T')[0];
+    const key = new Date(startMs + i * 86_400_000).toISOString().split('T')[0];
     byDate[key] = { revenue: 0, orders: 0 };
   }
   for (const order of currentOrders) {
@@ -1297,19 +1249,19 @@ export async function getAllAnalytics(
     const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
     if (byDate[dateKey]) {
       byDate[dateKey].revenue += price;
-      byDate[dateKey].orders += 1;
+      byDate[dateKey].orders  += 1;
     }
   }
   const revenue = Object.entries(byDate)
     .map(([date, data]) => ({
       date,
       revenue: data.revenue,
-      orders: data.orders,
-      aov: data.orders > 0 ? data.revenue / data.orders : 0,
+      orders:  data.orders,
+      aov:     data.orders > 0 ? data.revenue / data.orders : 0,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 
-  // ── Products ──
+  // ── Products ───────────────────────────────────────────────────────────────
   const productMap: Record<string, ShopifyProduct> = {};
   for (const order of currentOrders) {
     const lineItems = order.lineItems as {
@@ -1323,131 +1275,70 @@ export async function getAllAnalytics(
       }>;
     };
     if (!lineItems?.edges) continue;
-    for (const li of lineItems.edges) {
-      const node = li.node;
-      const productId = node.product?.id || node.title;
-      const productTitle = node.product?.title || node.title;
-      const unitPrice = parseFloat(node.originalUnitPriceSet?.shopMoney?.amount || '0');
-      const rev = unitPrice * (node.quantity || 0);
-      if (!productMap[productId]) {
-        productMap[productId] = {
-          id: productId,
-          title: productTitle,
-          totalRevenue: 0,
-          totalUnitsSold: 0,
-          totalOrders: 0,
-          averagePrice: unitPrice,
-          imageUrl: node.product?.featuredImage?.url || null,
-        };
+    for (const { node } of lineItems.edges) {
+      const pid   = node.product?.id || node.title;
+      const title = node.product?.title || node.title;
+      const unit  = parseFloat(node.originalUnitPriceSet?.shopMoney?.amount || '0');
+      const rev   = unit * (node.quantity || 0);
+      if (!productMap[pid]) {
+        productMap[pid] = { id: pid, title, totalRevenue: 0, totalUnitsSold: 0, totalOrders: 0, averagePrice: unit, imageUrl: node.product?.featuredImage?.url || null };
       }
-      productMap[productId].totalRevenue += rev;
-      productMap[productId].totalUnitsSold += node.quantity || 0;
-      productMap[productId].totalOrders += 1;
+      productMap[pid].totalRevenue    += rev;
+      productMap[pid].totalUnitsSold  += node.quantity || 0;
+      productMap[pid].totalOrders     += 1;
     }
   }
-  const products = Object.values(productMap)
-    .sort((a, b) => b.totalRevenue - a.totalRevenue)
-    .slice(0, 15);
+  const products = Object.values(productMap).sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 15);
 
-  // ── Customers ──
-  let newCount = 0;
-  let returningCount = 0;
-  let newRevenue = 0;
-  let returningRevenue = 0;
-  const customerMap: Record<
-    string,
-    { customer: Record<string, unknown>; totalSpent: number; orderCount: number }
-  > = {};
+  // ── Customers ──────────────────────────────────────────────────────────────
+  let newCount = 0, returningCount = 0, newRevenue = 0, returningRevenue = 0;
+  const customerMap: Record<string, { customer: Record<string, unknown>; totalSpent: number; orderCount: number }> = {};
 
   for (const order of currentOrders) {
-    const customer = order.customer as {
-      id: string;
-      firstName: string;
-      lastName: string;
-      email: string;
-      numberOfOrders: number;
-      createdAt: string;
-      tags: string[];
-    } | null;
-    const priceSet = order.totalPriceSet as { shopMoney: { amount: string } };
-    const price = parseFloat(priceSet?.shopMoney?.amount || '0');
-
-    if (customer?.id) {
-      if (customer.numberOfOrders > 1) {
-        returningCount++;
-        returningRevenue += price;
-      } else {
-        newCount++;
-        newRevenue += price;
-      }
-      if (!customerMap[customer.id]) {
-        customerMap[customer.id] = { customer, totalSpent: 0, orderCount: 0 };
-      }
-      customerMap[customer.id].totalSpent += price;
-      customerMap[customer.id].orderCount += 1;
+    const cust = order.customer as { id: string; firstName: string; lastName: string; email: string; numberOfOrders: number; createdAt: string; tags: string[] } | null;
+    const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
+    if (cust?.id) {
+      if (cust.numberOfOrders > 1) { returningCount++; returningRevenue += price; }
+      else                         { newCount++;       newRevenue       += price; }
+      if (!customerMap[cust.id]) customerMap[cust.id] = { customer: cust as Record<string, unknown>, totalSpent: 0, orderCount: 0 };
+      customerMap[cust.id].totalSpent  += price;
+      customerMap[cust.id].orderCount  += 1;
     }
   }
-
   const topCustomers = Object.values(customerMap)
     .sort((a, b) => b.totalSpent - a.totalSpent)
     .slice(0, 10)
-    .map((c) => {
-      const cust = c.customer as {
-        id: string;
-        firstName: string;
-        lastName: string;
-        email: string;
-        numberOfOrders: number;
-        createdAt: string;
-        tags: string[];
-      };
-      return {
-        id: cust.id,
-        email: cust.email || '',
-        firstName: cust.firstName || '',
-        lastName: cust.lastName || '',
-        ordersCount: c.orderCount,
-        totalSpent: c.totalSpent,
-        createdAt: cust.createdAt,
-        tags: cust.tags || [],
-      };
+    .map(({ customer: c, totalSpent, orderCount }) => {
+      const cust = c as { id: string; firstName: string; lastName: string; email: string; createdAt: string; tags: string[] };
+      return { id: cust.id, email: cust.email || '', firstName: cust.firstName || '', lastName: cust.lastName || '', ordersCount: orderCount, totalSpent, createdAt: cust.createdAt, tags: cust.tags || [] };
     });
 
   const customers = {
-    newVsReturning: [
-      { name: 'New Customers', value: newCount },
-      { name: 'Returning Customers', value: returningCount },
-    ],
-    revenueBySegment: [
-      { name: 'New Customer Revenue', value: newRevenue },
-      { name: 'Returning Revenue', value: returningRevenue },
-    ],
+    newVsReturning:  [{ name: 'New Customers', value: newCount }, { name: 'Returning Customers', value: returningCount }],
+    revenueBySegment:[{ name: 'New Customer Revenue', value: newRevenue }, { name: 'Returning Revenue', value: returningRevenue }],
     topCustomers,
   };
 
-  // ── Order status ──
+  // ── Order status ───────────────────────────────────────────────────────────
   const statusMap: Record<string, number> = {};
   for (const order of currentOrders) {
-    const status = (order.displayFulfillmentStatus as string) || 'UNFULFILLED';
-    statusMap[status] = (statusMap[status] || 0) + 1;
+    const s = (order.displayFulfillmentStatus as string) || 'UNFULFILLED';
+    statusMap[s] = (statusMap[s] || 0) + 1;
   }
   const orderStatus = Object.entries(statusMap).map(([name, value]) => ({ name, value }));
 
-  // ── Conversion Funnel (computed from already-fetched orders — no extra API call) ──
-  const nonVoided = currentOrders.filter((o) => (o.displayFinancialStatus as string) !== 'VOIDED');
-  const funnelTotal = nonVoided.length;
-  const funnelPaid = nonVoided.filter((o) => {
-    const fs = (o.displayFinancialStatus as string) || '';
-    return fs === 'PAID' || fs === 'PARTIALLY_PAID' || fs === 'PARTIALLY_REFUNDED';
-  }).length;
+  // ── Conversion funnel ──────────────────────────────────────────────────────
+  const nonVoided     = currentOrders.filter((o) => (o.displayFinancialStatus as string) !== 'VOIDED');
+  const funnelTotal   = nonVoided.length;
+  const funnelPaid    = nonVoided.filter((o) => { const f = (o.displayFinancialStatus as string) || ''; return f === 'PAID' || f === 'PARTIALLY_PAID' || f === 'PARTIALLY_REFUNDED'; }).length;
   const funnelFulfilled = nonVoided.filter((o) => (o.displayFulfillmentStatus as string) === 'FULFILLED').length;
   const funnelPartial   = nonVoided.filter((o) => (o.displayFulfillmentStatus as string) === 'PARTIAL').length;
-  const funnelRefunded  = nonVoided.filter((o) => (o.displayFinancialStatus as string) === 'REFUNDED').length;
+  const funnelRefunded  = nonVoided.filter((o) => (o.displayFinancialStatus  as string) === 'REFUNDED').length;
   const conversionFunnel: ConversionFunnel[] = [
-    { stage: 'Total Orders', count: funnelTotal, dropoffRate: 0 },
-    { stage: 'Paid',         count: funnelPaid,  dropoffRate: funnelTotal > 0 ? ((funnelTotal - funnelPaid) / funnelTotal) * 100 : 0 },
-    { stage: 'Fulfilled',    count: funnelFulfilled + funnelPartial, dropoffRate: funnelPaid > 0 ? ((funnelPaid - (funnelFulfilled + funnelPartial)) / funnelPaid) * 100 : 0 },
-    { stage: 'Refunded',     count: funnelRefunded, dropoffRate: 0 },
+    { stage: 'Total Orders', count: funnelTotal,                    dropoffRate: 0 },
+    { stage: 'Paid',         count: funnelPaid,                     dropoffRate: funnelTotal > 0 ? ((funnelTotal - funnelPaid) / funnelTotal) * 100 : 0 },
+    { stage: 'Fulfilled',    count: funnelFulfilled + funnelPartial, dropoffRate: funnelPaid  > 0 ? ((funnelPaid - (funnelFulfilled + funnelPartial)) / funnelPaid) * 100 : 0 },
+    { stage: 'Refunded',     count: funnelRefunded,                 dropoffRate: 0 },
   ];
 
   return { kpis, revenue, products, customers, orderStatus, conversionFunnel };

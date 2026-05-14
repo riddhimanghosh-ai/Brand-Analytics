@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const APP_URL = 'https://main.d1rrlzi8cyg90j.amplifyapp.com';
-
 // GET /api/auth/ga4?slug=brand-slug
 // Starts the Google Analytics 4 OAuth flow.
 export async function GET(request: NextRequest) {
@@ -17,7 +15,9 @@ export async function GET(request: NextRequest) {
     return new NextResponse('GOOGLE_CLIENT_ID not configured on server', { status: 500 });
   }
 
-  const redirectUri = `${APP_URL}/api/auth/ga4/callback`;
+  // Use the request origin so this works in both local dev and production
+  const origin = `${new URL(request.url).protocol}//${new URL(request.url).host}`;
+  const redirectUri = `${origin}/api/auth/ga4/callback`;
 
   const params = new URLSearchParams({
     client_id: clientId,

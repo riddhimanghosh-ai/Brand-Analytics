@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateBrand } from '@/lib/mongodb-store';
 
-const APP_URL = 'https://main.d1rrlzi8cyg90j.amplifyapp.com';
-
 interface AdAccount {
   id: string;        // e.g. "act_123456789"
   name: string;
@@ -12,7 +10,9 @@ interface AdAccount {
 // GET /api/auth/meta/callback
 // Meta redirects here after the user approves the connection.
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
+  const reqUrl = new URL(request.url);
+  const APP_URL = `${reqUrl.protocol}//${reqUrl.host}`;
+  const { searchParams } = reqUrl;
   const code  = searchParams.get('code');
   const slug  = searchParams.get('state');
   const error = searchParams.get('error');
