@@ -208,24 +208,57 @@ async function fetchOrdersWindow(
   return orders;
 }
 
+// ── Date chunking helper ──────────────────────────────────────────────────────
+// Shopify's GraphQL cursor pagination with a date-range query: filter silently
+// stops at ~5 000–6 000 results (hasNextPage becomes false early).  Splitting
+// into 7-day windows keeps each sub-query to ≤~900 orders (≤4 pages) which is
+// well within the reliable range.  13 weekly chunks × 4 pages = same total work,
+// but every page is fetched correctly.
+function chunkDateRange(startDate: string, endDate: string, chunkDays = 7): Array<[string, string]> {
+  const chunks: Array<[string, string]> = [];
+  let current = new Date(startDate + 'T00:00:00Z');
+  const end    = new Date(endDate   + 'T00:00:00Z');
+  while (current <= end) {
+    const chunkEnd = new Date(Math.min(
+      current.getTime() + (chunkDays - 1) * 86_400_000,
+      end.getTime(),
+    ));
+    chunks.push([
+      current.toISOString().split('T')[0],
+      chunkEnd.toISOString().split('T')[0],
+    ]);
+    current = new Date(chunkEnd.getTime() + 86_400_000);
+  }
+  return chunks;
+}
+
 /**
- * Fetch ALL orders for a date range — fully sequential, no data missed.
+ * Fetch ALL orders for a date range in 7-day chunks.
  *
- * We deliberately use a single window (no parallelism) to keep the GraphQL
- * request rate low enough that bucket tracking in shopifyGraphQL() can keep
- * us well under Shopify's 2000-point limit without ever hitting THROTTLED.
+ * A single 90-day query against a high-volume store silently truncates at
+ * ~5 000–6 000 results because Shopify's Elasticsearch backing for the
+ * `query:` filter has a soft pagination cap.  Weekly chunks sidestep this.
  *
- * Concurrency happens at the getKPIs / getAllAnalytics level where the current
- * period and previous period are fetched in parallel (2 streams max). Each
- * stream is sequential internally, which means at most 2 simultaneous GraphQL
- * requests at any moment — a safe rate for the 2000-point bucket.
+ * Each chunk is fetched sequentially to stay within the 2 000-point GraphQL
+ * bucket (≈4 pages × 68 pts = 272 pts per chunk, restoring 200 pts while the
+ * requests run — net ≈ 72 pts/chunk, bucket never runs dry).
  */
 async function fetchAllOrders(
   config: ShopifyConfig,
   startDate: string,
   endDate: string,
 ): Promise<Array<Record<string, unknown>>> {
-  return fetchOrdersWindow(config, startDate, endDate);
+  const chunks = chunkDateRange(startDate, endDate, 7);
+  if (chunks.length === 1) {
+    // Fast path for short ranges (≤7 days)
+    return fetchOrdersWindow(config, startDate, endDate);
+  }
+  const all: Array<Record<string, unknown>> = [];
+  for (const [cs, ce] of chunks) {
+    const orders = await fetchOrdersWindow(config, cs, ce);
+    all.push(...orders);
+  }
+  return all;
 }
 
 // ---------------------------------------------------------------------------
@@ -1157,7 +1190,6 @@ export async function getAllAnalytics(
     let allEntries = cachedEntries.filter((e) => !e.isPartialDay); // start with stable cache
 
     if (datesToFetch.length > 0) {
-      // Fetch the smallest contiguous window that covers all missing dates
       const fetchStart = datesToFetch[0];
       const fetchEnd   = datesToFetch[datesToFetch.length - 1];
 
@@ -1166,7 +1198,12 @@ export async function getAllAnalytics(
         `(${fetchStart} → ${fetchEnd}, today=${today})`,
       );
 
-      const freshOrders = await fetchOrdersWindow(config, fetchStart, fetchEnd);
+      // Chunk into 7-day windows to avoid Shopify's ~5K cursor-pagination limit
+      const freshOrders: Array<Record<string, unknown>> = [];
+      for (const [cs, ce] of chunkDateRange(fetchStart, fetchEnd, 7)) {
+        const chunk = await fetchOrdersWindow(config, cs, ce);
+        freshOrders.push(...chunk);
+      }
       const newEntries  = buildDayCacheEntries(config.slug, freshOrders, today);
 
       // Create empty entries for dates that had zero orders
