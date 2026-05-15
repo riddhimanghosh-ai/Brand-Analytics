@@ -19,7 +19,7 @@ export default async function DashboardLayout({
   // but a server-side check here defends against any edge case where middleware
   // doesn't run e.g. internal routes).
   const cookieStore = await cookies();
-  const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+  const user = await verifySession(cookieStore.get(COOKIE_NAME)?.value);
   if (!canAccessBrand(user, slug)) {
     redirect('/');
   }

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     const user = findUser(body.username, body.password);
     if (user) {
       const response = NextResponse.json({ success: true, username: user.username });
-      response.cookies.set(COOKIE_NAME, signSession(user.username), {
+      response.cookies.set(COOKIE_NAME, await signSession(user.username), {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',

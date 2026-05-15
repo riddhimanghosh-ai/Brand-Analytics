@@ -6,7 +6,7 @@ import { verifySession, canAccessBrand, COOKIE_NAME } from '@/lib/auth';
 
 async function getUser() {
   const cookieStore = await cookies();
-  return verifySession(cookieStore.get(COOKIE_NAME)?.value);
+  return await verifySession(cookieStore.get(COOKIE_NAME)?.value);
 }
 
 export async function GET(

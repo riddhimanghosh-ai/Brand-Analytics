@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifySession, canAccessBrand, COOKIE_NAME } from '@/lib/auth';
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow login page and auth API
@@ -12,7 +12,7 @@ export function middleware(request: NextRequest) {
 
   // Resolve user from signed session cookie
   const token = request.cookies.get(COOKIE_NAME)?.value;
-  const user = verifySession(token);
+  const user = await verifySession(token);
   if (!user) {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);

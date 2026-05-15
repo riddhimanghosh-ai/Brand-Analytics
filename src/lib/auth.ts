@@ -1,15 +1,12 @@
 /**
  * auth.ts — multi-user auth with per-user brand access scoping.
  *
- * Session cookie format: `${username}.${hmac(username)}`
- * Anyone who tampers with the cookie can't generate a valid hmac without the SECRET.
+ * Uses Web Crypto API (globalThis.crypto.subtle) so this file is safe to
+ * import from both Edge runtime (middleware) and Node.js runtime (API routes).
+ *
+ * Session cookie format: `${username}.${hmac(username).slice(0,24)}`
  */
 
-import crypto from 'crypto';
-
-// IMPORTANT: keep the SECRET stable — changing it logs out all users.
-// Old shared session secret was 'brand-analytics-session-v1'. Reusing it
-// as the HMAC key keeps existing sessions readable in their old form too.
 const SECRET = process.env.SESSION_SECRET || 'brand-analytics-session-v1';
 const COOKIE_NAME = 'ba_session';
 
@@ -21,9 +18,7 @@ export interface User {
 }
 
 export const USERS: User[] = [
-  // Admin — sees everything
   { username: 'Riddhiman', password: 'BrandAnalytics1234', allowedBrands: null },
-  // Hira-only user
   { username: 'hira', password: 'HIRA@1234', allowedBrands: ['hira'] },
 ];
 
@@ -35,36 +30,45 @@ export function getUserByName(username: string): User | null {
   return USERS.find((u) => u.username === username) ?? null;
 }
 
-/** Returns the cookie value to set after a successful login */
-export function signSession(username: string): string {
-  const sig = crypto.createHmac('sha256', SECRET).update(username).digest('hex').slice(0, 24);
+async function hmacHex(data: string): Promise<string> {
+  const enc = new TextEncoder();
+  const key = await globalThis.crypto.subtle.importKey(
+    'raw', enc.encode(SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  const buf = await globalThis.crypto.subtle.sign('HMAC', key, enc.encode(data));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 24);
+}
+
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+export async function signSession(username: string): Promise<string> {
+  const sig = await hmacHex(username);
   return `${username}.${sig}`;
 }
 
-/** Verifies the cookie and returns the resolved user, or null. */
-export function verifySession(token: string | undefined | null): User | null {
+export async function verifySession(token: string | undefined | null): Promise<User | null> {
   if (!token) return null;
-
-  // ── Legacy session support (cookie = 'brand-analytics-session-v1') ─────────
-  // Pre-multi-user cookies were a shared static string. Treat them as admin.
-  if (token === 'brand-analytics-session-v1') {
-    return getUserByName('Riddhiman');
-  }
-
+  if (token === 'brand-analytics-session-v1') return getUserByName('Riddhiman');
   const dot = token.lastIndexOf('.');
   if (dot < 1) return null;
   const username = token.slice(0, dot);
   const sig = token.slice(dot + 1);
-  const expected = crypto.createHmac('sha256', SECRET).update(username).digest('hex').slice(0, 24);
-  // Constant-time comparison
-  if (sig.length !== expected.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  const expected = await hmacHex(username);
+  if (!safeEqual(sig, expected)) return null;
   return getUserByName(username);
 }
 
 export function canAccessBrand(user: User | null, slug: string): boolean {
   if (!user) return false;
-  if (user.allowedBrands === null) return true; // admin
+  if (user.allowedBrands === null) return true;
   return user.allowedBrands.includes(slug);
 }
 

@@ -14,7 +14,7 @@ export default async function HomePage() {
 
   // Resolve current user from session cookie
   const cookieStore = await cookies();
-  const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+  const user = await verifySession(cookieStore.get(COOKIE_NAME)?.value);
 
   // Fetch brands — redirect() throws a special error that must NOT be caught
   const allBrands = await getBrands().catch((error) => {

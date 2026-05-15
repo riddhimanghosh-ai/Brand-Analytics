@@ -8,7 +8,7 @@ import { verifySession, filterBrandsForUser, COOKIE_NAME } from '@/lib/auth';
 export async function GET() {
   try {
     const cookieStore = await cookies();
-    const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+    const user = await verifySession(cookieStore.get(COOKIE_NAME)?.value);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const allBrands = await getBrands();

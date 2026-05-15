@@ -15,7 +15,7 @@ export async function requireBrandAccess(slug: string | null): Promise<
     return { user: null, denied: NextResponse.json({ error: 'Brand slug required' }, { status: 400 }) };
   }
   const cookieStore = await nextCookies();
-  const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+  const user = await verifySession(cookieStore.get(COOKIE_NAME)?.value);
   if (!user) {
     return { user: null, denied: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
@@ -30,7 +30,7 @@ export async function requireUser(): Promise<
   | { user: null; denied: NextResponse }
 > {
   const cookieStore = await nextCookies();
-  const user = verifySession(cookieStore.get(COOKIE_NAME)?.value);
+  const user = await verifySession(cookieStore.get(COOKIE_NAME)?.value);
   if (!user) {
     return { user: null, denied: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
   }
