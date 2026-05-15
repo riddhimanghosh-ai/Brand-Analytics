@@ -92,15 +92,17 @@ export async function GET(request: NextRequest) {
   let accounts: GoogleAdsAccount[] = [];
   if (devToken) {
     try {
+      const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+      const baseHeaders: Record<string, string> = {
+        Authorization: `Bearer ${accessToken}`,
+        'developer-token': devToken,
+        ...(loginCustomerId ? { 'login-customer-id': loginCustomerId.replace(/-/g, '') } : {}),
+      };
+
       // Use the Google Ads API to list accessible customers
       const listRes = await fetch(
-        'https://googleads.googleapis.com/v17/customers:listAccessibleCustomers',
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'developer-token': devToken,
-          },
-        }
+        'https://googleads.googleapis.com/v21/customers:listAccessibleCustomers',
+        { headers: baseHeaders }
       );
 
       if (listRes.ok) {
@@ -112,14 +114,8 @@ export async function GET(request: NextRequest) {
           resourceNames.slice(0, 20).map(async (resourceName) => {
             const customerId = resourceName.replace('customers/', '');
             const detailRes = await fetch(
-              `https://googleads.googleapis.com/v17/customers/${customerId}`,
-              {
-                headers: {
-                  Authorization: `Bearer ${accessToken}`,
-                  'developer-token': devToken,
-                  'login-customer-id': customerId,
-                },
-              }
+              `https://googleads.googleapis.com/v21/customers/${customerId}`,
+              { headers: baseHeaders }
             );
             if (!detailRes.ok) return null;
             const detail = await detailRes.json() as {
