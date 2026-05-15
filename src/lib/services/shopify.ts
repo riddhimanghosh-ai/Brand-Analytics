@@ -108,6 +108,7 @@ async function shopifyGraphQL(
       'X-Shopify-Access-Token': config.accessToken,
     },
     body: JSON.stringify({ query, variables }),
+    signal: AbortSignal.timeout(20_000), // 20s per request — avoids Lambda timeout
   });
 
   if (!response.ok) {
@@ -293,6 +294,7 @@ async function fetchAllOrders(
   config: ShopifyConfig,
   startDate: string,
   endDate: string,
+  deadlineMs = Date.now() + 22_000, // default 22s — leave buffer before Lambda kills connection
 ): Promise<Array<Record<string, unknown>>> {
   const chunks = chunkDateRange(startDate, endDate, 7);
   const raw: Array<Record<string, unknown>> = [];
@@ -300,11 +302,14 @@ async function fetchAllOrders(
     raw.push(...await fetchOrdersWindow(config, startDate, endDate));
   } else {
     for (const [cs, ce] of chunks) {
+      if (Date.now() > deadlineMs) {
+        console.warn(`fetchAllOrders: deadline exceeded after ${raw.length} orders — returning partial data`);
+        break;
+      }
       raw.push(...await fetchOrdersWindow(config, cs, ce));
     }
   }
   // Exclude cancelled orders — Shopify Analytics excludes these from all metrics.
-  // cancelledAt is fetched in buildOrderQuery.
   return raw.filter(o => !o.cancelledAt);
 }
 
