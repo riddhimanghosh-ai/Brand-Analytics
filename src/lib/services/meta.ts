@@ -6,6 +6,16 @@ const DATE_PRESETS: Record<string, string> = {
   '90d': 'last_90d',
 };
 
+/** Returns either date_preset or time_range params depending on dateRange format */
+function dateParams(dateRange: string): Record<string, string> {
+  // Custom range: "YYYY-MM-DD:YYYY-MM-DD"
+  if (/^\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}$/.test(dateRange)) {
+    const [since, until] = dateRange.split(':');
+    return { time_range: JSON.stringify({ since, until }) };
+  }
+  return { date_preset: DATE_PRESETS[dateRange] ?? 'last_30d' };
+}
+
 export interface MetaConfig {
   accessToken: string;
   adAccountId: string;
@@ -80,7 +90,6 @@ async function fetchMeta<T>(path: string, params: Record<string, string>): Promi
 
 export async function getKPIs(config: MetaConfig, dateRange: string): Promise<MetaKPIs> {
   const acct = accountId(config.adAccountId);
-  const datePreset = DATE_PRESETS[dateRange] ?? 'last_30d';
 
   const data = await fetchMeta<{
     data: Array<{
@@ -96,7 +105,7 @@ export async function getKPIs(config: MetaConfig, dateRange: string): Promise<Me
     }>;
   }>(`${acct}/insights`, {
     access_token: config.accessToken,
-    date_preset: datePreset,
+    ...dateParams(dateRange),
     fields: 'spend,impressions,clicks,ctr,cpc,cpm,reach,actions,action_values',
     level: 'account',
   });
@@ -133,7 +142,6 @@ export async function getKPIs(config: MetaConfig, dateRange: string): Promise<Me
 
 export async function getCampaigns(config: MetaConfig, dateRange: string): Promise<MetaCampaign[]> {
   const acct = accountId(config.adAccountId);
-  const datePreset = DATE_PRESETS[dateRange] ?? 'last_30d';
 
   const data = await fetchMeta<{
     data: Array<{
@@ -149,7 +157,7 @@ export async function getCampaigns(config: MetaConfig, dateRange: string): Promi
     }>;
   }>(`${acct}/insights`, {
     access_token: config.accessToken,
-    date_preset: datePreset,
+    ...dateParams(dateRange),
     fields: 'campaign_id,campaign_name,spend,impressions,clicks,ctr,cpc,actions,action_values',
     level: 'campaign',
     limit: '500',
@@ -182,7 +190,6 @@ export async function getSpendOverTime(
   dateRange: string
 ): Promise<MetaSpendPoint[]> {
   const acct = accountId(config.adAccountId);
-  const datePreset = DATE_PRESETS[dateRange] ?? 'last_30d';
 
   const data = await fetchMeta<{
     data: Array<{
@@ -193,7 +200,7 @@ export async function getSpendOverTime(
     }>;
   }>(`${acct}/insights`, {
     access_token: config.accessToken,
-    date_preset: datePreset,
+    ...dateParams(dateRange),
     fields: 'spend,impressions,clicks,date_start',
     time_increment: '1',
     level: 'account',
