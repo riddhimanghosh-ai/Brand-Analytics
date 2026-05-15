@@ -309,8 +309,11 @@ async function fetchAllOrders(
       raw.push(...await fetchOrdersWindow(config, cs, ce));
     }
   }
-  // Exclude cancelled orders — Shopify Analytics excludes these from all metrics.
-  return raw.filter(o => !o.cancelledAt);
+  // NOTE: Do NOT filter cancelled orders here.
+  // Shopify Analytics counts ALL orders (including cancelled ones) in the orders metric.
+  // Cancelled orders with VOIDED status are excluded from REVENUE in buildDayEntry,
+  // and cancelled orders with REFUNDED status contribute zero net revenue (price - refund = 0).
+  return raw;
 }
 
 // ---------------------------------------------------------------------------
@@ -1377,9 +1380,6 @@ export async function getAllAnalytics(
       );
       freshOrders.push(...batchResults.flat());
     }
-
-    // Exclude cancelled orders (Shopify analytics excludes these too)
-    freshOrders = freshOrders.filter((o) => !o.cancelledAt);
 
     console.log(`[getAllAnalytics] fetched ${freshOrders.length} fresh orders for ${missingDates.length} missing days`);
 
