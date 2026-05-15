@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateBrand } from '@/lib/mongodb-store';
+import { cacheInvalidate } from '@/lib/analytics-cache';
 
 const APP_URL = 'https://main.d1rrlzi8cyg90j.amplifyapp.com';
 
@@ -54,6 +55,13 @@ export async function GET(request: NextRequest) {
     console.error('Failed to save Shopify credentials:', err);
     return NextResponse.redirect(`${APP_URL}/?error=save_failed`);
   }
+
+  // Clear all cached data so the new token is used immediately on next load.
+  // Run both cache clears in parallel, fire-and-forget (don't block the redirect).
+  Promise.all([
+    cacheInvalidate(slug),
+    import('@/lib/shopify-sync').then(({ clearCachedDays }) => clearCachedDays(slug)),
+  ]).catch((err) => console.error('[shopify/callback] cache clear error:', err));
 
   // Done — redirect back to the brand's settings page
   return NextResponse.redirect(`${APP_URL}/dashboard/${slug}/settings?shopify=connected`);

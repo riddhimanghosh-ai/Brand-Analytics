@@ -61,14 +61,36 @@ function ShopifyConnect({
   };
 
   if (isConnected) {
+    const handleReconnect = () => {
+      const store = brand.shopifyStoreUrl?.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+      if (!store) return;
+      window.location.href = `/api/shopify/install?shop=${encodeURIComponent(store)}&slug=${encodeURIComponent(slug)}`;
+    };
+
     return (
-      <div style={{ padding: '14px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-        <span style={{ fontSize: '24px' }}>✅</span>
-        <div>
-          <div style={{ fontWeight: '600', color: '#22c55e', fontSize: '14px' }}>Connected</div>
-          <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            Store: <strong>{brand.shopifyStoreUrl}</strong> — data syncing automatically
+      <div>
+        <div style={{ padding: '14px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <span style={{ fontSize: '24px' }}>✅</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: '600', color: '#22c55e', fontSize: '14px' }}>Connected</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+              Store: <strong>{brand.shopifyStoreUrl}</strong> — data syncing automatically
+            </div>
           </div>
+          <button
+            onClick={handleReconnect}
+            title="Re-authorize to refresh permissions (e.g. to enable ShopifyQL analytics). MongoDB cache will be cleared automatically."
+            style={{
+              padding: '7px 14px', borderRadius: '8px', border: '1px solid rgba(148,191,72,0.4)',
+              background: 'transparent', color: '#96bf48',
+              fontSize: '12px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            🔄 Reconnect
+          </button>
+        </div>
+        <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
+          Use <strong>Reconnect</strong> if analytics data looks wrong — it re-authorizes Shopify permissions and automatically clears the data cache.
         </div>
       </div>
     );
