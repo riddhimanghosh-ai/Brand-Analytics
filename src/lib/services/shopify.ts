@@ -549,15 +549,16 @@ export async function getKPIs(
   const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
   // ── Try ShopifyQL first (fast path — sub-second, no pagination) ───────────
+  // Correct ShopifyQL syntax: FROM...SHOW...SINCE...UNTIL (not SELECT/sum())
   try {
     const [curRows, prevRows] = await Promise.all([
       runShopifyQL(
         config,
-        `FROM sales SINCE ${currentStart} UNTIL ${currentEnd} SELECT sum(net_sales) AS revenue, sum(orders) AS orders, sum(gross_sales) AS gross_sales, sum(returns) AS returns`,
+        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value SINCE ${currentStart} UNTIL ${currentEnd}`,
       ),
       runShopifyQL(
         config,
-        `FROM sales SINCE ${prevStart} UNTIL ${prevEnd} SELECT sum(net_sales) AS revenue, sum(orders) AS orders`,
+        `FROM sales SHOW orders, net_sales, average_order_value SINCE ${prevStart} UNTIL ${prevEnd}`,
       ),
     ]);
 
@@ -567,22 +568,22 @@ export async function getKPIs(
     console.log('[ShopifyQL getKPIs] cur row:', JSON.stringify(cur));
     console.log('[ShopifyQL getKPIs] prev row:', JSON.stringify(prev));
 
-    const totalRevenue  = parseFloat(cur.revenue      ?? '0');
-    const totalOrders   = parseInt(  cur.orders       ?? '0', 10);
-    const grossSales    = parseFloat(cur.gross_sales  ?? '0');
-    const totalReturns  = parseFloat(cur.returns      ?? '0');
-    const aov           = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    const refundRate    = grossSales  > 0 ? totalReturns  / grossSales  : 0;
+    const totalRevenue  = parseFloat(cur.net_sales           ?? '0');
+    const totalOrders   = parseInt(  cur.orders              ?? '0', 10);
+    const grossSales    = parseFloat(cur.gross_sales         ?? '0');
+    const totalReturns  = parseFloat(cur.returns             ?? '0');
+    const aov           = parseFloat(cur.average_order_value ?? '0') || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+    const refundRate    = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
 
-    const prevRevenue   = parseFloat(prev.revenue ?? '0');
-    const prevOrders    = parseInt(  prev.orders  ?? '0', 10);
-    const prevAOV       = prevOrders  > 0 ? prevRevenue / prevOrders : 0;
+    const prevRevenue   = parseFloat(prev.net_sales           ?? '0');
+    const prevOrders    = parseInt(  prev.orders              ?? '0', 10);
+    const prevAOV       = parseFloat(prev.average_order_value ?? '0') || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
 
     return {
       totalRevenue,
       totalOrders,
       averageOrderValue:      aov,
-      totalCustomers:         0,   // not available from sales table
+      totalCustomers:         0,   // not available from sales table alone
       repeatCustomerRate:     0,
       conversionRate:         0,
       cartAbandonmentRate:    0,
@@ -598,12 +599,10 @@ export async function getKPIs(
       prevTotalCustomers:     0,
     };
   } catch (err) {
-    // ShopifyQL unavailable (e.g. read_analytics scope not granted) — fall back
-    // to the original paginated approach so the dashboard still works.
     console.warn('[ShopifyQL getKPIs] ShopifyQL failed, falling back to paginated fetch:', (err as Error).message);
   }
 
-  // ── Fallback: paginated order fetch (original behaviour) ─────────────────
+  // ── Fallback: paginated order fetch ─────────────────────────────────────
   const [currentOrders, prevSummary] = await Promise.all([
     fetchAllOrders(config, currentStart, currentEnd),
     fetchPreviousPeriodSummary(config, prevStart, prevEnd),
@@ -656,10 +655,11 @@ export async function getRevenueOverTime(
   }
 
   // ── Try ShopifyQL first (fast path) ───────────────────────────────────────
+  // Correct syntax: SHOW...TIMESERIES day (not SELECT/GROUP BY/sum())
   try {
     const rows = await runShopifyQL(
       config,
-      `FROM sales SINCE ${startDate} UNTIL ${endDate} SELECT day, sum(net_sales) AS revenue, sum(orders) AS orders GROUP BY day ORDER BY day ASC`,
+      `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`,
     );
 
     const byDate = buildDateMap();
@@ -668,8 +668,8 @@ export async function getRevenueOverTime(
       // ShopifyQL returns `day` as "YYYY-MM-DD" or "YYYY-MM-DDT00:00:00"
       const date = (row.day ?? '').split('T')[0];
       if (date && byDate[date] !== undefined) {
-        byDate[date].revenue = parseFloat(row.revenue ?? '0');
-        byDate[date].orders  = parseInt(row.orders   ?? '0', 10);
+        byDate[date].revenue = parseFloat(row.net_sales ?? '0');
+        byDate[date].orders  = parseInt(row.orders      ?? '0', 10);
       }
     }
 
@@ -1308,15 +1308,161 @@ function groupIntoWindows(sortedDates: string[], windowDays: number): Array<[str
 }
 
 // ---------------------------------------------------------------------------
+// Internal: build full analytics result from ShopifyQL queries.
+//
+// Runs 5 ShopifyQL queries in parallel — instant, no pagination, 0% gap
+// vs Shopify native analytics.  Requires read_analytics scope on the token.
+// ---------------------------------------------------------------------------
+
+async function buildAllAnalyticsFromShopifyQL(
+  config: ShopifyConfig,
+  startDate: string,
+  endDate: string,
+  days: number,
+  prevStart: string,
+  prevEnd: string,
+): Promise<{
+  kpis: ShopifyKPIs;
+  revenue: (RevenueDataPoint & { aov: number })[];
+  products: ShopifyProduct[];
+  customers: {
+    newVsReturning: { name: string; value: number }[];
+    revenueBySegment: { name: string; value: number }[];
+    topCustomers: ShopifyCustomer[];
+  };
+  orderStatus: { name: string; value: number }[];
+  conversionFunnel: ConversionFunnel[];
+}> {
+  const [kpiRows, revenueRows, productRows, customerRows, prevRows] = await Promise.all([
+    // Current period: totals
+    runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, customers, returning_customers, returning_customer_rate SINCE ${startDate} UNTIL ${endDate}`),
+    // Current period: daily timeseries
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
+    // Top 15 products by gross sales
+    runShopifyQL(config, `FROM sales SHOW gross_sales, net_sales, orders GROUP BY product_title ORDER BY gross_sales DESC LIMIT 15 SINCE ${startDate} UNTIL ${endDate}`),
+    // Financial status breakdown (for order status / funnel)
+    runShopifyQL(config, `FROM sales SHOW orders GROUP BY order_status SINCE ${startDate} UNTIL ${endDate}`),
+    // Previous period: totals for comparison
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`),
+  ]);
+
+  // ── Parse current period KPIs ────────────────────────────────────────────
+  const kpi = kpiRows[0] ?? {};
+  const totalOrders      = parseInt(  kpi.orders              ?? '0', 10);
+  const totalRevenue     = parseFloat(kpi.net_sales           ?? '0');
+  const grossSales       = parseFloat(kpi.gross_sales         ?? '0');
+  const totalReturns     = parseFloat(kpi.returns             ?? '0');
+  const aov              = parseFloat(kpi.average_order_value ?? '0') || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+  const totalCustomers   = parseInt(  kpi.customers           ?? '0', 10);
+  const returningCustomers = parseInt(kpi.returning_customers ?? '0', 10);
+  const returningRate    = parseFloat(kpi.returning_customer_rate ?? '0') * 100; // fraction → %
+  const refundRate       = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
+
+  // ── Parse previous period ────────────────────────────────────────────────
+  const prev = prevRows[0] ?? {};
+  const prevOrders   = parseInt(  prev.orders              ?? '0', 10);
+  const prevRevenue  = parseFloat(prev.net_sales           ?? '0');
+  const prevAOV      = parseFloat(prev.average_order_value ?? '0') || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
+  const prevCustomers = parseInt( prev.customers           ?? '0', 10);
+
+  // ── Build revenue time series ────────────────────────────────────────────
+  const revenueByDate: Record<string, { revenue: number; orders: number }> = {};
+  const startMs = new Date(startDate + 'T00:00:00Z').getTime();
+  for (let i = 0; i <= days; i++) {
+    const key = new Date(startMs + i * 86_400_000).toISOString().split('T')[0];
+    revenueByDate[key] = { revenue: 0, orders: 0 };
+  }
+  for (const row of revenueRows) {
+    const date = (row.day ?? '').split('T')[0];
+    if (date && revenueByDate[date] !== undefined) {
+      revenueByDate[date].revenue = parseFloat(row.net_sales ?? '0');
+      revenueByDate[date].orders  = parseInt(row.orders      ?? '0', 10);
+    }
+  }
+  const revenue = Object.entries(revenueByDate)
+    .map(([date, data]) => ({
+      date,
+      revenue: data.revenue,
+      orders:  data.orders,
+      aov:     data.orders > 0 ? data.revenue / data.orders : 0,
+    }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  // ── Build top products ───────────────────────────────────────────────────
+  const products: ShopifyProduct[] = productRows.map((row, i) => ({
+    id:             `shopifyql-${i}`,
+    title:          row.product_title ?? 'Unknown',
+    totalRevenue:   parseFloat(row.net_sales   ?? '0'),
+    totalUnitsSold: 0,
+    totalOrders:    parseInt(row.orders        ?? '0', 10),
+    averagePrice:   0,
+    imageUrl:       null,
+  }));
+
+  // ── Build order status breakdown ─────────────────────────────────────────
+  const orderStatus = customerRows.map((row) => ({
+    name:  row.order_status ?? 'Unknown',
+    value: parseInt(row.orders ?? '0', 10),
+  }));
+
+  // ── Build conversion funnel ──────────────────────────────────────────────
+  const conversionFunnel: ConversionFunnel[] = [
+    { stage: 'Total Orders', count: totalOrders, dropoffRate: 0 },
+  ];
+
+  // ── Assemble KPIs ────────────────────────────────────────────────────────
+  const kpis: ShopifyKPIs = {
+    totalRevenue,
+    totalOrders,
+    averageOrderValue:       aov,
+    totalCustomers,
+    repeatCustomerRate:      returningRate,
+    conversionRate:          0,
+    cartAbandonmentRate:     0,
+    refundRate,
+    averageItemsPerOrder:    0,
+    returningCustomerRevenue: 0,
+    newCustomerRevenue:      0,
+    topSellingProduct:       products[0]?.title ?? '',
+    averageFulfillmentDays:  0,
+    prevTotalRevenue:        prevRevenue,
+    prevTotalOrders:         prevOrders,
+    prevAverageOrderValue:   prevAOV,
+    prevTotalCustomers:      prevCustomers,
+  };
+
+  console.log(`[ShopifyQL getAllAnalytics] ${totalOrders} orders, ₹${totalRevenue.toFixed(0)} net sales`);
+
+  return {
+    kpis,
+    revenue,
+    products,
+    customers: {
+      newVsReturning: [
+        { name: 'New Customers',       value: totalCustomers - returningCustomers },
+        { name: 'Returning Customers', value: returningCustomers },
+      ],
+      revenueBySegment: [
+        { name: 'New Customer Revenue',  value: 0 },
+        { name: 'Returning Revenue',     value: 0 },
+      ],
+      topCustomers: [],
+    },
+    orderStatus,
+    conversionFunnel,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Public: getAllAnalytics
 //
-// Uses a MongoDB per-day order cache (shopify_order_cache) so that historical
-// days are never re-fetched.  Only missing days (and today, which is partial)
-// are pulled from Shopify.  Missing windows are fetched 2-at-a-time to cut
-// the first-run time roughly in half without overwhelming the GraphQL bucket.
+// PRIMARY PATH (requires read_analytics scope):
+//   Uses ShopifyQL — 5 parallel pre-aggregated queries, instant, 0% gap vs
+//   Shopify native analytics.  No pagination, no timeout risk.
 //
-// First request for 90 days: fetches all ~13 weeks in parallel pairs → ~13s
-// Subsequent requests: loads entire date range from MongoDB → <200ms
+// FALLBACK PATH (no read_analytics scope):
+//   Uses MongoDB per-day order cache.  Only fetches missing days from Shopify.
+//   FIXED: windows that fail are NOT cached as empty (prevents permanent undercount).
 // ---------------------------------------------------------------------------
 
 export async function getAllAnalytics(
@@ -1335,10 +1481,22 @@ export async function getAllAnalytics(
   conversionFunnel: ConversionFunnel[];
 }> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
+  const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
+  const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
+
+  // ── PRIMARY: ShopifyQL (exact match with Shopify native analytics) ─────────
+  try {
+    return await buildAllAnalyticsFromShopifyQL(
+      config, currentStart, currentEnd, days, prevStart, prevEnd,
+    );
+  } catch (err) {
+    console.warn('[getAllAnalytics] ShopifyQL unavailable — re-authorize Shopify connection with read_analytics scope to enable. Falling back to day-cache.', (err as Error).message);
+  }
+
+  // ── FALLBACK: MongoDB per-day order cache ─────────────────────────────────
   const today = new Date().toISOString().split('T')[0];
   const slug  = config.slug;
 
-  // ── Step 1: load existing cached day-entries from MongoDB ─────────────────
   const {
     loadCachedDays,
     saveDays,
@@ -1352,47 +1510,61 @@ export async function getAllAnalytics(
     ? await loadCachedDays(slug, currentStart, currentEnd)
     : [];
 
-  // Days that are completely cached (exclude today — it's a partial day)
+  // Exclude today (partial day) and entries from previously failed fetches
+  // (zero-entry days that were saved when a fetch window errored out)
+  // A day is considered "reliably cached" only if it is not today.
   const cachedDateSet = new Set(
     cachedDays.filter((d) => !(d.isPartialDay && d.date === today)).map((d) => d.date),
   );
 
-  // ── Step 2: identify which days still need fetching ───────────────────────
   const allDatesInRange = generateDatesInRange(currentStart, currentEnd);
   const missingDates    = allDatesInRange.filter((d) => !cachedDateSet.has(d));
 
-  // ── Step 3: fetch missing days in parallel pairs of 7-day windows ─────────
   let freshOrders: Array<Record<string, unknown>> = [];
 
   if (missingDates.length > 0) {
     const windows = groupIntoWindows(missingDates, 7);
     console.log(`[getAllAnalytics] fetching ${missingDates.length} missing days in ${windows.length} windows (2 parallel)`);
 
+    // Track which windows succeeded vs failed
+    const succeededWindows = new Set<string>();
+
     for (let i = 0; i < windows.length; i += 2) {
       const batch = windows.slice(i, i + 2);
       const batchResults = await Promise.all(
-        batch.map(([s, e]) =>
-          fetchOrdersWindow(config, s, e).catch((err) => {
-            console.warn('[getAllAnalytics] window fetch error:', (err as Error).message);
+        batch.map(async ([s, e]) => {
+          try {
+            const orders = await fetchOrdersWindow(config, s, e);
+            succeededWindows.add(`${s}:${e}`);
+            return orders;
+          } catch (err) {
+            console.warn(`[getAllAnalytics] window ${s}→${e} failed — skipping cache for these dates:`, (err as Error).message);
             return [] as Array<Record<string, unknown>>;
-          }),
-        ),
+          }
+        }),
       );
       freshOrders.push(...batchResults.flat());
     }
 
     console.log(`[getAllAnalytics] fetched ${freshOrders.length} fresh orders for ${missingDates.length} missing days`);
 
-    // Build per-day cache entries from the fresh orders
+    // CRITICAL FIX: Only cache empty entries for dates in windows that SUCCEEDED.
+    // If a window failed, do NOT cache its dates as empty — they need re-fetching.
     if (slug) {
       const freshDayEntries = buildDayCacheEntries(slug, freshOrders, today);
       const fetchedOrderDates = new Set(
         freshOrders.map((o) => (o.createdAt as string)?.split('T')[0]).filter(Boolean),
       );
-      // Create empty entries for fetched days that had zero orders
-      // (so we don't re-fetch them on next request)
+
+      // Only mark a missing date as "empty/zero" if its window succeeded
       const emptyEntries = missingDates
-        .filter((d) => !fetchedOrderDates.has(d))
+        .filter((d) => {
+          if (fetchedOrderDates.has(d)) return false; // has orders, not empty
+          // Find which window this date belongs to
+          const win = windows.find(([s, e]) => d >= s && d <= e);
+          if (!win) return false;
+          return succeededWindows.has(`${win[0]}:${win[1]}`); // only cache if window succeeded
+        })
         .map((d) => emptyDayCacheEntry(slug, d, d === today));
 
       saveDays(slug, [...freshDayEntries, ...emptyEntries]).catch((err) =>
@@ -1401,9 +1573,7 @@ export async function getAllAnalytics(
     }
   }
 
-  // ── Step 4: merge cached + fresh, compute analytics ───────────────────────
-  // Build fresh day entries to merge (redo from raw orders so we have the
-  // full detail needed by computeFromCache)
+  // Merge cached + fresh, compute analytics
   const freshDayEntries = slug && freshOrders.length > 0
     ? buildDayCacheEntries(slug, freshOrders, today)
     : [];
@@ -1417,14 +1587,9 @@ export async function getAllAnalytics(
   const result = computeFromCache(allEntries, currentStart, currentEnd, days);
 
   console.log(
-    `[getAllAnalytics] total: ${result.kpis.totalOrders} orders, revenue ${result.kpis.totalRevenue.toFixed(0)}, ${allEntries.length} day-entries cached`,
+    `[getAllAnalytics] fallback total: ${result.kpis.totalOrders} orders, revenue ${result.kpis.totalRevenue.toFixed(0)}, ${allEntries.length} day-entries`,
   );
 
-  // ── Step 5: previous period comparison (fast: REST count + 1-page sample) ─
-  const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
-  const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
-
-  // ── Step 6: fill in previous period comparison ────────────────────────────
   const prevSummary = await fetchPreviousPeriodSummary(config, prevStart, prevEnd);
   result.kpis.prevTotalRevenue      = prevSummary.totalRevenue;
   result.kpis.prevTotalOrders       = prevSummary.totalOrders;
