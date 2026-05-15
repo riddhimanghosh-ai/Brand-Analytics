@@ -4,6 +4,7 @@ const APP_URL = 'https://main.d1rrlzi8cyg90j.amplifyapp.com';
 
 const SCOPES = [
   'read_analytics',
+  'read_all_orders',   // required to access orders older than 60 days via list/GraphQL APIs
   'read_assigned_fulfillment_orders',
   'read_customer_events',
   'read_checkouts',

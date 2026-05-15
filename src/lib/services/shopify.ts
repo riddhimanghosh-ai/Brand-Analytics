@@ -603,12 +603,16 @@ export async function getKPIs(
   }
 
   // ── Fallback: paginated order fetch ─────────────────────────────────────
-  const [currentOrders, prevSummary] = await Promise.all([
-    fetchAllOrders(config, currentStart, currentEnd),
-    fetchPreviousPeriodSummary(config, prevStart, prevEnd),
-  ]);
-
+  const currentOrders = await fetchAllOrders(config, currentStart, currentEnd);
   const currentMetrics = computeMetrics(currentOrders);
+
+  // Previous period is non-critical — if it fails (no read_all_orders scope for old dates), use zeros
+  let prevSummary = { totalRevenue: 0, totalOrders: 0, averageOrderValue: 0, uniqueCustomers: 0 };
+  try {
+    prevSummary = await fetchPreviousPeriodSummary(config, prevStart, prevEnd);
+  } catch (err) {
+    console.warn('[getKPIs] fetchPreviousPeriodSummary failed (prev period may be out of scope):', (err as Error).message);
+  }
 
   return {
     totalRevenue:           currentMetrics.totalRevenue,
@@ -1590,11 +1594,17 @@ export async function getAllAnalytics(
     `[getAllAnalytics] fallback total: ${result.kpis.totalOrders} orders, revenue ${result.kpis.totalRevenue.toFixed(0)}, ${allEntries.length} day-entries`,
   );
 
-  const prevSummary = await fetchPreviousPeriodSummary(config, prevStart, prevEnd);
-  result.kpis.prevTotalRevenue      = prevSummary.totalRevenue;
-  result.kpis.prevTotalOrders       = prevSummary.totalOrders;
-  result.kpis.prevAverageOrderValue = prevSummary.averageOrderValue;
-  result.kpis.prevTotalCustomers    = prevSummary.uniqueCustomers;
+  try {
+    const prevSummary = await fetchPreviousPeriodSummary(config, prevStart, prevEnd);
+    result.kpis.prevTotalRevenue      = prevSummary.totalRevenue;
+    result.kpis.prevTotalOrders       = prevSummary.totalOrders;
+    result.kpis.prevAverageOrderValue = prevSummary.averageOrderValue;
+    result.kpis.prevTotalCustomers    = prevSummary.uniqueCustomers;
+  } catch (err) {
+    // Previous-period summary is non-critical — if it fails (e.g. no read_all_orders
+    // scope for old date ranges), just log and continue with zeros for the comparison.
+    console.warn('[getAllAnalytics] fetchPreviousPeriodSummary failed (prev period may be out of scope):', (err as Error).message);
+  }
 
   return result;
 }
