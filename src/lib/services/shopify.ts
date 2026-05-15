@@ -533,6 +533,8 @@ function computeMetrics(orders: Array<Record<string, unknown>>) {
 
 // ---------------------------------------------------------------------------
 // Public: getKPIs
+// Uses ShopifyQL (read_analytics scope) for instant pre-aggregated metrics.
+// Falls back to the old paginated approach if ShopifyQL is unavailable.
 // ---------------------------------------------------------------------------
 
 export async function getKPIs(
@@ -543,7 +545,59 @@ export async function getKPIs(
   const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
   const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
-  // Fetch current period fully + previous period via fast summary (count + 1 page sample)
+  // ── Try ShopifyQL first (fast path — sub-second, no pagination) ───────────
+  try {
+    const [curRows, prevRows] = await Promise.all([
+      runShopifyQL(
+        config,
+        `FROM sales SINCE ${currentStart} UNTIL ${currentEnd} SELECT sum(net_sales) AS revenue, count(orders) AS orders, sum(gross_sales) AS gross_sales, sum(returns) AS returns`,
+      ),
+      runShopifyQL(
+        config,
+        `FROM sales SINCE ${prevStart} UNTIL ${prevEnd} SELECT sum(net_sales) AS revenue, count(orders) AS orders`,
+      ),
+    ]);
+
+    const cur  = curRows[0]  ?? {};
+    const prev = prevRows[0] ?? {};
+
+    const totalRevenue  = parseFloat(cur.revenue      ?? '0');
+    const totalOrders   = parseInt(  cur.orders       ?? '0', 10);
+    const grossSales    = parseFloat(cur.gross_sales  ?? '0');
+    const totalReturns  = parseFloat(cur.returns      ?? '0');
+    const aov           = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+    const refundRate    = grossSales  > 0 ? totalReturns  / grossSales  : 0;
+
+    const prevRevenue   = parseFloat(prev.revenue ?? '0');
+    const prevOrders    = parseInt(  prev.orders  ?? '0', 10);
+    const prevAOV       = prevOrders  > 0 ? prevRevenue / prevOrders : 0;
+
+    return {
+      totalRevenue,
+      totalOrders,
+      averageOrderValue:      aov,
+      totalCustomers:         0,   // not available from sales table
+      repeatCustomerRate:     0,
+      conversionRate:         0,
+      cartAbandonmentRate:    0,
+      refundRate,
+      averageItemsPerOrder:   0,
+      returningCustomerRevenue: 0,
+      newCustomerRevenue:     0,
+      topSellingProduct:      '',
+      averageFulfillmentDays: 0,
+      prevTotalRevenue:       prevRevenue,
+      prevTotalOrders:        prevOrders,
+      prevAverageOrderValue:  prevAOV,
+      prevTotalCustomers:     0,
+    };
+  } catch (err) {
+    // ShopifyQL unavailable (e.g. read_analytics scope not granted) — fall back
+    // to the original paginated approach so the dashboard still works.
+    console.warn('getKPIs: ShopifyQL failed, falling back to paginated fetch:', err);
+  }
+
+  // ── Fallback: paginated order fetch (original behaviour) ─────────────────
   const [currentOrders, prevSummary] = await Promise.all([
     fetchAllOrders(config, currentStart, currentEnd),
     fetchPreviousPeriodSummary(config, prevStart, prevEnd),
@@ -552,28 +606,30 @@ export async function getKPIs(
   const currentMetrics = computeMetrics(currentOrders);
 
   return {
-    totalRevenue: currentMetrics.totalRevenue,
-    totalOrders: currentMetrics.totalOrders,
-    averageOrderValue: currentMetrics.averageOrderValue,
-    totalCustomers: currentMetrics.uniqueCustomers,
-    repeatCustomerRate: currentMetrics.repeatCustomerRate,
-    conversionRate: 0,
-    cartAbandonmentRate: 0,
-    refundRate: currentMetrics.refundRate,
-    averageItemsPerOrder: currentMetrics.averageItemsPerOrder,
+    totalRevenue:           currentMetrics.totalRevenue,
+    totalOrders:            currentMetrics.totalOrders,
+    averageOrderValue:      currentMetrics.averageOrderValue,
+    totalCustomers:         currentMetrics.uniqueCustomers,
+    repeatCustomerRate:     currentMetrics.repeatCustomerRate,
+    conversionRate:         0,
+    cartAbandonmentRate:    0,
+    refundRate:             currentMetrics.refundRate,
+    averageItemsPerOrder:   currentMetrics.averageItemsPerOrder,
     returningCustomerRevenue: currentMetrics.returningCustomerRevenue,
-    newCustomerRevenue: currentMetrics.newCustomerRevenue,
-    topSellingProduct: currentMetrics.topProduct,
+    newCustomerRevenue:     currentMetrics.newCustomerRevenue,
+    topSellingProduct:      currentMetrics.topProduct,
     averageFulfillmentDays: 0,
-    prevTotalRevenue: prevSummary.totalRevenue,
-    prevTotalOrders: prevSummary.totalOrders,
-    prevAverageOrderValue: prevSummary.averageOrderValue,
-    prevTotalCustomers: prevSummary.uniqueCustomers,
+    prevTotalRevenue:       prevSummary.totalRevenue,
+    prevTotalOrders:        prevSummary.totalOrders,
+    prevAverageOrderValue:  prevSummary.averageOrderValue,
+    prevTotalCustomers:     prevSummary.uniqueCustomers,
   };
 }
 
 // ---------------------------------------------------------------------------
 // Public: getRevenueOverTime  (updated to include aov per data point)
+// Uses ShopifyQL GROUP BY day for instant pre-aggregated time series.
+// Falls back to paginated order fetch if ShopifyQL is unavailable.
 // ---------------------------------------------------------------------------
 
 export async function getRevenueOverTime(
@@ -582,29 +638,60 @@ export async function getRevenueOverTime(
 ): Promise<(RevenueDataPoint & { aov: number })[]> {
   const { startDate, endDate, days } = parseDateRange(dateRange);
 
-  const orders = await fetchAllOrders(config, startDate, endDate);
-
-  const byDate: Record<string, { revenue: number; orders: number }> = {};
-
-  // Initialise every day in the range to zero
-  const start = new Date(startDate);
-  for (let i = 0; i <= days; i++) {
-    const d = new Date(start.getTime() + i * 86400000);
-    const key = d.toISOString().split('T')[0];
-    byDate[key] = { revenue: 0, orders: 0 };
+  // Helper: build the full zero-filled date map for the range
+  function buildDateMap() {
+    const map: Record<string, { revenue: number; orders: number }> = {};
+    const start = new Date(startDate);
+    for (let i = 0; i <= days; i++) {
+      const d = new Date(start.getTime() + i * 86_400_000);
+      map[d.toISOString().split('T')[0]] = { revenue: 0, orders: 0 };
+    }
+    return map;
   }
 
-  for (const order of orders) {
-    // Skip voided orders
-    if ((order.displayFinancialStatus as string) === 'VOIDED') continue;
-    const createdAt = order.createdAt as string;
-    const dateKey = createdAt.split('T')[0];
-    const priceSet = order.totalPriceSet as { shopMoney: { amount: string } };
-    const price = parseFloat(priceSet?.shopMoney?.amount || '0');
+  // ── Try ShopifyQL first (fast path) ───────────────────────────────────────
+  try {
+    const rows = await runShopifyQL(
+      config,
+      `FROM sales SINCE ${startDate} UNTIL ${endDate} SELECT day, sum(net_sales) AS revenue, count(orders) AS orders GROUP BY day ORDER BY day ASC`,
+    );
 
+    const byDate = buildDateMap();
+
+    for (const row of rows) {
+      // ShopifyQL returns `day` as "YYYY-MM-DD" or "YYYY-MM-DDT00:00:00"
+      const date = (row.day ?? '').split('T')[0];
+      if (date && byDate[date] !== undefined) {
+        byDate[date].revenue = parseFloat(row.revenue ?? '0');
+        byDate[date].orders  = parseInt(row.orders   ?? '0', 10);
+      }
+    }
+
+    return Object.entries(byDate)
+      .map(([date, data]) => ({
+        date,
+        revenue: data.revenue,
+        orders:  data.orders,
+        aov:     data.orders > 0 ? data.revenue / data.orders : 0,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  } catch (err) {
+    console.warn('getRevenueOverTime: ShopifyQL failed, falling back to paginated fetch:', err);
+  }
+
+  // ── Fallback: paginated order fetch ───────────────────────────────────────
+  const orders  = await fetchAllOrders(config, startDate, endDate);
+  const byDate  = buildDateMap();
+
+  for (const order of orders) {
+    if ((order.displayFinancialStatus as string) === 'VOIDED') continue;
+    const dateKey  = (order.createdAt as string).split('T')[0];
+    const price    = parseFloat(
+      (order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0'
+    );
     if (byDate[dateKey]) {
       byDate[dateKey].revenue += price;
-      byDate[dateKey].orders += 1;
+      byDate[dateKey].orders  += 1;
     }
   }
 
@@ -612,8 +699,8 @@ export async function getRevenueOverTime(
     .map(([date, data]) => ({
       date,
       revenue: data.revenue,
-      orders: data.orders,
-      aov: data.orders > 0 ? data.revenue / data.orders : 0,
+      orders:  data.orders,
+      aov:     data.orders > 0 ? data.revenue / data.orders : 0,
     }))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
