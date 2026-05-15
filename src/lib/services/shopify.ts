@@ -218,6 +218,10 @@ function buildOrderQuery(startDate: string, endDate: string, afterClause: string
               }
             }
             customer { id numberOfOrders }
+            shippingAddress { city province country countryCode }
+            discountCodes { code }
+            totalDiscountsSet { shopMoney { amount } }
+            channelInformation { channelDefinition { channelName } }
           }
         }
         pageInfo { hasNextPage }
@@ -1021,12 +1025,13 @@ export async function getAdvancedCROMetrics(
     channelMap[channelName].orders++;
     channelMap[channelName].revenue += price;
 
-    // ── Discount codes ── (discountCodes is [String!]! — array of code strings)
-    const discountCodes = order.discountCodes as string[] | null;
+    // ── Discount codes ── (discountCodes returns [{ code: string }])
+    const discountCodeObjs = order.discountCodes as { code: string }[] | null;
+    const discountCodes = (discountCodeObjs || []).map((d) => d.code).filter(Boolean);
     const totalDiscountsSet = order.totalDiscountsSet as { shopMoney: { amount: string } } | null;
     const orderDiscount = parseFloat(totalDiscountsSet?.shopMoney?.amount || '0');
 
-    if (discountCodes && discountCodes.length > 0) {
+    if (discountCodes.length > 0) {
       discountedOrders++;
       totalDiscountGiven += orderDiscount;
       for (const code of discountCodes) {
