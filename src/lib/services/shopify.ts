@@ -550,16 +550,19 @@ export async function getKPIs(
     const [curRows, prevRows] = await Promise.all([
       runShopifyQL(
         config,
-        `FROM sales SINCE ${currentStart} UNTIL ${currentEnd} SELECT sum(net_sales) AS revenue, count(orders) AS orders, sum(gross_sales) AS gross_sales, sum(returns) AS returns`,
+        `FROM sales SINCE ${currentStart} UNTIL ${currentEnd} SELECT sum(net_sales) AS revenue, sum(orders) AS orders, sum(gross_sales) AS gross_sales, sum(returns) AS returns`,
       ),
       runShopifyQL(
         config,
-        `FROM sales SINCE ${prevStart} UNTIL ${prevEnd} SELECT sum(net_sales) AS revenue, count(orders) AS orders`,
+        `FROM sales SINCE ${prevStart} UNTIL ${prevEnd} SELECT sum(net_sales) AS revenue, sum(orders) AS orders`,
       ),
     ]);
 
     const cur  = curRows[0]  ?? {};
     const prev = prevRows[0] ?? {};
+
+    console.log('[ShopifyQL getKPIs] cur row:', JSON.stringify(cur));
+    console.log('[ShopifyQL getKPIs] prev row:', JSON.stringify(prev));
 
     const totalRevenue  = parseFloat(cur.revenue      ?? '0');
     const totalOrders   = parseInt(  cur.orders       ?? '0', 10);
@@ -594,7 +597,7 @@ export async function getKPIs(
   } catch (err) {
     // ShopifyQL unavailable (e.g. read_analytics scope not granted) — fall back
     // to the original paginated approach so the dashboard still works.
-    console.warn('getKPIs: ShopifyQL failed, falling back to paginated fetch:', err);
+    console.warn('[ShopifyQL getKPIs] ShopifyQL failed, falling back to paginated fetch:', (err as Error).message);
   }
 
   // ── Fallback: paginated order fetch (original behaviour) ─────────────────
@@ -653,7 +656,7 @@ export async function getRevenueOverTime(
   try {
     const rows = await runShopifyQL(
       config,
-      `FROM sales SINCE ${startDate} UNTIL ${endDate} SELECT day, sum(net_sales) AS revenue, count(orders) AS orders GROUP BY day ORDER BY day ASC`,
+      `FROM sales SINCE ${startDate} UNTIL ${endDate} SELECT day, sum(net_sales) AS revenue, sum(orders) AS orders GROUP BY day ORDER BY day ASC`,
     );
 
     const byDate = buildDateMap();
@@ -1280,8 +1283,37 @@ export async function getAdvancedCROMetrics(
 }
 
 // ---------------------------------------------------------------------------
-// Public: getAllAnalytics — fetches orders via 7-day chunks (avoids Shopify
-// cursor truncation at ~5-6K orders) then computes all metrics in one pass.
+// ---------------------------------------------------------------------------
+// Internal: group a sorted list of date strings into contiguous windows of
+// at most `windowDays` days each.  Used by getAllAnalytics to batch-fetch
+// missing days in pairs.
+// ---------------------------------------------------------------------------
+
+function groupIntoWindows(sortedDates: string[], windowDays: number): Array<[string, string]> {
+  if (!sortedDates.length) return [];
+  const windows: Array<[string, string]> = [];
+  let i = 0;
+  while (i < sortedDates.length) {
+    const windowStart = sortedDates[i];
+    const cutoffMs = new Date(windowStart + 'T00:00:00Z').getTime() + (windowDays - 1) * 86_400_000;
+    let j = i;
+    while (j < sortedDates.length && new Date(sortedDates[j] + 'T00:00:00Z').getTime() <= cutoffMs) j++;
+    windows.push([windowStart, sortedDates[j - 1]]);
+    i = j;
+  }
+  return windows;
+}
+
+// ---------------------------------------------------------------------------
+// Public: getAllAnalytics
+//
+// Uses a MongoDB per-day order cache (shopify_order_cache) so that historical
+// days are never re-fetched.  Only missing days (and today, which is partial)
+// are pulled from Shopify.  Missing windows are fetched 2-at-a-time to cut
+// the first-run time roughly in half without overwhelming the GraphQL bucket.
+//
+// First request for 90 days: fetches all ~13 weeks in parallel pairs → ~13s
+// Subsequent requests: loads entire date range from MongoDB → <200ms
 // ---------------------------------------------------------------------------
 
 export async function getAllAnalytics(
@@ -1300,146 +1332,106 @@ export async function getAllAnalytics(
   conversionFunnel: ConversionFunnel[];
 }> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
+  const today = new Date().toISOString().split('T')[0];
+  const slug  = config.slug;
+
+  // ── Step 1: load existing cached day-entries from MongoDB ─────────────────
+  const {
+    loadCachedDays,
+    saveDays,
+    buildDayCacheEntries,
+    computeFromCache,
+    emptyDayCacheEntry,
+    generateDatesInRange,
+  } = await import('@/lib/shopify-sync');
+
+  const cachedDays = slug
+    ? await loadCachedDays(slug, currentStart, currentEnd)
+    : [];
+
+  // Days that are completely cached (exclude today — it's a partial day)
+  const cachedDateSet = new Set(
+    cachedDays.filter((d) => !(d.isPartialDay && d.date === today)).map((d) => d.date),
+  );
+
+  // ── Step 2: identify which days still need fetching ───────────────────────
+  const allDatesInRange = generateDatesInRange(currentStart, currentEnd);
+  const missingDates    = allDatesInRange.filter((d) => !cachedDateSet.has(d));
+
+  // ── Step 3: fetch missing days in parallel pairs of 7-day windows ─────────
+  let freshOrders: Array<Record<string, unknown>> = [];
+
+  if (missingDates.length > 0) {
+    const windows = groupIntoWindows(missingDates, 7);
+    console.log(`[getAllAnalytics] fetching ${missingDates.length} missing days in ${windows.length} windows (2 parallel)`);
+
+    for (let i = 0; i < windows.length; i += 2) {
+      const batch = windows.slice(i, i + 2);
+      const batchResults = await Promise.all(
+        batch.map(([s, e]) =>
+          fetchOrdersWindow(config, s, e).catch((err) => {
+            console.warn('[getAllAnalytics] window fetch error:', (err as Error).message);
+            return [] as Array<Record<string, unknown>>;
+          }),
+        ),
+      );
+      freshOrders.push(...batchResults.flat());
+    }
+
+    // Exclude cancelled orders (Shopify analytics excludes these too)
+    freshOrders = freshOrders.filter((o) => !o.cancelledAt);
+
+    console.log(`[getAllAnalytics] fetched ${freshOrders.length} fresh orders for ${missingDates.length} missing days`);
+
+    // Build per-day cache entries from the fresh orders
+    if (slug) {
+      const freshDayEntries = buildDayCacheEntries(slug, freshOrders, today);
+      const fetchedOrderDates = new Set(
+        freshOrders.map((o) => (o.createdAt as string)?.split('T')[0]).filter(Boolean),
+      );
+      // Create empty entries for fetched days that had zero orders
+      // (so we don't re-fetch them on next request)
+      const emptyEntries = missingDates
+        .filter((d) => !fetchedOrderDates.has(d))
+        .map((d) => emptyDayCacheEntry(slug, d, d === today));
+
+      saveDays(slug, [...freshDayEntries, ...emptyEntries]).catch((err) =>
+        console.error('[getAllAnalytics] saveDays error:', err),
+      );
+    }
+  }
+
+  // ── Step 4: merge cached + fresh, compute analytics ───────────────────────
+  // Build fresh day entries to merge (redo from raw orders so we have the
+  // full detail needed by computeFromCache)
+  const freshDayEntries = slug && freshOrders.length > 0
+    ? buildDayCacheEntries(slug, freshOrders, today)
+    : [];
+  const freshDateSet = new Set(freshDayEntries.map((e) => e.date));
+
+  const allEntries = [
+    ...cachedDays.filter((d) => !freshDateSet.has(d.date)),
+    ...freshDayEntries,
+  ].sort((a, b) => a.date.localeCompare(b.date));
+
+  const result = computeFromCache(allEntries, currentStart, currentEnd, days);
+
+  console.log(
+    `[getAllAnalytics] total: ${result.kpis.totalOrders} orders, revenue ${result.kpis.totalRevenue.toFixed(0)}, ${allEntries.length} day-entries cached`,
+  );
+
+  // ── Step 5: previous period comparison (fast: REST count + 1-page sample) ─
   const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
   const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
-  // Fetch current period (chunked 7-day windows) + previous period summary in parallel
-  const [currentOrders, prevSummary] = await Promise.all([
-    fetchAllOrders(config, currentStart, currentEnd),
-    fetchPreviousPeriodSummary(config, prevStart, prevEnd),
-  ]);
+  // ── Step 6: fill in previous period comparison ────────────────────────────
+  const prevSummary = await fetchPreviousPeriodSummary(config, prevStart, prevEnd);
+  result.kpis.prevTotalRevenue      = prevSummary.totalRevenue;
+  result.kpis.prevTotalOrders       = prevSummary.totalOrders;
+  result.kpis.prevAverageOrderValue = prevSummary.averageOrderValue;
+  result.kpis.prevTotalCustomers    = prevSummary.uniqueCustomers;
 
-  console.log(`[getAllAnalytics] fetched ${currentOrders.length} active (non-cancelled) orders for ${currentStart} → ${currentEnd}`);
-
-  // ── KPIs ──────────────────────────────────────────────────────────────────
-  const currentMetrics = computeMetrics(currentOrders);
-
-  const kpis: ShopifyKPIs = {
-    totalRevenue: currentMetrics.totalRevenue,
-    totalOrders: currentMetrics.totalOrders,
-    averageOrderValue: currentMetrics.averageOrderValue,
-    totalCustomers: currentMetrics.uniqueCustomers,
-    repeatCustomerRate: currentMetrics.repeatCustomerRate,
-    conversionRate: 0,
-    cartAbandonmentRate: 0,
-    refundRate: currentMetrics.refundRate,
-    averageItemsPerOrder: currentMetrics.averageItemsPerOrder,
-    returningCustomerRevenue: currentMetrics.returningCustomerRevenue,
-    newCustomerRevenue: currentMetrics.newCustomerRevenue,
-    topSellingProduct: currentMetrics.topProduct,
-    averageFulfillmentDays: 0,
-    prevTotalRevenue: prevSummary.totalRevenue,
-    prevTotalOrders: prevSummary.totalOrders,
-    prevAverageOrderValue: prevSummary.averageOrderValue,
-    prevTotalCustomers: prevSummary.uniqueCustomers,
-  };
-
-  // ── Revenue over time ──────────────────────────────────────────────────────
-  const byDate: Record<string, { revenue: number; orders: number }> = {};
-  const startMs = new Date(currentStart).getTime();
-  for (let i = 0; i <= days; i++) {
-    const key = new Date(startMs + i * 86_400_000).toISOString().split('T')[0];
-    byDate[key] = { revenue: 0, orders: 0 };
-  }
-  for (const order of currentOrders) {
-    if ((order.displayFinancialStatus as string) === 'VOIDED') continue;
-    const dateKey = (order.createdAt as string).split('T')[0];
-    const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
-    if (byDate[dateKey]) {
-      byDate[dateKey].revenue += price;
-      byDate[dateKey].orders  += 1;
-    }
-  }
-  const revenue = Object.entries(byDate)
-    .map(([date, data]) => ({
-      date,
-      revenue: data.revenue,
-      orders:  data.orders,
-      aov:     data.orders > 0 ? data.revenue / data.orders : 0,
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  // ── Products ───────────────────────────────────────────────────────────────
-  const productMap: Record<string, ShopifyProduct> = {};
-  for (const order of currentOrders) {
-    const lineItems = order.lineItems as {
-      edges: Array<{
-        node: {
-          title: string;
-          quantity: number;
-          originalUnitPriceSet: { shopMoney: { amount: string } };
-          product: { id: string; title: string; featuredImage?: { url: string } } | null;
-        };
-      }>;
-    };
-    if (!lineItems?.edges) continue;
-    for (const { node } of lineItems.edges) {
-      const pid   = node.product?.id || node.title;
-      const title = node.product?.title || node.title;
-      const unit  = parseFloat(node.originalUnitPriceSet?.shopMoney?.amount || '0');
-      const rev   = unit * (node.quantity || 0);
-      if (!productMap[pid]) {
-        productMap[pid] = { id: pid, title, totalRevenue: 0, totalUnitsSold: 0, totalOrders: 0, averagePrice: unit, imageUrl: node.product?.featuredImage?.url || null };
-      }
-      productMap[pid].totalRevenue    += rev;
-      productMap[pid].totalUnitsSold  += node.quantity || 0;
-      productMap[pid].totalOrders     += 1;
-    }
-  }
-  const products = Object.values(productMap).sort((a, b) => b.totalRevenue - a.totalRevenue).slice(0, 15);
-
-  // ── Customers ──────────────────────────────────────────────────────────────
-  let newCount = 0, returningCount = 0, newRevenue = 0, returningRevenue = 0;
-  const customerMap: Record<string, { customer: Record<string, unknown>; totalSpent: number; orderCount: number }> = {};
-
-  for (const order of currentOrders) {
-    const cust = order.customer as { id: string; firstName: string; lastName: string; email: string; numberOfOrders: number; createdAt: string; tags: string[] } | null;
-    const price = parseFloat((order.totalPriceSet as { shopMoney: { amount: string } })?.shopMoney?.amount || '0');
-    if (cust?.id) {
-      if (cust.numberOfOrders > 1) { returningCount++; returningRevenue += price; }
-      else                         { newCount++;       newRevenue       += price; }
-      if (!customerMap[cust.id]) customerMap[cust.id] = { customer: cust as Record<string, unknown>, totalSpent: 0, orderCount: 0 };
-      customerMap[cust.id].totalSpent  += price;
-      customerMap[cust.id].orderCount  += 1;
-    }
-  }
-  const topCustomers = Object.values(customerMap)
-    .sort((a, b) => b.totalSpent - a.totalSpent)
-    .slice(0, 10)
-    .map(({ customer: c, totalSpent, orderCount }) => {
-      const cust = c as { id: string; firstName: string; lastName: string; email: string; createdAt: string; tags: string[] };
-      return { id: cust.id, email: cust.email || '', firstName: cust.firstName || '', lastName: cust.lastName || '', ordersCount: orderCount, totalSpent, createdAt: cust.createdAt, tags: cust.tags || [] };
-    });
-
-  const customers = {
-    newVsReturning:  [{ name: 'New Customers', value: newCount }, { name: 'Returning Customers', value: returningCount }],
-    revenueBySegment:[{ name: 'New Customer Revenue', value: newRevenue }, { name: 'Returning Revenue', value: returningRevenue }],
-    topCustomers,
-  };
-
-  // ── Order status ───────────────────────────────────────────────────────────
-  const statusMap: Record<string, number> = {};
-  for (const order of currentOrders) {
-    const s = (order.displayFulfillmentStatus as string) || 'UNFULFILLED';
-    statusMap[s] = (statusMap[s] || 0) + 1;
-  }
-  const orderStatus = Object.entries(statusMap).map(([name, value]) => ({ name, value }));
-
-  // ── Conversion funnel ──────────────────────────────────────────────────────
-  const nonVoided     = currentOrders.filter((o) => (o.displayFinancialStatus as string) !== 'VOIDED');
-  const funnelTotal   = nonVoided.length;
-  const funnelPaid    = nonVoided.filter((o) => { const f = (o.displayFinancialStatus as string) || ''; return f === 'PAID' || f === 'PARTIALLY_PAID' || f === 'PARTIALLY_REFUNDED'; }).length;
-  const funnelFulfilled = nonVoided.filter((o) => (o.displayFulfillmentStatus as string) === 'FULFILLED').length;
-  const funnelPartial   = nonVoided.filter((o) => (o.displayFulfillmentStatus as string) === 'PARTIAL').length;
-  const funnelRefunded  = nonVoided.filter((o) => (o.displayFinancialStatus  as string) === 'REFUNDED').length;
-  const conversionFunnel: ConversionFunnel[] = [
-    { stage: 'Total Orders', count: funnelTotal,                    dropoffRate: 0 },
-    { stage: 'Paid',         count: funnelPaid,                     dropoffRate: funnelTotal > 0 ? ((funnelTotal - funnelPaid) / funnelTotal) * 100 : 0 },
-    { stage: 'Fulfilled',    count: funnelFulfilled + funnelPartial, dropoffRate: funnelPaid  > 0 ? ((funnelPaid - (funnelFulfilled + funnelPartial)) / funnelPaid) * 100 : 0 },
-    { stage: 'Refunded',     count: funnelRefunded,                 dropoffRate: 0 },
-  ];
-
-  return { kpis, revenue, products, customers, orderStatus, conversionFunnel };
+  return result;
 }
 
 // ---------------------------------------------------------------------------

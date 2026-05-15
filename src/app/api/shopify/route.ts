@@ -84,7 +84,8 @@ export async function GET(request: Request) {
 
     // ── Refresh: invalidate MongoDB cache for this brand ──────────────────────
     if (action === 'refresh') {
-      await cacheInvalidate(slug);
+      const { clearCachedDays } = await import('@/lib/shopify-sync');
+      await Promise.all([cacheInvalidate(slug), clearCachedDays(slug)]);
       return NextResponse.json({ ok: true, message: 'Cache cleared' });
     }
 
