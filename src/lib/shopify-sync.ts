@@ -382,11 +382,11 @@ export function computeFromCache(
   for (const entry of entries) {
     if (revenueByDate[entry.date]) {
       revenueByDate[entry.date].revenue += entry.revenue;
-      revenueByDate[entry.date].orders += entry.nonVoidedCount;
+      revenueByDate[entry.date].orders += entry.orderCount;
     }
 
     totalRevenue += entry.revenue;
-    totalOrders += entry.nonVoidedCount;
+    totalOrders += entry.orderCount;
     totalRefunded += entry.refunded;
     totalItems += entry.totalItems;
     newCustRevenue += entry.newCustomerRevenue;
