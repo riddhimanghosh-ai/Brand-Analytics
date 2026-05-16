@@ -301,17 +301,28 @@ export const demoGA4ProductFunnel = [
 export const demoMetaKPIs = {
   spend: 12480.5,
   impressions: 2840000,
+  reach: 1920000,
+  frequency: 1.48,
   clicks: 84200,
+  linkClicks: 71400,
   ctr: 2.97,
+  uniqueCtr: 3.41,
   cpc: 0.148,
   cpm: 4.39,
-  reach: 1920000,
+  costPerLinkClick: 0.175,
   purchases: 847,
   purchaseValue: 42380,
   roas: 3.4,
   addToCarts: 3240,
+  initiatedCheckouts: 1690,
   viewContent: 28400,
+  leads: 0,
   costPerPurchase: 14.74,
+  costPerAddToCart: 3.85,
+  costPerInitiatedCheckout: 7.38,
+  conversionRate: 1.19,
+  videoPlays: 184000,
+  videoCompletions: 38400,
 };
 
 export const demoMetaCampaigns = [
@@ -321,11 +332,18 @@ export const demoMetaCampaigns = [
     status: 'ACTIVE',
     spend: 4200,
     impressions: 980000,
+    reach: 620000,
+    frequency: 1.58,
     clicks: 31200,
+    linkClicks: 26400,
     ctr: 3.18,
+    cpc: 0.135,
+    cpm: 4.29,
     roas: 4.21,
     purchases: 312,
     purchaseValue: 17680,
+    addToCarts: 1240,
+    initiatedCheckouts: 642,
   },
   {
     id: 'camp_002',
@@ -333,11 +351,18 @@ export const demoMetaCampaigns = [
     status: 'ACTIVE',
     spend: 3800,
     impressions: 1120000,
+    reach: 780000,
+    frequency: 1.44,
     clicks: 28400,
+    linkClicks: 23800,
     ctr: 2.54,
+    cpc: 0.134,
+    cpm: 3.39,
     roas: 2.87,
     purchases: 241,
     purchaseValue: 10900,
+    addToCarts: 980,
+    initiatedCheckouts: 478,
   },
   {
     id: 'camp_003',
@@ -345,11 +370,18 @@ export const demoMetaCampaigns = [
     status: 'ACTIVE',
     spend: 2900,
     impressions: 540000,
+    reach: 360000,
+    frequency: 1.5,
     clicks: 18400,
+    linkClicks: 15600,
     ctr: 3.41,
+    cpc: 0.158,
+    cpm: 5.37,
     roas: 3.84,
     purchases: 198,
     purchaseValue: 11140,
+    addToCarts: 720,
+    initiatedCheckouts: 380,
   },
   {
     id: 'camp_004',
@@ -357,11 +389,18 @@ export const demoMetaCampaigns = [
     status: 'PAUSED',
     spend: 1580.5,
     impressions: 200000,
+    reach: 160000,
+    frequency: 1.25,
     clicks: 6200,
+    linkClicks: 5600,
     ctr: 3.1,
+    cpc: 0.255,
+    cpm: 7.9,
     roas: 1.68,
     purchases: 96,
     purchaseValue: 2660,
+    addToCarts: 300,
+    initiatedCheckouts: 190,
   },
 ];
 
@@ -370,7 +409,57 @@ export const demoMetaSpend = revenueSeries.slice(-30).map((d) => ({
   spend: parseFloat((d.orders * 6.8 + randomBetween(20, 80, 2)).toFixed(2)),
   impressions: Math.round(d.orders * 1540),
   clicks: Math.round(d.orders * 45),
+  purchases: Math.round(d.orders * 0.42),
+  purchaseValue: parseFloat((d.orders * 18.3).toFixed(2)),
 }));
+
+export const demoMetaFunnel = {
+  impressions: 2840000,
+  reach: 1920000,
+  linkClicks: 71400,
+  addToCarts: 3240,
+  initiatedCheckouts: 1690,
+  purchases: 847,
+};
+
+export const demoMetaAdSets = [
+  { id: 'as_1', name: 'IG Reels — Lookalike 1%', campaignName: 'Summer Sale — Retargeting', spend: 2100, impressions: 480000, reach: 320000, clicks: 16200, ctr: 3.38, cpc: 0.13, purchases: 168, purchaseValue: 9420, roas: 4.49 },
+  { id: 'as_2', name: 'FB Feed — Interest: Audio', campaignName: 'New Customer Acquisition', spend: 1900, impressions: 540000, reach: 410000, clicks: 13800, ctr: 2.56, cpc: 0.138, purchases: 120, purchaseValue: 5430, roas: 2.86 },
+  { id: 'as_3', name: 'Stories — Retarget ATC', campaignName: 'Summer Sale — Retargeting', spend: 1450, impressions: 320000, reach: 210000, clicks: 11400, ctr: 3.56, cpc: 0.127, purchases: 132, purchaseValue: 7240, roas: 4.99 },
+  { id: 'as_4', name: 'Earbuds Launch — Broad', campaignName: 'Product Launch — Earbuds', spend: 1800, impressions: 360000, reach: 240000, clicks: 12400, ctr: 3.44, cpc: 0.145, purchases: 134, purchaseValue: 7480, roas: 4.16 },
+];
+
+export const demoMetaAds = [
+  { id: 'ad_1', name: 'UGC — Review by Aanya', campaignName: 'Summer Sale — Retargeting', adsetName: 'IG Reels — Lookalike 1%', spend: 1240, impressions: 280000, reach: 190000, clicks: 9800, ctr: 3.5, cpc: 0.126, purchases: 110, purchaseValue: 6240, roas: 5.03 },
+  { id: 'ad_2', name: 'Carousel — Top 5 picks', campaignName: 'New Customer Acquisition', adsetName: 'FB Feed — Interest: Audio', spend: 980, impressions: 240000, reach: 180000, clicks: 7200, ctr: 3.0, cpc: 0.136, purchases: 70, purchaseValue: 3180, roas: 3.24 },
+  { id: 'ad_3', name: 'Stories — 30% off banner', campaignName: 'Summer Sale — Retargeting', adsetName: 'Stories — Retarget ATC', spend: 820, impressions: 180000, reach: 120000, clicks: 7100, ctr: 3.94, cpc: 0.115, purchases: 86, purchaseValue: 4720, roas: 5.76 },
+  { id: 'ad_4', name: 'Reel — Unboxing 15s', campaignName: 'Product Launch — Earbuds', adsetName: 'Earbuds Launch — Broad', spend: 760, impressions: 160000, reach: 110000, clicks: 6200, ctr: 3.88, cpc: 0.123, purchases: 64, purchaseValue: 3520, roas: 4.63 },
+];
+
+export const demoMetaDemographics = [
+  { key: '25-34|female', label: '25-34 · female', spend: 3640, impressions: 820000, clicks: 26800, ctr: 3.27, cpc: 0.136, purchases: 312, purchaseValue: 17400, roas: 4.78 },
+  { key: '25-34|male', label: '25-34 · male', spend: 2980, impressions: 740000, clicks: 21200, ctr: 2.86, cpc: 0.141, purchases: 198, purchaseValue: 9840, roas: 3.30 },
+  { key: '18-24|female', label: '18-24 · female', spend: 1840, impressions: 460000, clicks: 14600, ctr: 3.17, cpc: 0.126, purchases: 124, purchaseValue: 6120, roas: 3.33 },
+  { key: '35-44|female', label: '35-44 · female', spend: 1620, impressions: 380000, clicks: 9800, ctr: 2.58, cpc: 0.165, purchases: 98, purchaseValue: 5240, roas: 3.23 },
+  { key: '18-24|male', label: '18-24 · male', spend: 1280, impressions: 340000, clicks: 8400, ctr: 2.47, cpc: 0.152, purchases: 72, purchaseValue: 2780, roas: 2.17 },
+  { key: '35-44|male', label: '35-44 · male', spend: 1120, impressions: 100000, clicks: 3400, ctr: 3.4, cpc: 0.329, purchases: 43, purchaseValue: 1000, roas: 0.89 },
+];
+
+export const demoMetaPlacements = [
+  { key: 'instagram|stream', label: 'instagram · feed', spend: 3800, impressions: 820000, clicks: 28400, ctr: 3.46, cpc: 0.134, purchases: 312, purchaseValue: 16240, roas: 4.27 },
+  { key: 'facebook|feed', label: 'facebook · feed', spend: 2940, impressions: 760000, clicks: 22400, ctr: 2.95, cpc: 0.131, purchases: 198, purchaseValue: 8980, roas: 3.05 },
+  { key: 'instagram|story', label: 'instagram · stories', spend: 2300, impressions: 540000, clicks: 16400, ctr: 3.04, cpc: 0.140, purchases: 178, purchaseValue: 9320, roas: 4.05 },
+  { key: 'instagram|reels', label: 'instagram · reels', spend: 1980, impressions: 480000, clicks: 12200, ctr: 2.54, cpc: 0.162, purchases: 112, purchaseValue: 5840, roas: 2.95 },
+  { key: 'audience_network|stream', label: 'audience network · feed', spend: 720, impressions: 180000, clicks: 3400, ctr: 1.89, cpc: 0.212, purchases: 28, purchaseValue: 1200, roas: 1.67 },
+  { key: 'messenger|story', label: 'messenger · stories', spend: 480, impressions: 60000, clicks: 1400, ctr: 2.33, cpc: 0.343, purchases: 19, purchaseValue: 800, roas: 1.67 },
+];
+
+export const demoMetaDevices = [
+  { key: 'iphone', label: 'iphone', spend: 5800, impressions: 1240000, clicks: 41200, ctr: 3.32, cpc: 0.141, purchases: 462, purchaseValue: 22400, roas: 3.86 },
+  { key: 'android_smartphone', label: 'android smartphone', spend: 4200, impressions: 1080000, clicks: 31400, ctr: 2.91, cpc: 0.134, purchases: 298, purchaseValue: 14200, roas: 3.38 },
+  { key: 'ipad', label: 'ipad', spend: 1340, impressions: 280000, clicks: 7200, ctr: 2.57, cpc: 0.186, purchases: 62, purchaseValue: 3520, roas: 2.63 },
+  { key: 'desktop', label: 'desktop', spend: 1140, impressions: 240000, clicks: 4400, ctr: 1.83, cpc: 0.259, purchases: 25, purchaseValue: 2260, roas: 1.98 },
+];
 
 // ─── Google Ads ───────────────────────────────────────────────────────────────
 

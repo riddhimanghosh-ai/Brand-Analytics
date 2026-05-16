@@ -13,7 +13,7 @@ interface ShopifyConfig {
   slug?: string;
 }
 
-const API_VERSION = '2024-10';
+const API_VERSION = '2025-10';
 
 // ---------------------------------------------------------------------------
 // Exported interface for advanced CRO metrics
@@ -161,31 +161,41 @@ async function runShopifyQL(
   config: ShopifyConfig,
   query: string,
 ): Promise<Array<Record<string, string>>> {
+  // Schema in 2025-10:
+  //   shopifyqlQuery(query: String!): ShopifyqlQueryResponse
+  //   ShopifyqlQueryResponse { parseErrors: [String!]!  tableData: ShopifyqlTableData }
+  //   ShopifyqlTableData { columns: [...]!  rows: JSON! }
+  // `rows` is a JSON scalar — an array-of-arrays where each inner array maps
+  // positionally to `columns`.
   const gql = `{
     shopifyqlQuery(query: ${JSON.stringify(query)}) {
       tableData {
-        rowData
-        columns { name dataType }
+        rows
+        columns { name dataType displayName }
       }
-      parseErrors { code message }
+      parseErrors
     }
   }`;
 
   const data = await shopifyGraphQL(config, gql);
   const result = data.shopifyqlQuery as {
-    tableData?: { rowData: string[][]; columns: Array<{ name: string }> };
-    parseErrors?: Array<{ code: string; message: string }>;
+    tableData?: { rows: unknown; columns: Array<{ name: string; dataType?: string }> };
+    parseErrors?: string[];
   };
 
   if (result?.parseErrors?.length) {
-    throw new Error(`ShopifyQL: ${result.parseErrors.map((e) => e.message).join('; ')}`);
+    throw new Error(`ShopifyQL: ${result.parseErrors.join('; ')}`);
   }
 
-  const { rowData = [], columns = [] } = result?.tableData ?? {};
-  const colNames = columns.map((c) => c.name);
-  return rowData.map((row) =>
-    Object.fromEntries(colNames.map((col, i) => [col, row[i] ?? ''])),
-  );
+  // In 2025-10, `rows` is an array of objects keyed by column name (string values).
+  const rowsRaw = result?.tableData?.rows;
+  if (!Array.isArray(rowsRaw)) return [];
+  return rowsRaw.map((row) => {
+    const obj = row as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(obj)) out[k] = String(v ?? '');
+    return out;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -549,7 +559,9 @@ export async function getKPIs(
   const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
   // ── Try ShopifyQL first (fast path — sub-second, no pagination) ───────────
-  // Correct ShopifyQL syntax: FROM...SHOW...SINCE...UNTIL (not SELECT/sum())
+  // Valid ShopifyQL datasets: sales, customers, sessions (column names vary —
+  // confirmed via probing on 2025-10). Each enhancement query is wrapped in
+  // its own catch so column-not-found on one doesn't break the main KPIs.
   try {
     const [curRows, prevRows] = await Promise.all([
       runShopifyQL(
@@ -565,13 +577,10 @@ export async function getKPIs(
     const cur  = curRows[0]  ?? {};
     const prev = prevRows[0] ?? {};
 
-    console.log('[ShopifyQL getKPIs] cur row:', JSON.stringify(cur));
-    console.log('[ShopifyQL getKPIs] prev row:', JSON.stringify(prev));
-
     const totalRevenue  = parseFloat(cur.net_sales           ?? '0');
     const totalOrders   = parseInt(  cur.orders              ?? '0', 10);
     const grossSales    = parseFloat(cur.gross_sales         ?? '0');
-    const totalReturns  = parseFloat(cur.returns             ?? '0');
+    const totalReturns  = Math.abs(parseFloat(cur.returns    ?? '0')); // returns come back negative
     const aov           = parseFloat(cur.average_order_value ?? '0') || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
     const refundRate    = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
 
@@ -579,11 +588,21 @@ export async function getKPIs(
     const prevOrders    = parseInt(  prev.orders              ?? '0', 10);
     const prevAOV       = parseFloat(prev.average_order_value ?? '0') || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
 
+    // Optional enhancement: top product via GROUP BY on sales (cheap, ~1s)
+    let topProduct = '';
+    try {
+      const productRows = await runShopifyQL(
+        config,
+        `FROM sales SHOW net_sales GROUP BY product_title ORDER BY net_sales DESC LIMIT 1 SINCE ${currentStart} UNTIL ${currentEnd}`,
+      );
+      topProduct = productRows[0]?.product_title ?? '';
+    } catch { /* keep empty if it fails */ }
+
     return {
       totalRevenue,
       totalOrders,
       averageOrderValue:      aov,
-      totalCustomers:         0,   // not available from sales table alone
+      totalCustomers:         0, // ShopifyQL 'FROM customers' schema unstable — compute elsewhere if needed
       repeatCustomerRate:     0,
       conversionRate:         0,
       cartAbandonmentRate:    0,
@@ -591,7 +610,7 @@ export async function getKPIs(
       averageItemsPerOrder:   0,
       returningCustomerRevenue: 0,
       newCustomerRevenue:     0,
-      topSellingProduct:      '',
+      topSellingProduct:      topProduct,
       averageFulfillmentDays: 0,
       prevTotalRevenue:       prevRevenue,
       prevTotalOrders:        prevOrders,

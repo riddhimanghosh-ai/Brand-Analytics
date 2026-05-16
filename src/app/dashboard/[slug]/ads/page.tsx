@@ -7,8 +7,12 @@ import { DateRangeDropdown } from '@/components/DateRangeDropdown';
 import {
   AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell,
+  PieChart, Pie,
 } from 'recharts';
-import type { MetaKPIs, MetaCampaign, MetaSpendPoint } from '@/lib/services/meta';
+import type {
+  MetaKPIs, MetaCampaign, MetaSpendPoint, MetaAdSet, MetaAd,
+  MetaFunnel, MetaBreakdownRow,
+} from '@/lib/services/meta';
 import type { GoogleAdsKPIs, GoogleAdsCampaign, GoogleAdsSpendPoint } from '@/lib/services/google-ads';
 
 const COLORS = ['#3b82f6', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#f43f5e'];
@@ -49,10 +53,103 @@ function SpendTooltip({ active, payload, label }: {
 }
 
 // ---- Meta Ads Section ----
+function FunnelStrip({ funnel }: { funnel: MetaFunnel }) {
+  const stages = [
+    { key: 'impressions', label: 'Impressions', value: funnel.impressions, color: '#60a5fa' },
+    { key: 'reach', label: 'Reach', value: funnel.reach, color: '#3b82f6' },
+    { key: 'linkClicks', label: 'Link Clicks', value: funnel.linkClicks, color: '#8b5cf6' },
+    { key: 'addToCarts', label: 'Add to Cart', value: funnel.addToCarts, color: '#06b6d4' },
+    { key: 'initiatedCheckouts', label: 'Initiate Checkout', value: funnel.initiatedCheckouts, color: '#f59e0b' },
+    { key: 'purchases', label: 'Purchases', value: funnel.purchases, color: '#10b981' },
+  ];
+  const max = stages[0].value || 1;
+
+  return (
+    <div className="chart-card" style={{ marginTop: '24px' }}>
+      <div className="chart-card-header">
+        <div>
+          <div className="chart-card-title">🛒 Conversion Funnel</div>
+          <div className="chart-card-subtitle">From impression to purchase — with drop-off at each step</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '8px' }}>
+        {stages.map((s, i) => {
+          const pct = (s.value / max) * 100;
+          const prev = i > 0 ? stages[i - 1].value : null;
+          const stagePct = prev && prev > 0 ? (s.value / prev) * 100 : null;
+          return (
+            <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{ width: '140px', fontSize: '12px', color: 'var(--text-secondary)' }}>{s.label}</div>
+              <div style={{ flex: 1, position: 'relative', height: '30px', background: 'rgba(255,255,255,0.03)', borderRadius: '6px', overflow: 'hidden' }}>
+                <div style={{
+                  height: '100%', width: `${Math.max(pct, 1.5)}%`,
+                  background: `linear-gradient(90deg, ${s.color}, ${s.color}aa)`,
+                  borderRadius: '6px',
+                  display: 'flex', alignItems: 'center', paddingLeft: '12px',
+                  fontSize: '12px', fontWeight: 600, color: '#0f172a',
+                }}>
+                  {formatNum(s.value)}
+                </div>
+              </div>
+              <div style={{ width: '120px', textAlign: 'right', fontSize: '11px', color: 'var(--text-dim)' }}>
+                {stagePct != null ? `${stagePct.toFixed(1)}% step · ${((s.value / max) * 100).toFixed(2)}% of top` : `${pct.toFixed(2)}% baseline`}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BreakdownCard({ title, subtitle, rows, max = 6 }: { title: string; subtitle: string; rows: MetaBreakdownRow[]; max?: number }) {
+  if (!rows.length) return null;
+  const top = rows.slice(0, max);
+  return (
+    <div className="chart-card">
+      <div className="chart-card-header">
+        <div>
+          <div className="chart-card-title">{title}</div>
+          <div className="chart-card-subtitle">{subtitle}</div>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={220}>
+        <BarChart data={top} layout="vertical" margin={{ left: 8, right: 12 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+          <XAxis type="number" stroke="var(--text-dim)" fontSize={11} tickFormatter={(v: number) => `₹${(v / 1000).toFixed(0)}K`} />
+          <YAxis type="category" dataKey="label" stroke="var(--text-dim)" fontSize={11} width={130} />
+          <Tooltip
+            formatter={(value, name) => {
+              const n = Number(value ?? 0);
+              return name === 'spend' ? formatCurrency(n) : n.toLocaleString('en-IN');
+            }}
+            contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--glass-border)', borderRadius: '8px' }}
+          />
+          <Bar dataKey="spend" name="Spend" radius={[0, 4, 4, 0]}>
+            {top.map((r, i) => (
+              <Cell key={i} fill={r.roas >= 3 ? '#10b981' : r.roas >= 1.5 ? '#f59e0b' : '#f43f5e'} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+      <div style={{ padding: '8px 4px 0', fontSize: '11px', color: 'var(--text-dim)' }}>
+        Bars colored by ROAS · <span style={{ color: '#10b981' }}>≥3x</span> · <span style={{ color: '#f59e0b' }}>≥1.5x</span> · <span style={{ color: '#f43f5e' }}>&lt;1.5x</span>
+      </div>
+    </div>
+  );
+}
+
 function MetaSection({ slug, from, to, connected }: { slug: string; from: string; to: string; connected: boolean }) {
   const [kpis, setKpis] = useState<MetaKPIs | null>(null);
   const [campaigns, setCampaigns] = useState<MetaCampaign[]>([]);
+  const [adsets, setAdsets] = useState<MetaAdSet[]>([]);
+  const [ads, setAds] = useState<MetaAd[]>([]);
   const [spend, setSpend] = useState<MetaSpendPoint[]>([]);
+  const [funnel, setFunnel] = useState<MetaFunnel | null>(null);
+  const [demographics, setDemographics] = useState<MetaBreakdownRow[]>([]);
+  const [placements, setPlacements] = useState<MetaBreakdownRow[]>([]);
+  const [devices, setDevices] = useState<MetaBreakdownRow[]>([]);
+  const [activeTable, setActiveTable] = useState<'campaigns' | 'adsets' | 'ads'>('campaigns');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,16 +157,37 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
     if (!connected) { setLoading(false); return; }
     setLoading(true);
     setError(null);
+    const q = `slug=${slug}&platform=meta&from=${from}&to=${to}`;
     Promise.all([
-      fetch(`/api/ads?slug=${slug}&platform=meta&action=kpis&from=${from}&to=${to}`).then((r) => r.json()),
-      fetch(`/api/ads?slug=${slug}&platform=meta&action=campaigns&from=${from}&to=${to}`).then((r) => r.json()),
-      fetch(`/api/ads?slug=${slug}&platform=meta&action=spend&from=${from}&to=${to}`).then((r) => r.json()),
+      fetch(`/api/ads?${q}&action=kpis`).then((r) => r.json()),
+      fetch(`/api/ads?${q}&action=campaigns`).then((r) => r.json()),
+      fetch(`/api/ads?${q}&action=adsets`).then((r) => r.json()).catch(() => []),
+      fetch(`/api/ads?${q}&action=ads`).then((r) => r.json()).catch(() => []),
+      fetch(`/api/ads?${q}&action=spend`).then((r) => r.json()),
+      fetch(`/api/ads?${q}&action=demographics`).then((r) => r.json()).catch(() => []),
+      fetch(`/api/ads?${q}&action=placements`).then((r) => r.json()).catch(() => []),
+      fetch(`/api/ads?${q}&action=devices`).then((r) => r.json()).catch(() => []),
     ])
-      .then(([k, c, s]) => {
-        if (k.error) { setError(k.error); return; }
+      .then(([k, c, as, a, s, dem, pl, dev]) => {
+        if (k?.error) { setError(k.error); return; }
         setKpis(k);
         setCampaigns(Array.isArray(c) ? c : []);
+        setAdsets(Array.isArray(as) ? as : []);
+        setAds(Array.isArray(a) ? a : []);
         setSpend(Array.isArray(s) ? s : []);
+        setDemographics(Array.isArray(dem) ? dem : []);
+        setPlacements(Array.isArray(pl) ? pl : []);
+        setDevices(Array.isArray(dev) ? dev : []);
+        if (k) {
+          setFunnel({
+            impressions: k.impressions,
+            reach: k.reach,
+            linkClicks: k.linkClicks || k.clicks,
+            addToCarts: k.addToCarts,
+            initiatedCheckouts: k.initiatedCheckouts,
+            purchases: k.purchases,
+          });
+        }
       })
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
@@ -92,7 +210,7 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
     return (
       <>
         <div className="kpi-grid" style={{ marginTop: '16px' }}>
-          {[1, 2, 3, 4, 5, 6].map((i) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
             <div key={i} className="kpi-card">
               <div className="skeleton skeleton-text" style={{ width: '60%' }} />
               <div className="skeleton skeleton-title" />
@@ -117,8 +235,11 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
 
   if (!kpis) return null;
 
+  const placementPie = placements.slice(0, 6).map((p) => ({ name: p.label, value: p.spend }));
+
   return (
     <>
+      {/* Headline KPIs */}
       <div className="kpi-grid" style={{ marginTop: '16px' }}>
         <div className="kpi-card blue">
           <div className="kpi-icon">💸</div>
@@ -131,17 +252,23 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
           <div className="kpi-value">{kpis.roas.toFixed(2)}x</div>
           <div className="kpi-subtext">{kpis.roas >= 3 ? 'Strong' : kpis.roas >= 1.5 ? 'Moderate' : 'Below target'}</div>
         </div>
-        <div className="kpi-card violet">
-          <div className="kpi-icon">👆</div>
-          <div className="kpi-label">Clicks</div>
-          <div className="kpi-value">{formatNum(kpis.clicks)}</div>
-          <div className="kpi-subtext">CTR: {kpis.ctr.toFixed(2)}%</div>
-        </div>
         <div className="kpi-card amber">
           <div className="kpi-icon">💰</div>
           <div className="kpi-label">Purchase Revenue</div>
           <div className="kpi-value">{formatCurrency(kpis.purchaseValue)}</div>
           <div className="kpi-subtext">{kpis.purchases.toFixed(0)} purchases</div>
+        </div>
+        <div className="kpi-card rose">
+          <div className="kpi-icon">🛒</div>
+          <div className="kpi-label">Cost / Purchase</div>
+          <div className="kpi-value">{formatCurrency(kpis.costPerPurchase)}</div>
+          <div className="kpi-subtext">CR: {kpis.conversionRate.toFixed(2)}%</div>
+        </div>
+        <div className="kpi-card violet">
+          <div className="kpi-icon">👆</div>
+          <div className="kpi-label">Link Clicks</div>
+          <div className="kpi-value">{formatNum(kpis.linkClicks || kpis.clicks)}</div>
+          <div className="kpi-subtext">{formatCurrency(kpis.costPerLinkClick || kpis.cpc)} / click</div>
         </div>
         <div className="kpi-card cyan">
           <div className="kpi-icon">👁️</div>
@@ -149,28 +276,70 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
           <div className="kpi-value">{formatNum(kpis.impressions)}</div>
           <div className="kpi-subtext">CPM: {formatCurrency(kpis.cpm)}</div>
         </div>
-        <div className="kpi-card rose">
-          <div className="kpi-icon">🛒</div>
-          <div className="kpi-label">Cost per Purchase</div>
-          <div className="kpi-value">{formatCurrency(kpis.costPerPurchase)}</div>
-          {kpis.addToCarts > 0 && <div className="kpi-subtext">{kpis.addToCarts.toFixed(0)} add-to-carts</div>}
+        <div className="kpi-card blue">
+          <div className="kpi-icon">🎯</div>
+          <div className="kpi-label">Reach</div>
+          <div className="kpi-value">{formatNum(kpis.reach)}</div>
+          <div className="kpi-subtext">Freq: {kpis.frequency.toFixed(2)}x</div>
+        </div>
+        <div className="kpi-card emerald">
+          <div className="kpi-icon">📊</div>
+          <div className="kpi-label">CTR / Unique CTR</div>
+          <div className="kpi-value">{kpis.ctr.toFixed(2)}%</div>
+          <div className="kpi-subtext">Unique: {kpis.uniqueCtr.toFixed(2)}%</div>
         </div>
       </div>
 
+      {/* Secondary KPI row — conversion intermediates */}
+      <div className="kpi-grid" style={{ marginTop: '16px', gridTemplateColumns: 'repeat(4, 1fr)' }}>
+        <div className="kpi-card cyan">
+          <div className="kpi-icon">🛍️</div>
+          <div className="kpi-label">Add to Cart</div>
+          <div className="kpi-value">{formatNum(kpis.addToCarts)}</div>
+          <div className="kpi-subtext">{formatCurrency(kpis.costPerAddToCart)} / ATC</div>
+        </div>
+        <div className="kpi-card amber">
+          <div className="kpi-icon">💳</div>
+          <div className="kpi-label">Initiated Checkout</div>
+          <div className="kpi-value">{formatNum(kpis.initiatedCheckouts)}</div>
+          <div className="kpi-subtext">{formatCurrency(kpis.costPerInitiatedCheckout)} / IC</div>
+        </div>
+        <div className="kpi-card violet">
+          <div className="kpi-icon">📦</div>
+          <div className="kpi-label">View Content</div>
+          <div className="kpi-value">{formatNum(kpis.viewContent)}</div>
+          <div className="kpi-subtext">Product page visits</div>
+        </div>
+        <div className="kpi-card rose">
+          <div className="kpi-icon">🎬</div>
+          <div className="kpi-label">Video Plays</div>
+          <div className="kpi-value">{formatNum(kpis.videoPlays)}</div>
+          <div className="kpi-subtext">{formatNum(kpis.videoCompletions)} watched to end</div>
+        </div>
+      </div>
+
+      {/* Funnel */}
+      {funnel && <FunnelStrip funnel={funnel} />}
+
+      {/* Spend trend with revenue overlay */}
       {spend.length > 0 && (
         <div className="chart-card" style={{ marginTop: '24px' }}>
           <div className="chart-card-header">
             <div>
-              <div className="chart-card-title">Spend & Clicks Over Time</div>
-              <div className="chart-card-subtitle">Daily Meta Ads spend and click volume</div>
+              <div className="chart-card-title">Spend vs Revenue Over Time</div>
+              <div className="chart-card-subtitle">Daily spend, clicks, and purchase revenue</div>
             </div>
           </div>
-          <ResponsiveContainer width="100%" height={260}>
+          <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={spend}>
               <defs>
                 <linearGradient id="metaSpendGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="metaRevGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
@@ -179,27 +348,79 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
               <Tooltip content={<SpendTooltip />} />
               <Legend />
               <Area type="monotone" dataKey="spend" stroke="#3b82f6" fill="url(#metaSpendGrad)" strokeWidth={2} name="Spend (₹)" />
+              <Area type="monotone" dataKey="purchaseValue" stroke="#10b981" fill="url(#metaRevGrad)" strokeWidth={2} name="Revenue (₹)" />
               <Area type="monotone" dataKey="clicks" stroke="#8b5cf6" fill="none" strokeWidth={2} name="Clicks" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
       )}
 
-      {campaigns.length > 0 && (
-        <div className="data-table-wrapper" style={{ marginTop: '24px' }}>
-          <div className="data-table-header">
-            <div className="data-table-title">📋 Campaign Performance</div>
+      {/* Breakdowns row */}
+      <div className="charts-grid cols-2" style={{ marginTop: '24px' }}>
+        <BreakdownCard title="👥 Age × Gender" subtitle="Spend distribution by demographic — colored by ROAS" rows={demographics} />
+        <div className="chart-card">
+          <div className="chart-card-header">
+            <div>
+              <div className="chart-card-title">📍 Placement Mix</div>
+              <div className="chart-card-subtitle">Spend share across FB / IG / Stories / Reels</div>
+            </div>
           </div>
-          <div style={{ overflowX: 'auto' }}>
+          {placementPie.length > 0 ? (
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie data={placementPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={50} paddingAngle={2}>
+                  {placementPie.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip formatter={(v) => formatCurrency(Number(v ?? 0))} contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--glass-border)', borderRadius: '8px' }} />
+                <Legend wrapperStyle={{ fontSize: '11px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '12px' }}>No placement data for this period</div>
+          )}
+        </div>
+      </div>
+
+      <div className="charts-grid cols-2" style={{ marginTop: '24px' }}>
+        <BreakdownCard title="📱 Devices" subtitle="Spend by device — iPhone, Android, desktop" rows={devices} />
+        <BreakdownCard title="🎯 Placement Performance" subtitle="Where your spend converts best" rows={placements} max={6} />
+      </div>
+
+      {/* Hierarchy tables — switch between Campaigns / Ad Sets / Ads */}
+      <div className="data-table-wrapper" style={{ marginTop: '24px' }}>
+        <div className="data-table-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div className="data-table-title">📋 Performance Breakdown</div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            {(['campaigns', 'adsets', 'ads'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setActiveTable(t)}
+                style={{
+                  padding: '6px 12px', borderRadius: '6px',
+                  background: activeTable === t ? 'var(--accent-blue)' : 'var(--bg-card)',
+                  color: activeTable === t ? '#fff' : 'var(--text-secondary)',
+                  border: '1px solid var(--glass-border)', cursor: 'pointer', fontSize: '12px',
+                  textTransform: 'capitalize',
+                }}
+              >
+                {t === 'adsets' ? 'Ad Sets' : t} ({t === 'campaigns' ? campaigns.length : t === 'adsets' ? adsets.length : ads.length})
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          {activeTable === 'campaigns' && (
             <table className="data-table">
               <thead>
                 <tr>
                   <th>Campaign</th>
                   <th>Spend</th>
+                  <th>Reach</th>
                   <th>Impressions</th>
-                  <th>Clicks</th>
+                  <th>Link Clicks</th>
                   <th>CTR</th>
                   <th>CPC</th>
+                  <th>ATC</th>
                   <th>Purchases</th>
                   <th>Revenue</th>
                   <th>ROAS</th>
@@ -210,10 +431,12 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
                   <tr key={c.id}>
                     <td className="highlight" style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</td>
                     <td className="mono">{formatCurrency(c.spend)}</td>
+                    <td className="mono">{formatNum(c.reach)}</td>
                     <td className="mono">{formatNum(c.impressions)}</td>
-                    <td className="mono">{formatNum(c.clicks)}</td>
+                    <td className="mono">{formatNum(c.linkClicks || c.clicks)}</td>
                     <td className="mono">{c.ctr.toFixed(2)}%</td>
                     <td className="mono">{formatCurrency(c.cpc)}</td>
+                    <td className="mono">{formatNum(c.addToCarts)}</td>
                     <td className="mono">{c.purchases.toFixed(0)}</td>
                     <td className="mono">{formatCurrency(c.purchaseValue)}</td>
                     <td>
@@ -225,9 +448,104 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
                 ))}
               </tbody>
             </table>
-          </div>
+          )}
+          {activeTable === 'adsets' && (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Ad Set</th>
+                  <th>Campaign</th>
+                  <th>Spend</th>
+                  <th>Reach</th>
+                  <th>Impressions</th>
+                  <th>Clicks</th>
+                  <th>CTR</th>
+                  <th>CPC</th>
+                  <th>Purchases</th>
+                  <th>Revenue</th>
+                  <th>ROAS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adsets.length === 0 ? (
+                  <tr><td colSpan={11} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-dim)' }}>No ad sets in this date range.</td></tr>
+                ) : adsets.map((a) => (
+                  <tr key={a.id}>
+                    <td className="highlight" style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</td>
+                    <td style={{ fontSize: '12px', color: 'var(--text-muted)', maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.campaignName ?? '—'}</td>
+                    <td className="mono">{formatCurrency(a.spend)}</td>
+                    <td className="mono">{formatNum(a.reach)}</td>
+                    <td className="mono">{formatNum(a.impressions)}</td>
+                    <td className="mono">{formatNum(a.clicks)}</td>
+                    <td className="mono">{a.ctr.toFixed(2)}%</td>
+                    <td className="mono">{formatCurrency(a.cpc)}</td>
+                    <td className="mono">{a.purchases.toFixed(0)}</td>
+                    <td className="mono">{formatCurrency(a.purchaseValue)}</td>
+                    <td>
+                      <span className={`badge ${a.roas >= 3 ? 'green' : a.roas >= 1.5 ? 'amber' : 'rose'}`}>
+                        {a.roas.toFixed(2)}x
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          {activeTable === 'ads' && (
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Ad</th>
+                  <th>Campaign / Ad set</th>
+                  <th>Spend</th>
+                  <th>Impressions</th>
+                  <th>Clicks</th>
+                  <th>CTR</th>
+                  <th>CPC</th>
+                  <th>Purchases</th>
+                  <th>Revenue</th>
+                  <th>ROAS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ads.length === 0 ? (
+                  <tr><td colSpan={10} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-dim)' }}>No ads in this date range.</td></tr>
+                ) : ads.map((a) => (
+                  <tr key={a.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {a.thumbnailUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img src={a.thumbnailUrl} alt="" width={40} height={40} style={{ borderRadius: '6px', objectFit: 'cover', flex: 'none' }} />
+                        ) : (
+                          <div style={{ width: 40, height: 40, borderRadius: '6px', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flex: 'none' }}>🎯</div>
+                        )}
+                        <div className="highlight" style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</div>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: '11px', color: 'var(--text-muted)', maxWidth: '180px', lineHeight: 1.3 }}>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.campaignName ?? '—'}</div>
+                      <div style={{ color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.adsetName ?? ''}</div>
+                    </td>
+                    <td className="mono">{formatCurrency(a.spend)}</td>
+                    <td className="mono">{formatNum(a.impressions)}</td>
+                    <td className="mono">{formatNum(a.clicks)}</td>
+                    <td className="mono">{a.ctr.toFixed(2)}%</td>
+                    <td className="mono">{formatCurrency(a.cpc)}</td>
+                    <td className="mono">{a.purchases.toFixed(0)}</td>
+                    <td className="mono">{formatCurrency(a.purchaseValue)}</td>
+                    <td>
+                      <span className={`badge ${a.roas >= 3 ? 'green' : a.roas >= 1.5 ? 'amber' : 'rose'}`}>
+                        {a.roas.toFixed(2)}x
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-      )}
+      </div>
     </>
   );
 }

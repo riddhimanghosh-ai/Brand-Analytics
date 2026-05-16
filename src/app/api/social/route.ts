@@ -1,7 +1,10 @@
 import { getBrand } from '@/lib/mongodb-store';
-import { getPageComments, analyzeSentiment } from '@/lib/services/social';
+import { getPageComments, analyzeSentiment, type SocialComment } from '@/lib/services/social';
+import { getCommentsFromAds, getPermissions, getPageCoverage, getAdEngagement, probeReviewPermissions } from '@/lib/services/meta';
 import { NextResponse } from 'next/server';
 import { demoSocialComments, demoSocialStats } from '@/lib/demo-data';
+
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   try {
@@ -14,31 +17,98 @@ export async function GET(request: Request) {
     const brand = await getBrand(slug);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
 
-    // ── Demo mode ──────────────────────────────────────────────────────────
     if (slug === 'demo') {
       return NextResponse.json({ comments: demoSocialComments, stats: demoSocialStats });
     }
-    // ────────────────────────────────────────────────────────────────────────
 
     if (!brand.metaAccessToken) {
-      return NextResponse.json({ error: 'Meta Ads not connected. Add your Meta Access Token in Settings.' }, { status: 400 });
+      return NextResponse.json({
+        error: 'Meta Ads not connected. Add your Meta Access Token in Settings.',
+        permissions: null,
+        source: null,
+      }, { status: 400 });
     }
 
     const config = {
       accessToken: brand.metaAccessToken,
-      adAccountId: brand.metaAdAccountId,
+      adAccountId: brand.metaAdAccountId ?? null,
     };
 
-    let comments;
+    const permissions = await getPermissions(brand.metaAccessToken).catch(() => null);
+
+    // Page-coverage diagnostic — explains "permissions ok but no comments"
+    const coverage = brand.metaAdAccountId
+      ? await getPageCoverage({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }).catch(() => null)
+      : null;
+
+    // Ad engagement counts — works with ads_read only, gives real numbers
+    // even when comment-text is blocked (e.g. influencer Partnership Ads)
+    const range = searchParams.get('range') || '30d';
+    const engagement = brand.metaAdAccountId
+      ? await getAdEngagement({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }, range).catch(() => null)
+      : null;
+
+    // App Review probe — fires API calls for pending permissions
+    // (pages_manage_ads, instagram_branded_content_ads_brand) so Meta's
+    // "0 of 1 API call(s)" counters tick upward. Silent in normal use.
+    const probeReview = searchParams.get('probe') === '1';
+    const probe = probeReview && brand.metaAdAccountId
+      ? await probeReviewPermissions({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }).catch(() => null)
+      : null;
+
+    let comments: SocialComment[] = [];
+    let source: 'pages' | 'ads' | 'none' = 'none';
+
+    // Path 1: full page access — fetch Facebook + Instagram comments
     try {
       comments = await getPageComments(config);
+      source = 'pages';
     } catch (e) {
-      if ((e as Error).message === 'PAGE_ACCESS_REQUIRED') {
+      const msg = (e as Error).message;
+
+      // Path 2: page access denied — fall back to ad-creative comments
+      // (works with just ads_read on the user's promoted/dark posts)
+      if (msg === 'PAGE_ACCESS_REQUIRED' && brand.metaAdAccountId) {
+        try {
+          const adCmnts = await getCommentsFromAds(
+            { accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId },
+            '30d',
+          );
+          comments = adCmnts.map((c) => ({
+            id: c.id,
+            platform: 'Facebook' as const,
+            postPreview: c.adName ? `Ad: ${c.adName.slice(0, 56)}` : '[Ad post]',
+            postId: c.postId,
+            comment: c.message,
+            author: c.author,
+            authorId: '',
+            date: c.date,
+            source: 'post_comment' as const,
+          }));
+          source = 'ads';
+        } catch {
+          // both paths failed — surface helpful guidance
+          return NextResponse.json({
+            error: 'page_access_required',
+            message: 'Your Meta connection has ads access but not Page access. Re-authorize and grant pages_show_list + pages_read_engagement, or add a Facebook Page to your Meta Business account.',
+            permissions,
+            coverage,
+            engagement,
+            source: null,
+          }, { status: 200 });
+        }
+      } else if (msg === 'PAGE_ACCESS_REQUIRED') {
         return NextResponse.json({
-          error: 'Your Meta token does not have Facebook Page access. Go to Settings and generate a token with pages_read_engagement and pages_show_list permissions, or use a Page Access Token.',
-        }, { status: 400 });
+          error: 'page_access_required',
+          message: 'Your Meta connection has ads access but not Page access. Re-authorize and grant pages_show_list + pages_read_engagement.',
+          permissions,
+          coverage,
+          engagement,
+          source: null,
+        }, { status: 200 });
+      } else {
+        throw e;
       }
-      throw e;
     }
 
     if (withSentiment && comments.length > 0) {
@@ -57,9 +127,9 @@ export async function GET(request: Request) {
       instagram: comments.filter(c => c.platform === 'Instagram').length,
     };
 
-    return NextResponse.json({ comments, stats });
+    return NextResponse.json({ comments, stats, permissions, coverage, engagement, source, probe });
   } catch (err) {
     console.error('Social route error:', err);
-    return NextResponse.json({ error: 'Failed to fetch social comments' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to fetch social comments', message: (err as Error).message }, { status: 500 });
   }
 }

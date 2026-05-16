@@ -5,6 +5,8 @@ import * as googleAds from '@/lib/services/google-ads';
 import { requireBrandAccess } from '@/lib/auth-server';
 import {
   demoMetaKPIs, demoMetaCampaigns, demoMetaSpend,
+  demoMetaFunnel, demoMetaAdSets, demoMetaAds,
+  demoMetaDemographics, demoMetaPlacements, demoMetaDevices,
   demoGoogleAdsKPIs, demoGoogleAdsCampaigns, demoGoogleAdsSpend,
 } from '@/lib/demo-data';
 
@@ -34,7 +36,14 @@ export async function GET(request: Request) {
         switch (action) {
           case 'kpis': return NextResponse.json(demoMetaKPIs);
           case 'campaigns': return NextResponse.json(demoMetaCampaigns);
+          case 'adsets': return NextResponse.json(demoMetaAdSets);
+          case 'ads': return NextResponse.json(demoMetaAds);
           case 'spend': return NextResponse.json(demoMetaSpend);
+          case 'funnel': return NextResponse.json(demoMetaFunnel);
+          case 'demographics': return NextResponse.json(demoMetaDemographics);
+          case 'placements': return NextResponse.json(demoMetaPlacements);
+          case 'devices': return NextResponse.json(demoMetaDevices);
+          case 'permissions': return NextResponse.json({ granted: ['ads_read','ads_management','pages_show_list','pages_read_engagement','instagram_basic'], declined: [], expired: [], hasPageAccess: true, hasInstagramAccess: true, pagesCount: 1, adAccountCount: 1 });
           default: return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
         }
       }
@@ -66,8 +75,24 @@ export async function GET(request: Request) {
           return NextResponse.json(await meta.getKPIs(config, dateRange));
         case 'campaigns':
           return NextResponse.json(await meta.getCampaigns(config, dateRange));
+        case 'adsets':
+          return NextResponse.json(await meta.getAdSets(config, dateRange));
+        case 'ads':
+          return NextResponse.json(await meta.getAds(config, dateRange));
         case 'spend':
           return NextResponse.json(await meta.getSpendOverTime(config, dateRange));
+        case 'funnel':
+          return NextResponse.json(await meta.getFunnel(config, dateRange));
+        case 'demographics':
+          return NextResponse.json(await meta.getDemographics(config, dateRange));
+        case 'placements':
+          return NextResponse.json(await meta.getPlacements(config, dateRange));
+        case 'devices':
+          return NextResponse.json(await meta.getDevices(config, dateRange));
+        case 'countries':
+          return NextResponse.json(await meta.getCountries(config, dateRange));
+        case 'permissions':
+          return NextResponse.json(await meta.getPermissions(config.accessToken));
         default:
           return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
       }
