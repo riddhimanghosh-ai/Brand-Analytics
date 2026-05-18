@@ -160,13 +160,7 @@ async function shopifyGraphQL(
 async function runShopifyQL(
   config: ShopifyConfig,
   query: string,
-): Promise<Array<Record<string, string>>> {
-  // Schema in 2025-10:
-  //   shopifyqlQuery(query: String!): ShopifyqlQueryResponse
-  //   ShopifyqlQueryResponse { parseErrors: [String!]!  tableData: ShopifyqlTableData }
-  //   ShopifyqlTableData { columns: [...]!  rows: JSON! }
-  // `rows` is a JSON scalar — an array-of-arrays where each inner array maps
-  // positionally to `columns`.
+): Promise<Array<Record<string, number | string>>> {
   const gql = `{
     shopifyqlQuery(query: ${JSON.stringify(query)}) {
       tableData {
@@ -187,13 +181,28 @@ async function runShopifyQL(
     throw new Error(`ShopifyQL: ${result.parseErrors.join('; ')}`);
   }
 
-  // In 2025-10, `rows` is an array of objects keyed by column name (string values).
+  const columns = result?.tableData?.columns ?? [];
   const rowsRaw = result?.tableData?.rows;
   if (!Array.isArray(rowsRaw)) return [];
+
+  // Mirror the Slack bot's parseTable logic: use column dataType to convert values.
+  // ShopifyQL returns PERCENT columns as decimals (0.0234 = 2.34%) — multiply by 100.
   return rowsRaw.map((row) => {
     const obj = row as Record<string, unknown>;
-    const out: Record<string, string> = {};
-    for (const [k, v] of Object.entries(obj)) out[k] = String(v ?? '');
+    const out: Record<string, number | string> = {};
+    for (const col of columns) {
+      const raw = obj[col.name];
+      const str = String(raw ?? '');
+      if (col.dataType === 'PERCENT') {
+        out[col.name] = parseFloat(str) * 100;
+      } else if (col.dataType === 'MONEY' || col.dataType === 'FLOAT') {
+        out[col.name] = parseFloat(str) || 0;
+      } else if (col.dataType === 'INTEGER') {
+        out[col.name] = parseInt(str, 10) || 0;
+      } else {
+        out[col.name] = str;
+      }
+    }
     return out;
   });
 }
@@ -559,11 +568,8 @@ export async function getKPIs(
   const prevStart = new Date(new Date(prevEnd).getTime() - (days - 1) * 86_400_000).toISOString().split('T')[0];
 
   // ── Try ShopifyQL first (fast path — sub-second, no pagination) ───────────
-  // Valid ShopifyQL datasets: sales, customers, sessions (column names vary —
-  // confirmed via probing on 2025-10). Each enhancement query is wrapped in
-  // its own catch so column-not-found on one doesn't break the main KPIs.
   try {
-    const [curRows, prevRows] = await Promise.all([
+    const [curRows, prevRows, sessionRows] = await Promise.all([
       runShopifyQL(
         config,
         `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value SINCE ${currentStart} UNTIL ${currentEnd}`,
@@ -572,50 +578,62 @@ export async function getKPIs(
         config,
         `FROM sales SHOW orders, net_sales, average_order_value SINCE ${prevStart} UNTIL ${prevEnd}`,
       ),
+      runShopifyQL(
+        config,
+        `FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE ${currentStart} UNTIL ${currentEnd}`,
+      ).catch(() => [] as Array<Record<string, number | string>>),
     ]);
 
-    const cur  = curRows[0]  ?? {};
-    const prev = prevRows[0] ?? {};
+    const cur     = curRows[0]     ?? {};
+    const prev    = prevRows[0]    ?? {};
+    const session = sessionRows[0] ?? {};
 
-    const totalRevenue  = parseFloat(cur.net_sales           ?? '0');
-    const totalOrders   = parseInt(  cur.orders              ?? '0', 10);
-    const grossSales    = parseFloat(cur.gross_sales         ?? '0');
-    const totalReturns  = Math.abs(parseFloat(cur.returns    ?? '0')); // returns come back negative
-    const aov           = parseFloat(cur.average_order_value ?? '0') || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
-    const refundRate    = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
+    const totalRevenue = Number(cur.net_sales           ?? 0);
+    const totalOrders  = Number(cur.orders              ?? 0);
+    const grossSales   = Number(cur.gross_sales         ?? 0);
+    const totalReturns = Math.abs(Number(cur.returns    ?? 0));
+    const aov          = Number(cur.average_order_value ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+    const refundRate   = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
 
-    const prevRevenue   = parseFloat(prev.net_sales           ?? '0');
-    const prevOrders    = parseInt(  prev.orders              ?? '0', 10);
-    const prevAOV       = parseFloat(prev.average_order_value ?? '0') || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
+    const prevRevenue = Number(prev.net_sales           ?? 0);
+    const prevOrders  = Number(prev.orders              ?? 0);
+    const prevAOV     = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
 
-    // Optional enhancement: top product via GROUP BY on sales (cheap, ~1s)
+    // Sessions funnel — mirrors the Slack bot's get_funnel tool logic
+    const totalSessions = Number(session.sessions        ?? 0);
+    const atcRate       = Number(session.added_to_cart_rate ?? 0); // already *100 (PERCENT col)
+    // Derive conversion rate from orders/sessions for accuracy (matches bot approach)
+    const conversionRate = totalSessions > 0 ? (totalOrders / totalSessions) * 100 : Number(session.conversion_rate ?? 0);
+    const cartAbandonmentRate = atcRate > 0 ? Math.max(0, ((atcRate - conversionRate) / atcRate) * 100) : 0;
+
+    // Optional: top product
     let topProduct = '';
     try {
       const productRows = await runShopifyQL(
         config,
         `FROM sales SHOW net_sales GROUP BY product_title ORDER BY net_sales DESC LIMIT 1 SINCE ${currentStart} UNTIL ${currentEnd}`,
       );
-      topProduct = productRows[0]?.product_title ?? '';
+      topProduct = String(productRows[0]?.product_title ?? '');
     } catch { /* keep empty if it fails */ }
 
     return {
       totalRevenue,
       totalOrders,
-      averageOrderValue:      aov,
-      totalCustomers:         0, // ShopifyQL 'FROM customers' schema unstable — compute elsewhere if needed
-      repeatCustomerRate:     0,
-      conversionRate:         0,
-      cartAbandonmentRate:    0,
+      averageOrderValue:        aov,
+      totalCustomers:           0,
+      repeatCustomerRate:       0,
+      conversionRate,
+      cartAbandonmentRate,
       refundRate,
-      averageItemsPerOrder:   0,
+      averageItemsPerOrder:     0,
       returningCustomerRevenue: 0,
-      newCustomerRevenue:     0,
-      topSellingProduct:      topProduct,
-      averageFulfillmentDays: 0,
-      prevTotalRevenue:       prevRevenue,
-      prevTotalOrders:        prevOrders,
-      prevAverageOrderValue:  prevAOV,
-      prevTotalCustomers:     0,
+      newCustomerRevenue:       0,
+      topSellingProduct:        topProduct,
+      averageFulfillmentDays:   0,
+      prevTotalRevenue:         prevRevenue,
+      prevTotalOrders:          prevOrders,
+      prevAverageOrderValue:    prevAOV,
+      prevTotalCustomers:       0,
     };
   } catch (err) {
     console.warn('[ShopifyQL getKPIs] ShopifyQL failed, falling back to paginated fetch:', (err as Error).message);
@@ -688,11 +706,10 @@ export async function getRevenueOverTime(
     const byDate = buildDateMap();
 
     for (const row of rows) {
-      // ShopifyQL returns `day` as "YYYY-MM-DD" or "YYYY-MM-DDT00:00:00"
-      const date = (row.day ?? '').split('T')[0];
+      const date = String(row.day ?? '').split('T')[0];
       if (date && byDate[date] !== undefined) {
-        byDate[date].revenue = parseFloat(row.net_sales ?? '0');
-        byDate[date].orders  = parseInt(row.orders      ?? '0', 10);
+        byDate[date].revenue = Number(row.net_sales ?? 0);
+        byDate[date].orders  = Number(row.orders    ?? 0);
       }
     }
 
@@ -1356,37 +1373,49 @@ async function buildAllAnalyticsFromShopifyQL(
   orderStatus: { name: string; value: number }[];
   conversionFunnel: ConversionFunnel[];
 }> {
-  const [kpiRows, revenueRows, productRows, customerRows, prevRows] = await Promise.all([
-    // Current period: totals
+  const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows] = await Promise.all([
+    // Current period: sales totals
     runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, customers, returning_customers, returning_customer_rate SINCE ${startDate} UNTIL ${endDate}`),
     // Current period: daily timeseries
     runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
     // Top 15 products by gross sales
     runShopifyQL(config, `FROM sales SHOW gross_sales, net_sales, orders GROUP BY product_title ORDER BY gross_sales DESC LIMIT 15 SINCE ${startDate} UNTIL ${endDate}`),
-    // Financial status breakdown (for order status / funnel)
+    // Financial status breakdown
     runShopifyQL(config, `FROM sales SHOW orders GROUP BY order_status SINCE ${startDate} UNTIL ${endDate}`),
     // Previous period: totals for comparison
     runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`),
+    // Sessions funnel — same queries the Slack bot's get_funnel tool uses
+    runShopifyQL(config, `FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE ${startDate} UNTIL ${endDate}`)
+      .catch(() => [] as Array<Record<string, number | string>>),
   ]);
 
   // ── Parse current period KPIs ────────────────────────────────────────────
   const kpi = kpiRows[0] ?? {};
-  const totalOrders      = parseInt(  kpi.orders              ?? '0', 10);
-  const totalRevenue     = parseFloat(kpi.net_sales           ?? '0');
-  const grossSales       = parseFloat(kpi.gross_sales         ?? '0');
-  const totalReturns     = parseFloat(kpi.returns             ?? '0');
-  const aov              = parseFloat(kpi.average_order_value ?? '0') || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
-  const totalCustomers   = parseInt(  kpi.customers           ?? '0', 10);
-  const returningCustomers = parseInt(kpi.returning_customers ?? '0', 10);
-  const returningRate    = parseFloat(kpi.returning_customer_rate ?? '0') * 100; // fraction → %
-  const refundRate       = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
+  const totalOrders        = Number(kpi.orders              ?? 0);
+  const totalRevenue       = Number(kpi.net_sales           ?? 0);
+  const grossSales         = Number(kpi.gross_sales         ?? 0);
+  const totalReturns       = Number(kpi.returns             ?? 0);
+  const aov                = Number(kpi.average_order_value ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+  const totalCustomers     = Number(kpi.customers           ?? 0);
+  const returningCustomers = Number(kpi.returning_customers ?? 0);
+  // returning_customer_rate is a PERCENT column — runShopifyQL already multiplied by 100
+  const returningRate      = Number(kpi.returning_customer_rate ?? 0);
+  const refundRate         = grossSales > 0 ? (Math.abs(totalReturns) / grossSales) * 100 : 0;
+
+  // ── Parse sessions funnel (mirrors bot's get_funnel) ────────────────────
+  const session       = sessionRows[0] ?? {};
+  const totalSessions = Number(session.sessions           ?? 0);
+  const atcRate       = Number(session.added_to_cart_rate ?? 0); // PERCENT col — already *100
+  // Use orders/sessions ratio for accuracy (bot's approach, works for custom checkout too)
+  const conversionRate      = totalSessions > 0 ? (totalOrders / totalSessions) * 100 : Number(session.conversion_rate ?? 0);
+  const cartAbandonmentRate = atcRate > 0 ? Math.max(0, ((atcRate - conversionRate) / atcRate) * 100) : 0;
 
   // ── Parse previous period ────────────────────────────────────────────────
   const prev = prevRows[0] ?? {};
-  const prevOrders   = parseInt(  prev.orders              ?? '0', 10);
-  const prevRevenue  = parseFloat(prev.net_sales           ?? '0');
-  const prevAOV      = parseFloat(prev.average_order_value ?? '0') || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
-  const prevCustomers = parseInt( prev.customers           ?? '0', 10);
+  const prevOrders    = Number(prev.orders              ?? 0);
+  const prevRevenue   = Number(prev.net_sales           ?? 0);
+  const prevAOV       = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
+  const prevCustomers = Number(prev.customers           ?? 0);
 
   // ── Build revenue time series ────────────────────────────────────────────
   const revenueByDate: Record<string, { revenue: number; orders: number }> = {};
@@ -1396,10 +1425,10 @@ async function buildAllAnalyticsFromShopifyQL(
     revenueByDate[key] = { revenue: 0, orders: 0 };
   }
   for (const row of revenueRows) {
-    const date = (row.day ?? '').split('T')[0];
+    const date = String(row.day ?? '').split('T')[0];
     if (date && revenueByDate[date] !== undefined) {
-      revenueByDate[date].revenue = parseFloat(row.net_sales ?? '0');
-      revenueByDate[date].orders  = parseInt(row.orders      ?? '0', 10);
+      revenueByDate[date].revenue = Number(row.net_sales ?? 0);
+      revenueByDate[date].orders  = Number(row.orders    ?? 0);
     }
   }
   const revenue = Object.entries(revenueByDate)
@@ -1414,18 +1443,18 @@ async function buildAllAnalyticsFromShopifyQL(
   // ── Build top products ───────────────────────────────────────────────────
   const products: ShopifyProduct[] = productRows.map((row, i) => ({
     id:             `shopifyql-${i}`,
-    title:          row.product_title ?? 'Unknown',
-    totalRevenue:   parseFloat(row.net_sales   ?? '0'),
+    title:          String(row.product_title ?? 'Unknown'),
+    totalRevenue:   Number(row.net_sales   ?? 0),
     totalUnitsSold: 0,
-    totalOrders:    parseInt(row.orders        ?? '0', 10),
+    totalOrders:    Number(row.orders      ?? 0),
     averagePrice:   0,
     imageUrl:       null,
   }));
 
   // ── Build order status breakdown ─────────────────────────────────────────
-  const orderStatus = customerRows.map((row) => ({
-    name:  row.order_status ?? 'Unknown',
-    value: parseInt(row.orders ?? '0', 10),
+  const orderStatus = orderStatusRows.map((row) => ({
+    name:  String(row.order_status ?? 'Unknown'),
+    value: Number(row.orders ?? 0),
   }));
 
   // ── Build conversion funnel ──────────────────────────────────────────────
@@ -1437,21 +1466,21 @@ async function buildAllAnalyticsFromShopifyQL(
   const kpis: ShopifyKPIs = {
     totalRevenue,
     totalOrders,
-    averageOrderValue:       aov,
+    averageOrderValue:        aov,
     totalCustomers,
-    repeatCustomerRate:      returningRate,
-    conversionRate:          0,
-    cartAbandonmentRate:     0,
+    repeatCustomerRate:       returningRate,
+    conversionRate,
+    cartAbandonmentRate,
     refundRate,
-    averageItemsPerOrder:    0,
+    averageItemsPerOrder:     0,
     returningCustomerRevenue: 0,
-    newCustomerRevenue:      0,
-    topSellingProduct:       products[0]?.title ?? '',
-    averageFulfillmentDays:  0,
-    prevTotalRevenue:        prevRevenue,
-    prevTotalOrders:         prevOrders,
-    prevAverageOrderValue:   prevAOV,
-    prevTotalCustomers:      prevCustomers,
+    newCustomerRevenue:       0,
+    topSellingProduct:        products[0]?.title ?? '',
+    averageFulfillmentDays:   0,
+    prevTotalRevenue:         prevRevenue,
+    prevTotalOrders:          prevOrders,
+    prevAverageOrderValue:    prevAOV,
+    prevTotalCustomers:       prevCustomers,
   };
 
   console.log(`[ShopifyQL getAllAnalytics] ${totalOrders} orders, ₹${totalRevenue.toFixed(0)} net sales`);
