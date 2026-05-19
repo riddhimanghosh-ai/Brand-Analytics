@@ -1380,8 +1380,9 @@ async function buildAllAnalyticsFromShopifyQL(
     runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
     // Top 15 products by gross sales
     runShopifyQL(config, `FROM sales SHOW gross_sales, net_sales, orders GROUP BY product_title ORDER BY gross_sales DESC LIMIT 15 SINCE ${startDate} UNTIL ${endDate}`),
-    // Financial status breakdown
-    runShopifyQL(config, `FROM sales SHOW orders GROUP BY order_status SINCE ${startDate} UNTIL ${endDate}`),
+    // Shipping country breakdown (order_status not available in ShopifyQL FROM sales)
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales GROUP BY shipping_country ORDER BY orders DESC LIMIT 20 SINCE ${startDate} UNTIL ${endDate}`)
+      .catch(() => [] as Array<Record<string, number | string>>),
     // Previous period: totals for comparison
     runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`),
     // Sessions funnel — same queries the Slack bot's get_funnel tool uses
@@ -1451,9 +1452,10 @@ async function buildAllAnalyticsFromShopifyQL(
     imageUrl:       null,
   }));
 
-  // ── Build order status breakdown ─────────────────────────────────────────
+  // ── Build order status breakdown (using shipping country as proxy — order_status
+  //    not available in ShopifyQL FROM sales table)
   const orderStatus = orderStatusRows.map((row) => ({
-    name:  String(row.order_status ?? 'Unknown'),
+    name:  String(row.shipping_country ?? 'Unknown'),
     value: Number(row.orders ?? 0),
   }));
 
