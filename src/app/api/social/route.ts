@@ -1,5 +1,5 @@
 import { getBrand } from '@/lib/mongodb-store';
-import { getPageComments, analyzeSentiment, type SocialComment } from '@/lib/services/social';
+import { getPageComments, getAdComments, analyzeSentiment, type SocialComment } from '@/lib/services/social';
 import { getCommentsFromAds, getPermissions, getPageCoverage, getAdEngagement, probeReviewPermissions } from '@/lib/services/meta';
 import { NextResponse } from 'next/server';
 import { demoSocialComments, demoSocialStats } from '@/lib/demo-data';
@@ -108,6 +108,17 @@ export async function GET(request: Request) {
         }, { status: 200 });
       } else {
         throw e;
+      }
+    }
+
+    // If no comments from either page or ad-creative path, try ad-level comments as last resort
+    if (comments.length === 0 && brand.metaAdAccountId) {
+      try {
+        comments = await getAdComments({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId });
+        console.log(`[social] Got ${comments.length} ad-level comments as fallback`);
+        if (comments.length > 0) source = 'ads';
+      } catch (err) {
+        console.warn('[social] getAdComments also failed:', (err as Error).message);
       }
     }
 
