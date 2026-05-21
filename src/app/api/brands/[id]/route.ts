@@ -57,6 +57,7 @@ export async function PUT(
       'klaviyoApiKey',
       'pinterestAccessToken', 'pinterestAdAccountId',
       'customDashboard', 'savedMetrics', 'competitors',
+      'cogsPercent', 'avgShippingCost', 'avgReturnRate',
     ];
     const updates = Object.fromEntries(
       allowedFields

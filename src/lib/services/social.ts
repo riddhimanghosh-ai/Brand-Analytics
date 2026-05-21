@@ -201,3 +201,56 @@ export async function analyzeSentiment(
 
   return result;
 }
+
+/**
+ * Fallback: fetch comments on Facebook ad posts (requires ads_management scope).
+ * Used when page admin access is not available.
+ */
+export async function getAdComments(config: MetaConfig): Promise<SocialComment[]> {
+  if (!config.adAccountId) return [];
+  const comments: SocialComment[] = [];
+
+  try {
+    const acct = config.adAccountId.startsWith('act_') ? config.adAccountId : `act_${config.adAccountId}`;
+
+    // Get active ads with their creative
+    const adsData = await metaGet(`${acct}/ads`, config.accessToken, {
+      fields: 'id,name,creative{effective_object_story_id}',
+      effective_status: JSON.stringify(['ACTIVE', 'PAUSED']),
+      limit: '20',
+    });
+
+    const storyIds = new Set<string>();
+    for (const ad of (adsData.data || [])) {
+      const storyId = ad.creative?.effective_object_story_id;
+      if (storyId) storyIds.add(storyId);
+    }
+
+    for (const storyId of Array.from(storyIds).slice(0, 10)) {
+      try {
+        const postData = await metaGet(storyId, config.accessToken, {
+          fields: 'message,created_time,comments{message,from,created_time,id}',
+        });
+
+        const postPreview = (postData.message || '').slice(0, 60) + ((postData.message || '').length > 60 ? '...' : '') || '[Ad post]';
+        for (const c of (postData.comments?.data || [])) {
+          comments.push({
+            id: `ad_${c.id}`,
+            platform: 'Facebook',
+            postPreview,
+            postId: storyId,
+            comment: c.message || '',
+            author: c.from?.name || 'Unknown',
+            authorId: c.from?.id || '',
+            date: c.created_time,
+            source: 'post_comment',
+          });
+        }
+      } catch { /* skip this ad post */ }
+    }
+  } catch (err) {
+    console.error('[getAdComments] error:', err);
+  }
+
+  return comments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}

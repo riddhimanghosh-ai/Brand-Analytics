@@ -318,6 +318,19 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
         </div>
       </div>
 
+      {/* ROAS alert */}
+      {kpis && kpis.roas < 1 && (
+        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '10px', padding: '16px 20px', marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+          <span style={{ fontSize: '20px' }}>⚠️</span>
+          <div>
+            <div style={{ fontWeight: 600, color: '#f87171', marginBottom: '4px' }}>ROAS Below 1x — Spending More Than Earning</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+              Meta attributes ₹{kpis.roas.toFixed(2)} in purchase revenue per ₹1 spent. Check campaign-level breakdown below — pause underperforming campaigns and shift budget to ROAS &gt; 1x campaigns.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Funnel */}
       {funnel && <FunnelStrip funnel={funnel} />}
 
@@ -421,6 +434,9 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
                   <th>CTR</th>
                   <th>CPC</th>
                   <th>ATC</th>
+                  <th>IC</th>
+                  <th>ATC→IC%</th>
+                  <th>IC→Pur%</th>
                   <th>Purchases</th>
                   <th>Revenue</th>
                   <th>ROAS</th>
@@ -437,10 +453,13 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
                     <td className="mono">{c.ctr.toFixed(2)}%</td>
                     <td className="mono">{formatCurrency(c.cpc)}</td>
                     <td className="mono">{formatNum(c.addToCarts)}</td>
+                    <td className="mono">{formatNum(c.initiatedCheckouts)}</td>
+                    <td className="mono">{c.addToCarts > 0 ? ((c.initiatedCheckouts / c.addToCarts) * 100).toFixed(0) + '%' : '—'}</td>
+                    <td className="mono">{c.initiatedCheckouts > 0 ? ((c.purchases / c.initiatedCheckouts) * 100).toFixed(0) + '%' : '—'}</td>
                     <td className="mono">{c.purchases.toFixed(0)}</td>
                     <td className="mono">{formatCurrency(c.purchaseValue)}</td>
                     <td>
-                      <span className={`badge ${c.roas >= 3 ? 'green' : c.roas >= 1.5 ? 'amber' : 'rose'}`}>
+                      <span className={`badge ${c.roas >= 2 ? 'green' : c.roas >= 1 ? 'amber' : 'rose'}`}>
                         {c.roas.toFixed(2)}x
                       </span>
                     </td>
@@ -482,7 +501,7 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
                     <td className="mono">{a.purchases.toFixed(0)}</td>
                     <td className="mono">{formatCurrency(a.purchaseValue)}</td>
                     <td>
-                      <span className={`badge ${a.roas >= 3 ? 'green' : a.roas >= 1.5 ? 'amber' : 'rose'}`}>
+                      <span className={`badge ${a.roas >= 2 ? 'green' : a.roas >= 1 ? 'amber' : 'rose'}`}>
                         {a.roas.toFixed(2)}x
                       </span>
                     </td>
@@ -535,7 +554,7 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
                     <td className="mono">{a.purchases.toFixed(0)}</td>
                     <td className="mono">{formatCurrency(a.purchaseValue)}</td>
                     <td>
-                      <span className={`badge ${a.roas >= 3 ? 'green' : a.roas >= 1.5 ? 'amber' : 'rose'}`}>
+                      <span className={`badge ${a.roas >= 2 ? 'green' : a.roas >= 1 ? 'amber' : 'rose'}`}>
                         {a.roas.toFixed(2)}x
                       </span>
                     </td>

@@ -52,6 +52,7 @@ export function OverviewKPIs({ slug, connections }: Props) {
   const [kpis, setKpis] = useState<KPIs | null>(null);
   const [loading, setLoading] = useState(connections.shopify);
   const [error, setError] = useState('');
+  const [metaSpend, setMetaSpend] = useState<number | null>(null);
 
   useEffect(() => {
     if (!connections.shopify) return;
@@ -64,6 +65,14 @@ export function OverviewKPIs({ slug, connections }: Props) {
       .catch(() => setError('Failed to load Shopify data'))
       .finally(() => setLoading(false));
   }, [slug, connections.shopify]);
+
+  useEffect(() => {
+    if (!connections.metaAds) return;
+    fetch(`/api/ads?slug=${slug}&platform=meta&action=kpis&range=30d`)
+      .then(r => r.json())
+      .then(data => { if (!data.error && data.spend != null) setMetaSpend(data.spend); })
+      .catch(() => {});
+  }, [slug, connections.metaAds]);
 
   if (!connections.shopify) {
     return (
@@ -154,6 +163,24 @@ export function OverviewKPIs({ slug, connections }: Props) {
           <div className="kpi-subtext">Bundle opportunity</div>
         </div>
       </div>
+
+      {/* MER / Profitability Quick Card */}
+      {(connections.metaAds || connections.googleAds) && kpis && (
+        <div style={{ marginTop: '20px', padding: '16px 20px', borderRadius: '12px', background: 'rgba(34,197,94,0.05)', border: '1px solid rgba(34,197,94,0.15)', display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '24px' }}>💰</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '2px' }}>Marketing Efficiency Ratio (Last 30 days)</div>
+            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+              {metaSpend != null && metaSpend > 0
+                ? <>MER: <strong style={{ color: (kpis.totalRevenue / metaSpend) >= 3 ? '#22c55e' : (kpis.totalRevenue / metaSpend) >= 1.5 ? '#f59e0b' : '#f43f5e' }}>{(kpis.totalRevenue / metaSpend).toFixed(2)}x</strong> — {formatCurrency(kpis.totalRevenue)} revenue ÷ {formatCurrency(metaSpend)} ad spend</>
+                : 'Connect Meta Ads to calculate your true blended ROAS'}
+            </div>
+          </div>
+          <Link href={`/dashboard/${slug}/profit`} style={{ padding: '7px 14px', borderRadius: '8px', background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.25)', color: '#22c55e', fontSize: '12px', fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            View P&amp;L →
+          </Link>
+        </div>
+      )}
 
       {/* CRO Insights */}
       <div className="section-title" style={{ marginTop: '32px' }}>
