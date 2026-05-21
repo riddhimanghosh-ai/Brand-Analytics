@@ -8,6 +8,66 @@ import { MetaConnect } from '@/components/MetaConnect';
 import { GoogleAdsConnect } from '@/components/GoogleAdsConnect';
 import { GA4Connect } from '@/components/GA4Connect';
 
+// ── Meta Permission Status ─────────────────────────────────────────────────────
+function MetaPermissionStatus({ slug }: { slug: string }) {
+  const [status, setStatus] = useState<{
+    granted: string[]; hasPageAccess: boolean; hasInstagramAccess: boolean;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch(`/api/ads?slug=${slug}&platform=meta&action=permissions`)
+      .then(r => r.json())
+      .then(d => { if (!d.error) setStatus(d); })
+      .finally(() => setLoading(false));
+  }, [slug]);
+
+  if (loading) return null;
+  if (!status) return null;
+
+  const needed = [
+    { perm: 'pages_read_user_content', label: 'Page Comments', icon: '💬' },
+    { perm: 'instagram_basic', label: 'Instagram Media', icon: '📸' },
+    { perm: 'instagram_manage_comments', label: 'Instagram Comments', icon: '💬' },
+  ];
+  const missing = needed.filter(n => !status.granted.includes(n.perm));
+
+  if (missing.length === 0) return (
+    <div style={{ marginTop: '12px', padding: '10px 14px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px', fontSize: '12px', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>
+      ✅ All permissions granted — Social Comments fully enabled
+    </div>
+  );
+
+  return (
+    <div style={{ marginTop: '12px', padding: '12px 16px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '8px' }}>
+      <div style={{ fontSize: '12px', fontWeight: 700, color: '#f59e0b', marginBottom: '8px' }}>
+        ⚠️ Missing permissions — Social Comments partially unavailable
+      </div>
+      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+        {needed.map(n => (
+          <span key={n.perm} style={{
+            fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 600,
+            background: status.granted.includes(n.perm) ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
+            color: status.granted.includes(n.perm) ? '#22c55e' : '#f87171',
+            border: `1px solid ${status.granted.includes(n.perm) ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
+          }}>
+            {n.icon} {n.label} {status.granted.includes(n.perm) ? '✓' : '✗'}
+          </span>
+        ))}
+      </div>
+      <a
+        href={`/api/auth/meta?slug=${slug}&rerequest=1`}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '7px', color: '#f59e0b', fontSize: '12px', fontWeight: 600, textDecoration: 'none', cursor: 'pointer' }}
+      >
+        🔄 Re-authorize Meta with full permissions
+      </a>
+      <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px' }}>
+        Click to reconnect — you will be asked to grant the missing permissions
+      </div>
+    </div>
+  );
+}
+
 interface BrandData {
   id: string;
   name: string;
@@ -550,6 +610,11 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
               setMetaPendingAccounts([]);
             }}
           />
+
+          {/* Permission status + re-auth nudge */}
+          {isConnected.meta && (
+            <MetaPermissionStatus slug={params?.slug ?? ''} />
+          )}
         </ConnectionAccordion>
 
         {/* ── GOOGLE ADS ── */}

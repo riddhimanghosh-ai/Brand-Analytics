@@ -29,6 +29,10 @@ export interface BrandData {
   customDashboard?: string | null;
   savedMetrics?: { name: string; query: string; chartType: string }[];
   competitors?: Array<{ name: string; pageId: string }> | null;
+  // P&L / profitability fields
+  cogsPercent?: number | null;        // Cost of Goods Sold as % of revenue (e.g. 35)
+  avgShippingCost?: number | null;    // Average shipping cost per order in INR
+  avgReturnRate?: number | null;      // Average return/refund rate % (e.g. 5)
   createdAt: string;
   updatedAt: string;
 }
