@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
+import { useGlobalDateRange } from '@/lib/use-date-range';
+import { DateRangeDropdown } from '@/components/DateRangeDropdown';
 
 interface TikTokKPIs {
   spend: number;
@@ -34,17 +36,26 @@ interface TikTokData {
   error?: string;
 }
 
+function roasBadgeClass(roas: number) {
+  if (roas >= 2) return 'green';
+  if (roas >= 1) return 'amber';
+  return 'rose';
+}
+
 export default function TikTokPage() {
   const params = useParams();
   const slug = params.slug as string;
+  const { from, to } = useGlobalDateRange();
   const [data, setData] = useState<TikTokData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
+      setError('');
       try {
-        const res = await fetch(`/api/tiktok?slug=${slug}`);
+        const res = await fetch(`/api/tiktok?slug=${slug}&from=${from}&to=${to}`);
         if (!res.ok) throw new Error('Failed to fetch TikTok data');
         const result = await res.json();
         if (result.error) {
@@ -60,155 +71,152 @@ export default function TikTokPage() {
     };
 
     fetchData();
-  }, [slug]);
-
-  if (loading) {
-    return (
-      <div style={{ padding: '40px', textAlign: 'center' }}>
-        <div style={{ fontSize: '24px', color: 'var(--text-muted)' }}>Loading TikTok data...</div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div style={{ padding: '40px' }}>
-        <div style={{
-          background: 'rgba(239,68,68,0.1)',
-          border: '1px solid rgba(239,68,68,0.3)',
-          borderRadius: '8px',
-          padding: '16px',
-          color: '#ef4444',
-        }}>
-          ❌ {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (!data || !data.kpis) {
-    return (
-      <div style={{ padding: '40px' }}>
-        <div style={{ color: 'var(--text-muted)' }}>No TikTok data available. Connect your account in Settings.</div>
-      </div>
-    );
-  }
-
-  const kpis = data.kpis;
-  const cpm = kpis.spend > 0 ? (kpis.spend / kpis.impressions) * 1000 : 0;
+  }, [slug, from, to]);
 
   return (
-    <div style={{ width: '100%', maxWidth: '1200px', margin: '0 auto', padding: '40px 32px' }}>
-      <div style={{ marginBottom: '32px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '700', marginBottom: '8px' }}>🎵 TikTok Ads</h1>
-        <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Campaign performance, spend & ROAS (Last 30 days)</p>
-      </div>
-
-      {/* KPI Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: '16px',
-        marginBottom: '32px',
-      }}>
-        {[
-          { label: 'Total Spend', value: `₹${kpis.spend.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`, color: '#ef4444' },
-          { label: 'Conversions', value: kpis.conversions.toLocaleString(), color: '#10b981' },
-          { label: 'ROAS', value: `${kpis.roas.toFixed(2)}x`, color: '#3b82f6' },
-          { label: 'CPM', value: `₹${cpm.toFixed(0)}`, color: '#f59e0b' },
-        ].map((kpi) => (
-          <div key={kpi.label} style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '20px',
-          }}>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              {kpi.label}
-            </div>
-            <div style={{
-              fontSize: '28px',
-              fontWeight: '700',
-              color: kpi.color,
-            }}>
-              {kpi.value}
-            </div>
+    <>
+      <div className="page-header">
+        <div className="page-header-row">
+          <div>
+            <h2>TikTok Ads</h2>
+            <p>Campaign performance, spend &amp; ROAS</p>
           </div>
-        ))}
-      </div>
-
-      {/* Secondary metrics */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(4, 1fr)',
-        gap: '16px',
-        marginBottom: '32px',
-      }}>
-        {[
-          { label: 'Impressions', value: (kpis.impressions / 1000).toFixed(1) + 'K' },
-          { label: 'Clicks', value: kpis.clicks.toLocaleString() },
-          { label: 'CTR', value: (kpis.ctr * 100).toFixed(2) + '%' },
-          { label: 'CPC', value: `₹${kpis.cpc.toFixed(0)}` },
-        ].map((m) => (
-          <div key={m.label} style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: '12px',
-            padding: '16px',
-          }}>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '6px' }}>{m.label}</div>
-            <div style={{ fontSize: '18px', fontWeight: '700' }}>{m.value}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Campaigns Table */}
-      <div style={{
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderRadius: '12px',
-        overflow: 'hidden',
-      }}>
-        <div style={{ padding: '20px', borderBottom: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '16px', fontWeight: '600' }}>Top Campaigns</h2>
+          <DateRangeDropdown />
         </div>
-        <table style={{
-          width: '100%',
-          borderCollapse: 'collapse',
-          fontSize: '13px',
-        }}>
-          <thead style={{
-            background: 'var(--bg-elevated)',
-            borderBottom: '1px solid var(--border)',
-          }}>
-            <tr>
-              {['Campaign Name', 'Spend', 'Clicks', 'Conversions', 'ROAS'].map((h) => (
-                <th key={h} style={{
-                  padding: '12px 16px',
-                  textAlign: 'left',
-                  fontWeight: '600',
-                  color: 'var(--text-muted)',
-                }}>
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.campaigns.map((c, i) => (
-              <tr key={c.id} style={{
-                borderBottom: i < data.campaigns.length - 1 ? '1px solid var(--border)' : 'none',
-              }}>
-                <td style={{ padding: '12px 16px', fontWeight: '500' }}>{c.name}</td>
-                <td style={{ padding: '12px 16px' }}>₹{c.spend.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
-                <td style={{ padding: '12px 16px' }}>{c.clicks.toLocaleString()}</td>
-                <td style={{ padding: '12px 16px', color: '#10b981', fontWeight: '600' }}>{c.conversions.toLocaleString()}</td>
-                <td style={{ padding: '12px 16px', color: '#3b82f6', fontWeight: '600' }}>{c.roas.toFixed(2)}x</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
-    </div>
+
+      <div className="page-body">
+        {loading && (
+          <>
+            <div className="kpi-grid">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                <div key={i} className="kpi-card">
+                  <div className="skeleton skeleton-text" style={{ width: '60%' }} />
+                  <div className="skeleton skeleton-title" />
+                </div>
+              ))}
+            </div>
+            <div className="chart-card" style={{ marginTop: '16px' }}>
+              <div className="skeleton skeleton-chart" />
+            </div>
+          </>
+        )}
+
+        {!loading && error && (
+          <div style={{
+            background: 'rgba(239,68,68,0.1)',
+            border: '1px solid rgba(239,68,68,0.3)',
+            borderRadius: '8px',
+            padding: '16px',
+            color: '#ef4444',
+          }}>
+            {error}
+          </div>
+        )}
+
+        {!loading && !error && (!data || !data.kpis) && (
+          <div style={{ color: 'var(--text-secondary)' }}>
+            No TikTok data available. Connect your account in Settings.
+          </div>
+        )}
+
+        {!loading && !error && data && data.kpis && (() => {
+          const kpis = data.kpis!;
+          const cpm = kpis.impressions > 0 ? (kpis.spend / kpis.impressions) * 1000 : 0;
+
+          return (
+            <>
+              {/* Primary KPI grid */}
+              <div className="kpi-grid">
+                <div className="kpi-card rose">
+                  <div className="kpi-label">Total Spend</div>
+                  <div className="kpi-value">
+                    ₹{kpis.spend.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </div>
+                </div>
+                <div className="kpi-card emerald">
+                  <div className="kpi-label">Conversions</div>
+                  <div className="kpi-value">{kpis.conversions.toLocaleString()}</div>
+                </div>
+                <div className="kpi-card blue">
+                  <div className="kpi-label">ROAS</div>
+                  <div className="kpi-value">{kpis.roas.toFixed(2)}x</div>
+                  <div className="kpi-subtext">
+                    {kpis.roas >= 2 ? 'Strong' : kpis.roas >= 1 ? 'Moderate' : 'Below target'}
+                  </div>
+                </div>
+                <div className="kpi-card amber">
+                  <div className="kpi-label">CPM</div>
+                  <div className="kpi-value">₹{cpm.toFixed(0)}</div>
+                </div>
+                <div className="kpi-card cyan">
+                  <div className="kpi-label">Impressions</div>
+                  <div className="kpi-value">
+                    {(kpis.impressions / 1000).toFixed(1)}K
+                  </div>
+                </div>
+                <div className="kpi-card violet">
+                  <div className="kpi-label">Clicks</div>
+                  <div className="kpi-value">{kpis.clicks.toLocaleString()}</div>
+                </div>
+                <div className="kpi-card blue">
+                  <div className="kpi-label">CTR</div>
+                  <div className="kpi-value">{(kpis.ctr * 100).toFixed(2)}%</div>
+                </div>
+                <div className="kpi-card amber">
+                  <div className="kpi-label">CPC</div>
+                  <div className="kpi-value">₹{kpis.cpc.toFixed(0)}</div>
+                </div>
+              </div>
+
+              {/* Campaigns table */}
+              <div className="data-table-wrapper" style={{ marginTop: '24px' }}>
+                <div className="data-table-header">
+                  <div className="data-table-title">Top Campaigns</div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Campaign Name</th>
+                        <th>Spend</th>
+                        <th>Clicks</th>
+                        <th>Conversions</th>
+                        <th>ROAS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {data.campaigns.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-dim)' }}>
+                            No campaigns in this date range.
+                          </td>
+                        </tr>
+                      ) : data.campaigns.map((c) => (
+                        <tr key={c.id}>
+                          <td className="highlight">{c.name}</td>
+                          <td className="mono">
+                            ₹{c.spend.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          </td>
+                          <td className="mono">{c.clicks.toLocaleString()}</td>
+                          <td className="mono" style={{ color: '#22c55e', fontWeight: 600 }}>
+                            {c.conversions.toLocaleString()}
+                          </td>
+                          <td>
+                            <span className={`badge ${roasBadgeClass(c.roas)}`}>
+                              {c.roas.toFixed(2)}x
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          );
+        })()}
+      </div>
+    </>
   );
 }

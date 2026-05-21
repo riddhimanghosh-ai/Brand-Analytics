@@ -100,6 +100,9 @@ interface BrandData {
   tiktokConnected?: boolean;
   klaviyoConnected?: boolean;
   competitors?: Array<{ name: string; pageId: string }> | null;
+  cogsPercent?: number | null;
+  avgShippingCost?: number | null;
+  avgReturnRate?: number | null;
 }
 
 // ── Shopify OAuth connect component ──
@@ -335,6 +338,13 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   const [deleting, setDeleting] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
 
+  // Business Costs state
+  const [cogsPercent, setCogsPercent] = useState<string>('');
+  const [avgShippingCost, setAvgShippingCost] = useState<string>('');
+  const [avgReturnRate, setAvgReturnRate] = useState<string>('');
+  const [costSaving, setCostSaving] = useState(false);
+  const [costSaved, setCostSaved] = useState(false);
+
   // OAuth callback state from URL params
   const metaConnectedViaOAuth      = searchParams.get('meta') === 'connected';
   const googleAdsConnectedViaOAuth = searchParams.get('google_ads') === 'connected';
@@ -368,7 +378,12 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
     // Fetch the brand by slug
     fetch(`/api/brands/${params.slug}`)
       .then(r => r.json())
-      .then(setBrand)
+      .then((data: BrandData) => {
+        setBrand(data);
+        setCogsPercent(data.cogsPercent != null ? String(data.cogsPercent) : '');
+        setAvgShippingCost(data.avgShippingCost != null ? String(data.avgShippingCost) : '');
+        setAvgReturnRate(data.avgReturnRate != null ? String(data.avgReturnRate) : '');
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [params, metaConnectedViaOAuth, googleAdsConnectedViaOAuth, ga4ConnectedViaOAuth]);
@@ -412,6 +427,29 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
       setSaveError('Network error. Please check your connection and try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveCosts = async () => {
+    if (!params) return;
+    setCostSaving(true);
+    setCostSaved(false);
+    try {
+      const res = await fetch(`/api/brands/${params.slug}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cogsPercent: cogsPercent !== '' ? parseFloat(cogsPercent) : null,
+          avgShippingCost: avgShippingCost !== '' ? parseFloat(avgShippingCost) : null,
+          avgReturnRate: avgReturnRate !== '' ? parseFloat(avgReturnRate) : null,
+        }),
+      });
+      if (res.ok) {
+        setCostSaved(true);
+        setTimeout(() => setCostSaved(false), 3000);
+      }
+    } finally {
+      setCostSaving(false);
     }
   };
 
@@ -746,6 +784,71 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           <div className="form-group">
             <label className="form-label">Klaviyo Private API Key</label>
             <input className="form-input mono" type="password" value={(brand as unknown as Record<string,string>).klaviyoApiKey || ''} onChange={(e) => updateField('klaviyoApiKey', e.target.value)} placeholder="pk_..." />
+          </div>
+        </ConnectionAccordion>
+
+        {/* ── BUSINESS COSTS ── */}
+        <ConnectionAccordion
+          id="businessCosts"
+          title="Business Costs"
+          icon="💰"
+          isConnected={!!(brand.cogsPercent || brand.avgShippingCost)}
+        >
+          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+            Set your cost assumptions for the Profitability P&amp;L calculator
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">COGS %</label>
+              <input
+                className="form-input"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={cogsPercent}
+                onChange={(e) => setCogsPercent(e.target.value)}
+                placeholder="e.g. 35"
+              />
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>Cost of goods as % of revenue</div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Avg Shipping Cost (₹)</label>
+              <input
+                className="form-input"
+                type="number"
+                min="0"
+                step="1"
+                value={avgShippingCost}
+                onChange={(e) => setAvgShippingCost(e.target.value)}
+                placeholder="e.g. 80"
+              />
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>Average shipping cost per order in INR</div>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Return Rate %</label>
+              <input
+                className="form-input"
+                type="number"
+                min="0"
+                max="100"
+                step="0.1"
+                value={avgReturnRate}
+                onChange={(e) => setAvgReturnRate(e.target.value)}
+                placeholder="e.g. 3"
+              />
+              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>Return / refund rate %</div>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button className="btn btn-primary" onClick={saveCosts} disabled={costSaving}>
+              {costSaving ? '⏳ Saving...' : costSaved ? '✅ Saved!' : '💾 Save Costs'}
+            </button>
+            {costSaved && <span style={{ fontSize: '13px', color: 'var(--accent-emerald)' }}>✅ Cost assumptions updated — Profitability P&amp;L will reflect these values</span>}
           </div>
         </ConnectionAccordion>
 

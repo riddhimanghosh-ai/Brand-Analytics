@@ -107,8 +107,59 @@ export function OverviewKPIs({ slug, connections }: Props) {
   const ordersChange = percentChange(kpis.totalOrders, kpis.prevTotalOrders);
   const aovChange = percentChange(kpis.averageOrderValue, kpis.prevAverageOrderValue);
 
+  // Build insight alert chips (max 3)
+  const alerts: { text: string; href: string; type: 'warn' | 'info' }[] = [];
+  if (kpis.repeatCustomerRate < 20) {
+    alerts.push({
+      text: `⚠️ Repeat rate ${kpis.repeatCustomerRate.toFixed(1)}% — below 20% benchmark`,
+      href: `/dashboard/${slug}/cro`,
+      type: 'warn',
+    });
+  }
+  if (kpis.averageOrderValue < 600) {
+    const threshold = Math.round(kpis.averageOrderValue * 1.3);
+    alerts.push({
+      text: `💡 AOV ₹${Math.round(kpis.averageOrderValue)} — add free shipping threshold at ₹${threshold}`,
+      href: `/dashboard/${slug}/cro`,
+      type: 'info',
+    });
+  }
+  if (kpis.refundRate > 5) {
+    alerts.push({
+      text: `🔴 Refund rate ${kpis.refundRate.toFixed(1)}% — investigate product quality`,
+      href: `/dashboard/${slug}/shopify`,
+      type: 'warn',
+    });
+  }
+  if (alerts.length < 3 && kpis.averageItemsPerOrder < 1.5) {
+    alerts.push({
+      text: `📦 ${kpis.averageItemsPerOrder.toFixed(1)} items/order — add bundles to lift AOV`,
+      href: `/dashboard/${slug}/cro`,
+      type: 'info',
+    });
+  }
+  const visibleAlerts = alerts.slice(0, 3);
+
   return (
     <>
+      {/* Today at a Glance alert strip */}
+      {visibleAlerts.length > 0 && (
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '20px' }}>
+          {visibleAlerts.map(a => (
+            <Link key={a.text} href={a.href} style={{
+              display: 'inline-flex', alignItems: 'center', gap: '6px',
+              padding: '6px 12px', borderRadius: '20px', fontSize: '12px', fontWeight: 500,
+              background: a.type === 'warn' ? 'rgba(245,158,11,0.1)' : 'rgba(59,130,246,0.08)',
+              border: `1px solid ${a.type === 'warn' ? 'rgba(245,158,11,0.25)' : 'rgba(59,130,246,0.15)'}`,
+              color: a.type === 'warn' ? '#f59e0b' : 'var(--text-secondary)',
+              textDecoration: 'none', whiteSpace: 'nowrap',
+            }}>
+              {a.text}
+            </Link>
+          ))}
+        </div>
+      )}
+
       <div className="section-title">
         <span className="section-icon">💰</span>
         Revenue &amp; Sales
