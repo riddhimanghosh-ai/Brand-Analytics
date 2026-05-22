@@ -310,7 +310,7 @@ export default function SocialPage() {
           </p>
           {permissions && (
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
-              {['ads_read', 'pages_show_list', 'pages_read_engagement', 'pages_read_user_engagement', 'instagram_basic', 'instagram_manage_comments'].map((permission) => {
+              {['ads_read', 'pages_show_list', 'pages_read_engagement', 'instagram_basic', 'instagram_manage_comments'].map((permission) => {
                 const granted = permissions.granted.includes(permission);
                 return (
                   <span

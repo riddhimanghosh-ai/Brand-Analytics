@@ -1,24 +1,28 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { ConnectionAccordion } from '@/components/ConnectionAccordion';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { MetaConnect } from '@/components/MetaConnect';
-import { GoogleAdsConnect } from '@/components/GoogleAdsConnect';
-import { GA4Connect } from '@/components/GA4Connect';
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ConnectionAccordion } from "@/components/ConnectionAccordion";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { MetaConnect } from "@/components/MetaConnect";
+import { GoogleAdsConnect } from "@/components/GoogleAdsConnect";
+import { GA4Connect } from "@/components/GA4Connect";
 
 // ── Meta Permission Status ─────────────────────────────────────────────────────
 function MetaPermissionStatus({ slug }: { slug: string }) {
   const [status, setStatus] = useState<{
-    granted: string[]; hasPageAccess: boolean; hasInstagramAccess: boolean;
+    granted: string[];
+    hasPageAccess: boolean;
+    hasInstagramAccess: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetch(`/api/ads?slug=${slug}&platform=meta&action=permissions`)
-      .then(r => r.json())
-      .then(d => { if (!d.error) setStatus(d); })
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.error) setStatus(d);
+      })
       .finally(() => setLoading(false));
   }, [slug]);
 
@@ -26,45 +30,107 @@ function MetaPermissionStatus({ slug }: { slug: string }) {
   if (!status) return null;
 
   const needed = [
-    { perm: 'ads_read', label: 'Ad Metrics', icon: '📊' },
-    { perm: 'pages_show_list', label: 'Managed Pages', icon: '📄' },
-    { perm: 'pages_read_engagement', label: 'Page Comments', icon: '💬' },
-    { perm: 'pages_read_user_content', label: 'Page Mentions', icon: '🗨️' },
-    { perm: 'instagram_basic', label: 'Instagram Media', icon: '📸' },
-    { perm: 'instagram_manage_comments', label: 'Instagram Comments', icon: '💬' },
+    { perm: "ads_read", label: "Ad Metrics", icon: "📊" },
+    { perm: "pages_show_list", label: "Managed Pages", icon: "📄" },
+    { perm: "pages_read_engagement", label: "Page Comments", icon: "💬" },
+    { perm: "instagram_basic", label: "Instagram Media", icon: "📸" },
+    {
+      perm: "instagram_manage_comments",
+      label: "Instagram Comments",
+      icon: "💬",
+    },
   ];
-  const missing = needed.filter(n => !status.granted.includes(n.perm));
+  const missing = needed.filter((n) => !status.granted.includes(n.perm));
 
-  if (missing.length === 0) return (
-    <div style={{ marginTop: '12px', padding: '10px 14px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: '8px', fontSize: '12px', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '8px' }}>
-      ✅ All permissions granted — Social Comments fully enabled
-    </div>
-  );
+  if (missing.length === 0)
+    return (
+      <div
+        style={{
+          marginTop: "12px",
+          padding: "10px 14px",
+          background: "rgba(34,197,94,0.08)",
+          border: "1px solid rgba(34,197,94,0.2)",
+          borderRadius: "8px",
+          fontSize: "12px",
+          color: "#22c55e",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        ✅ All permissions granted — Social Comments fully enabled
+      </div>
+    );
 
   return (
-    <div style={{ marginTop: '12px', padding: '12px 16px', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '8px' }}>
-      <div style={{ fontSize: '12px', fontWeight: 700, color: '#f59e0b', marginBottom: '8px' }}>
+    <div
+      style={{
+        marginTop: "12px",
+        padding: "12px 16px",
+        background: "rgba(245,158,11,0.06)",
+        border: "1px solid rgba(245,158,11,0.2)",
+        borderRadius: "8px",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "12px",
+          fontWeight: 700,
+          color: "#f59e0b",
+          marginBottom: "8px",
+        }}
+      >
         ⚠️ Missing permissions — Social Comments partially unavailable
       </div>
-      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
-        {needed.map(n => (
-          <span key={n.perm} style={{
-            fontSize: '11px', padding: '2px 8px', borderRadius: '10px', fontWeight: 600,
-            background: status.granted.includes(n.perm) ? 'rgba(34,197,94,0.12)' : 'rgba(239,68,68,0.12)',
-            color: status.granted.includes(n.perm) ? '#22c55e' : '#f87171',
-            border: `1px solid ${status.granted.includes(n.perm) ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
-          }}>
-            {n.icon} {n.label} {status.granted.includes(n.perm) ? '✓' : '✗'}
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          flexWrap: "wrap",
+          marginBottom: "10px",
+        }}
+      >
+        {needed.map((n) => (
+          <span
+            key={n.perm}
+            style={{
+              fontSize: "11px",
+              padding: "2px 8px",
+              borderRadius: "10px",
+              fontWeight: 600,
+              background: status.granted.includes(n.perm)
+                ? "rgba(34,197,94,0.12)"
+                : "rgba(239,68,68,0.12)",
+              color: status.granted.includes(n.perm) ? "#22c55e" : "#f87171",
+              border: `1px solid ${status.granted.includes(n.perm) ? "rgba(34,197,94,0.25)" : "rgba(239,68,68,0.25)"}`,
+            }}
+          >
+            {n.icon} {n.label} {status.granted.includes(n.perm) ? "✓" : "✗"}
           </span>
         ))}
       </div>
       <a
         href={`/api/auth/meta?slug=${slug}&rerequest=1`}
-        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'rgba(245,158,11,0.15)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: '7px', color: '#f59e0b', fontSize: '12px', fontWeight: 600, textDecoration: 'none', cursor: 'pointer' }}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: "7px 14px",
+          background: "rgba(245,158,11,0.15)",
+          border: "1px solid rgba(245,158,11,0.35)",
+          borderRadius: "7px",
+          color: "#f59e0b",
+          fontSize: "12px",
+          fontWeight: 600,
+          textDecoration: "none",
+          cursor: "pointer",
+        }}
       >
         🔄 Re-authorize Meta with full permissions
       </a>
-      <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '6px' }}>
+      <div
+        style={{ fontSize: "11px", color: "var(--text-dim)", marginTop: "6px" }}
+      >
         Click to reconnect — you will be asked to grant the missing permissions
       </div>
     </div>
@@ -118,45 +184,86 @@ function ShopifyConnect({
   brand: BrandData;
   isConnected: boolean;
 }) {
-  const [shopUrl, setShopUrl] = useState(brand.shopifyStoreUrl || '');
+  const [shopUrl, setShopUrl] = useState(brand.shopifyStoreUrl || "");
 
   const handleConnect = () => {
-    const clean = shopUrl.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+    const clean = shopUrl
+      .trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/$/, "");
     if (!clean) return;
     window.location.href = `/api/shopify/install?shop=${encodeURIComponent(clean)}&slug=${encodeURIComponent(slug)}`;
   };
 
   if (isConnected) {
     const handleReconnect = () => {
-      const store = brand.shopifyStoreUrl?.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const store = brand.shopifyStoreUrl
+        ?.trim()
+        .replace(/^https?:\/\//, "")
+        .replace(/\/$/, "");
       if (!store) return;
       window.location.href = `/api/shopify/install?shop=${encodeURIComponent(store)}&slug=${encodeURIComponent(slug)}`;
     };
 
     return (
       <div>
-        <div style={{ padding: '14px 16px', background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.25)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontSize: '24px' }}>✅</span>
+        <div
+          style={{
+            padding: "14px 16px",
+            background: "rgba(34,197,94,0.1)",
+            border: "1px solid rgba(34,197,94,0.25)",
+            borderRadius: "8px",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+          }}
+        >
+          <span style={{ fontSize: "24px" }}>✅</span>
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: '600', color: '#22c55e', fontSize: '14px' }}>Connected</div>
-            <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
-              Store: <strong>{brand.shopifyStoreUrl}</strong> — data syncing automatically
+            <div
+              style={{ fontWeight: "600", color: "#22c55e", fontSize: "14px" }}
+            >
+              Connected
+            </div>
+            <div
+              style={{
+                fontSize: "12px",
+                color: "var(--text-secondary)",
+                marginTop: "2px",
+              }}
+            >
+              Store: <strong>{brand.shopifyStoreUrl}</strong> — data syncing
+              automatically
             </div>
           </div>
           <button
             onClick={handleReconnect}
             title="Re-authorize to refresh permissions (e.g. to enable ShopifyQL analytics). MongoDB cache will be cleared automatically."
             style={{
-              padding: '7px 14px', borderRadius: '8px', border: '1px solid rgba(148,191,72,0.4)',
-              background: 'transparent', color: '#96bf48',
-              fontSize: '12px', fontWeight: '600', cursor: 'pointer', whiteSpace: 'nowrap',
+              padding: "7px 14px",
+              borderRadius: "8px",
+              border: "1px solid rgba(148,191,72,0.4)",
+              background: "transparent",
+              color: "#96bf48",
+              fontSize: "12px",
+              fontWeight: "600",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
             }}
           >
             🔄 Reconnect
           </button>
         </div>
-        <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-muted)' }}>
-          Use <strong>Reconnect</strong> if analytics data looks wrong — it re-authorizes Shopify permissions and automatically clears the data cache.
+        <div
+          style={{
+            marginTop: "8px",
+            fontSize: "11px",
+            color: "var(--text-muted)",
+          }}
+        >
+          Use <strong>Reconnect</strong> if analytics data looks wrong — it
+          re-authorizes Shopify permissions and automatically clears the data
+          cache.
         </div>
       </div>
     );
@@ -165,14 +272,34 @@ function ShopifyConnect({
   return (
     <div>
       {brand.shopifyStoreUrl && !isConnected && (
-        <div style={{ marginBottom: '14px', padding: '10px 14px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '8px', fontSize: '13px', color: 'var(--accent-amber)' }}>
-          ⚠️ Store URL saved but authorization is incomplete — click <strong>Connect Shopify</strong> below to finish.
+        <div
+          style={{
+            marginBottom: "14px",
+            padding: "10px 14px",
+            background: "rgba(245,158,11,0.08)",
+            border: "1px solid rgba(245,158,11,0.25)",
+            borderRadius: "8px",
+            fontSize: "13px",
+            color: "var(--accent-amber)",
+          }}
+        >
+          ⚠️ Store URL saved but authorization is incomplete — click{" "}
+          <strong>Connect Shopify</strong> below to finish.
         </div>
       )}
-      <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-        Enter your Shopify store URL and click <strong>Connect Shopify</strong>. You will be taken to Shopify to approve the connection — no tokens needed.
+      <div
+        style={{
+          marginBottom: "16px",
+          fontSize: "13px",
+          color: "var(--text-secondary)",
+          lineHeight: "1.6",
+        }}
+      >
+        Enter your Shopify store URL and click <strong>Connect Shopify</strong>.
+        You will be taken to Shopify to approve the connection — no tokens
+        needed.
       </div>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+      <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
         <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
           <label className="form-label">Store URL</label>
           <input
@@ -180,35 +307,52 @@ function ShopifyConnect({
             placeholder="your-store.myshopify.com"
             value={shopUrl}
             onChange={(e) => setShopUrl(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleConnect()}
+            onKeyDown={(e) => e.key === "Enter" && handleConnect()}
           />
         </div>
         <button
           onClick={handleConnect}
           disabled={!shopUrl.trim()}
           style={{
-            padding: '10px 20px', borderRadius: '10px', border: 'none',
-            background: shopUrl.trim() ? '#96bf48' : 'var(--bg-card)',
-            color: shopUrl.trim() ? '#fff' : 'var(--text-dim)',
-            fontSize: '14px', fontWeight: '600', cursor: shopUrl.trim() ? 'pointer' : 'default',
-            whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '8px', marginTop: '22px',
+            padding: "10px 20px",
+            borderRadius: "10px",
+            border: "none",
+            background: shopUrl.trim() ? "#96bf48" : "var(--bg-card)",
+            color: shopUrl.trim() ? "#fff" : "var(--text-dim)",
+            fontSize: "14px",
+            fontWeight: "600",
+            cursor: shopUrl.trim() ? "pointer" : "default",
+            whiteSpace: "nowrap",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginTop: "22px",
           }}
         >
           🛍️ Connect Shopify
         </button>
       </div>
-      <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-muted)' }}>
-        You will be redirected to Shopify to approve permissions, then automatically redirected back here.
+      <div
+        style={{
+          marginTop: "10px",
+          fontSize: "12px",
+          color: "var(--text-muted)",
+        }}
+      >
+        You will be redirected to Shopify to approve permissions, then
+        automatically redirected back here.
       </div>
     </div>
   );
 }
 
 // Parse the ad account picker list from URL: "act_123|Name,act_456|Other"
-function parseAccountsParam(raw: string | null): { id: string; name: string }[] {
+function parseAccountsParam(
+  raw: string | null,
+): { id: string; name: string }[] {
   if (!raw) return [];
-  return raw.split(',').map(item => {
-    const [id, encodedName] = item.split('|');
+  return raw.split(",").map((item) => {
+    const [id, encodedName] = item.split("|");
     return { id, name: decodeURIComponent(encodedName ?? id) };
   });
 }
@@ -223,19 +367,20 @@ function CompetitorTrackingCard({
   onUpdate: (competitors: Array<{ name: string; pageId: string }>) => void;
   params: { slug: string } | null;
 }) {
-  const [newName, setNewName] = useState('');
-  const [newPageId, setNewPageId] = useState('');
+  const [newName, setNewName] = useState("");
+  const [newPageId, setNewPageId] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const competitors: Array<{ name: string; pageId: string }> = (brand.competitors as Array<{ name: string; pageId: string }>) || [];
+  const competitors: Array<{ name: string; pageId: string }> =
+    (brand.competitors as Array<{ name: string; pageId: string }>) || [];
 
   const persist = async (updated: Array<{ name: string; pageId: string }>) => {
     if (!params) return;
     setSaving(true);
     try {
       await fetch(`/api/brands/${params.slug}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ competitors: updated }),
       });
       onUpdate(updated);
@@ -246,10 +391,13 @@ function CompetitorTrackingCard({
 
   const add = async () => {
     if (!newName.trim() || !newPageId.trim()) return;
-    const updated = [...competitors, { name: newName.trim(), pageId: newPageId.trim() }];
+    const updated = [
+      ...competitors,
+      { name: newName.trim(), pageId: newPageId.trim() },
+    ];
     await persist(updated);
-    setNewName('');
-    setNewPageId('');
+    setNewName("");
+    setNewPageId("");
   };
 
   const remove = async (idx: number) => {
@@ -261,56 +409,93 @@ function CompetitorTrackingCard({
     <div className="form-card">
       <div className="form-card-title">🔍 Competitor Tracking</div>
       <div className="form-card-desc">
-        Track competitor ads via the Meta Ad Library. Add their Facebook Page ID to monitor their active ads.
+        Track competitor ads via the Meta Ad Library. Add their Facebook Page ID
+        to monitor their active ads.
       </div>
 
       {/* Add row */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          marginBottom: "16px",
+          flexWrap: "wrap",
+        }}
+      >
         <input
           className="form-input"
-          style={{ flex: '1', minWidth: '140px' }}
+          style={{ flex: "1", minWidth: "140px" }}
           placeholder="Brand name (e.g. Nykaa)"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
+          onKeyDown={(e) => e.key === "Enter" && add()}
         />
         <input
           className="form-input mono"
-          style={{ flex: '1', minWidth: '160px' }}
+          style={{ flex: "1", minWidth: "160px" }}
           placeholder="Facebook Page ID (e.g. 123456789)"
           value={newPageId}
           onChange={(e) => setNewPageId(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && add()}
+          onKeyDown={(e) => e.key === "Enter" && add()}
         />
         <button
           className="btn btn-primary"
           onClick={add}
           disabled={saving || !newName.trim() || !newPageId.trim()}
-          style={{ whiteSpace: 'nowrap' }}
+          style={{ whiteSpace: "nowrap" }}
         >
-          {saving ? '⏳' : '+ Add'}
+          {saving ? "⏳" : "+ Add"}
         </button>
       </div>
 
       {/* Saved competitors */}
       {competitors.length === 0 ? (
-        <div style={{ fontSize: '13px', color: 'var(--text-dim)', padding: '12px 0' }}>
-          No competitors added yet. Add a competitor above to start tracking their ads.
+        <div
+          style={{
+            fontSize: "13px",
+            color: "var(--text-dim)",
+            padding: "12px 0",
+          }}
+        >
+          No competitors added yet. Add a competitor above to start tracking
+          their ads.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {competitors.map((c, i) => (
-            <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: '12px',
-              padding: '10px 12px', background: 'var(--bg-hover)',
-              borderRadius: '8px', border: '1px solid var(--glass-border)',
-            }}>
-              <span style={{ flex: 1, fontWeight: 600, fontSize: '14px' }}>{c.name}</span>
-              <span className="mono" style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{c.pageId}</span>
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "10px 12px",
+                background: "var(--bg-hover)",
+                borderRadius: "8px",
+                border: "1px solid var(--glass-border)",
+              }}
+            >
+              <span style={{ flex: 1, fontWeight: 600, fontSize: "14px" }}>
+                {c.name}
+              </span>
+              <span
+                className="mono"
+                style={{ fontSize: "12px", color: "var(--text-secondary)" }}
+              >
+                {c.pageId}
+              </span>
               <button
                 onClick={() => remove(i)}
                 disabled={saving}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-dim)', fontSize: '16px', lineHeight: 1, padding: '2px 4px' }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--text-dim)",
+                  fontSize: "16px",
+                  lineHeight: 1,
+                  padding: "2px 4px",
+                }}
                 title="Remove"
               >
                 ×
@@ -320,14 +505,37 @@ function CompetitorTrackingCard({
         </div>
       )}
 
-      <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--text-dim)', lineHeight: 1.5 }}>
-        💡 Find a page ID: go to the brand&apos;s Facebook page → right-click → View Page Source → search for <code style={{ fontFamily: 'monospace', background: 'rgba(59,130,246,0.1)', padding: '1px 4px', borderRadius: '3px' }}>page_id</code>. Requires Meta Ads to be connected.
+      <div
+        style={{
+          marginTop: "12px",
+          fontSize: "12px",
+          color: "var(--text-dim)",
+          lineHeight: 1.5,
+        }}
+      >
+        💡 Find a page ID: go to the brand&apos;s Facebook page → right-click →
+        View Page Source → search for{" "}
+        <code
+          style={{
+            fontFamily: "monospace",
+            background: "rgba(59,130,246,0.1)",
+            padding: "1px 4px",
+            borderRadius: "3px",
+          }}
+        >
+          page_id
+        </code>
+        . Requires Meta Ads to be connected.
       </div>
     </div>
   );
 }
 
-export default function SettingsPage({ params: paramsPromise }: { params: Promise<{ slug: string }> }) {
+export default function SettingsPage({
+  params: paramsPromise,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [params, setParams] = useState<{ slug: string } | null>(null);
@@ -335,41 +543,45 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [saveError, setSaveError] = useState('');
-  const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
+  const [saveError, setSaveError] = useState("");
+  const [testResults, setTestResults] = useState<
+    Record<string, { success: boolean; message: string }>
+  >({});
   const [testing, setTesting] = useState<Record<string, boolean>>({});
   const [deleting, setDeleting] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [deleteConfirm, setDeleteConfirm] = useState("");
 
   // Business Costs state
-  const [cogsPercent, setCogsPercent] = useState<string>('');
-  const [avgShippingCost, setAvgShippingCost] = useState<string>('');
-  const [avgReturnRate, setAvgReturnRate] = useState<string>('');
+  const [cogsPercent, setCogsPercent] = useState<string>("");
+  const [avgShippingCost, setAvgShippingCost] = useState<string>("");
+  const [avgReturnRate, setAvgReturnRate] = useState<string>("");
   const [costSaving, setCostSaving] = useState(false);
   const [costSaved, setCostSaved] = useState(false);
 
   // OAuth callback state from URL params
-  const metaConnectedViaOAuth      = searchParams.get('meta') === 'connected';
-  const googleAdsConnectedViaOAuth = searchParams.get('google_ads') === 'connected';
-  const ga4ConnectedViaOAuth       = searchParams.get('ga4') === 'connected';
-  const metaError      = searchParams.get('meta_error');
-  const googleAdsError = searchParams.get('google_ads_error');
-  const ga4Error       = searchParams.get('ga4_error');
-  const shopifySuccess = searchParams.get('shopify') === 'connected';
+  const metaConnectedViaOAuth = searchParams.get("meta") === "connected";
+  const googleAdsConnectedViaOAuth =
+    searchParams.get("google_ads") === "connected";
+  const ga4ConnectedViaOAuth = searchParams.get("ga4") === "connected";
+  const metaError = searchParams.get("meta_error");
+  const googleAdsError = searchParams.get("google_ads_error");
+  const ga4Error = searchParams.get("ga4_error");
+  const shopifySuccess = searchParams.get("shopify") === "connected";
 
   // Parse pending picker lists (shown after OAuth if multiple accounts/properties found)
   const [metaPendingAccounts, setMetaPendingAccounts] = useState(() =>
-    parseAccountsParam(searchParams.get('meta_accounts'))
+    parseAccountsParam(searchParams.get("meta_accounts")),
   );
   const [googleAdsPendingAccounts, setGoogleAdsPendingAccounts] = useState(() =>
-    parseAccountsParam(searchParams.get('google_ads_accounts'))
+    parseAccountsParam(searchParams.get("google_ads_accounts")),
   );
-  const ga4PropertiesParam = searchParams.get('ga4_properties');
-  const ga4NeedsManualPropertyId = ga4ConnectedViaOAuth && ga4PropertiesParam === 'none';
+  const ga4PropertiesParam = searchParams.get("ga4_properties");
+  const ga4NeedsManualPropertyId =
+    ga4ConnectedViaOAuth && ga4PropertiesParam === "none";
   const [ga4PendingProperties, setGa4PendingProperties] = useState(() =>
-    ga4PropertiesParam && ga4PropertiesParam !== 'none'
+    ga4PropertiesParam && ga4PropertiesParam !== "none"
       ? parseAccountsParam(ga4PropertiesParam)
-      : []
+      : [],
   );
 
   useEffect(() => {
@@ -380,16 +592,27 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
     if (!params) return;
     // Fetch the brand by slug
     fetch(`/api/brands/${params.slug}`)
-      .then(r => r.json())
+      .then((r) => r.json())
       .then((data: BrandData) => {
         setBrand(data);
-        setCogsPercent(data.cogsPercent != null ? String(data.cogsPercent) : '');
-        setAvgShippingCost(data.avgShippingCost != null ? String(data.avgShippingCost) : '');
-        setAvgReturnRate(data.avgReturnRate != null ? String(data.avgReturnRate) : '');
+        setCogsPercent(
+          data.cogsPercent != null ? String(data.cogsPercent) : "",
+        );
+        setAvgShippingCost(
+          data.avgShippingCost != null ? String(data.avgShippingCost) : "",
+        );
+        setAvgReturnRate(
+          data.avgReturnRate != null ? String(data.avgReturnRate) : "",
+        );
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [params, metaConnectedViaOAuth, googleAdsConnectedViaOAuth, ga4ConnectedViaOAuth]);
+  }, [
+    params,
+    metaConnectedViaOAuth,
+    googleAdsConnectedViaOAuth,
+    ga4ConnectedViaOAuth,
+  ]);
 
   const updateField = (field: string, value: string) => {
     if (!brand) return;
@@ -401,21 +624,21 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
     if (!brand || !params) return;
     setSaving(true);
     setSaved(false);
-    setSaveError('');
+    setSaveError("");
     try {
       // Only send fields the user has actually set (non-empty strings)
       // Omit fields that are undefined/empty so we don't accidentally null them out
       const payload: Record<string, unknown> = {};
       for (const [key, val] of Object.entries(brand)) {
         // Skip connected booleans from masked response
-        if (key.endsWith('Connected')) continue;
+        if (key.endsWith("Connected")) continue;
         // Skip blank/undefined — don't overwrite DB value with nothing
-        if (val === undefined || val === '' || val === null) continue;
+        if (val === undefined || val === "" || val === null) continue;
         payload[key] = val;
       }
       const res = await fetch(`/api/brands/${params.slug}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -424,10 +647,15 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
         setTimeout(() => setSaved(false), 3000);
       } else {
         const err = await res.json().catch(() => ({}));
-        setSaveError((err as { error?: string }).error || 'Failed to save. Please try again.');
+        setSaveError(
+          (err as { error?: string }).error ||
+            "Failed to save. Please try again.",
+        );
       }
     } catch {
-      setSaveError('Network error. Please check your connection and try again.');
+      setSaveError(
+        "Network error. Please check your connection and try again.",
+      );
     } finally {
       setSaving(false);
     }
@@ -439,12 +667,14 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
     setCostSaved(false);
     try {
       const res = await fetch(`/api/brands/${params.slug}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          cogsPercent: cogsPercent !== '' ? parseFloat(cogsPercent) : null,
-          avgShippingCost: avgShippingCost !== '' ? parseFloat(avgShippingCost) : null,
-          avgReturnRate: avgReturnRate !== '' ? parseFloat(avgReturnRate) : null,
+          cogsPercent: cogsPercent !== "" ? parseFloat(cogsPercent) : null,
+          avgShippingCost:
+            avgShippingCost !== "" ? parseFloat(avgShippingCost) : null,
+          avgReturnRate:
+            avgReturnRate !== "" ? parseFloat(avgReturnRate) : null,
         }),
       });
       if (res.ok) {
@@ -458,24 +688,29 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
 
   const testShopify = async () => {
     if (!brand?.shopifyStoreUrl) return;
-    setTesting(p => ({ ...p, shopify: true }));
+    setTesting((p) => ({ ...p, shopify: true }));
     try {
-      const res = await fetch('/api/test-connection', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const res = await fetch("/api/test-connection", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type: 'shopify',
+          type: "shopify",
           storeUrl: brand.shopifyStoreUrl,
           accessToken: brand.shopifyAccessToken,
         }),
       });
       const data = await res.json();
-      setTestResults(prev => ({
+      setTestResults((prev) => ({
         ...prev,
-        shopify: { success: data.success, message: data.success ? `✅ Connected to "${data.shopName}"` : `❌ ${data.error}` },
+        shopify: {
+          success: data.success,
+          message: data.success
+            ? `✅ Connected to "${data.shopName}"`
+            : `❌ ${data.error}`,
+        },
       }));
     } finally {
-      setTesting(p => ({ ...p, shopify: false }));
+      setTesting((p) => ({ ...p, shopify: false }));
     }
   };
 
@@ -484,16 +719,16 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
     setDeleting(true);
     try {
       const res = await fetch(`/api/brands/${params.slug}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
       });
       if (res.ok) {
-        router.push('/');
+        router.push("/");
       } else {
-        alert('Failed to delete brand');
+        alert("Failed to delete brand");
       }
     } catch {
-      alert('Failed to delete brand');
+      alert("Failed to delete brand");
     } finally {
       setDeleting(false);
     }
@@ -507,11 +742,17 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           <p>Loading...</p>
         </div>
         <div className="page-body">
-          {[1,2,3].map(i => (
-            <div key={i} className="form-card" style={{ marginBottom: '16px' }}>
-              <div className="skeleton skeleton-text" style={{ width: '40%', marginBottom: '16px' }} />
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="form-card" style={{ marginBottom: "16px" }}>
+              <div
+                className="skeleton skeleton-text"
+                style={{ width: "40%", marginBottom: "16px" }}
+              />
               <div className="skeleton skeleton-text" />
-              <div className="skeleton skeleton-text" style={{ width: '80%' }} />
+              <div
+                className="skeleton skeleton-text"
+                style={{ width: "80%" }}
+              />
             </div>
           ))}
         </div>
@@ -522,7 +763,7 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   if (!brand) return null;
 
   const isConnected = {
-    shopify: !!(brand.shopifyConnected),  // needs both URL + token — shopifyConnected flag set by masked API
+    shopify: !!brand.shopifyConnected, // needs both URL + token — shopifyConnected flag set by masked API
     ga4: !!(brand.ga4Connected || brand.ga4PropertyId),
     meta: !!(brand.metaConnected || brand.metaAccessToken),
     googleAds: !!(brand.googleAdsConnected || brand.googleAdsCustomerId),
@@ -533,14 +774,56 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
   };
 
   const Step = ({ n, text }: { n: number; text: string }) => (
-    <div style={{ display: 'flex', gap: '10px', marginBottom: '8px', alignItems: 'flex-start' }}>
-      <span style={{ minWidth: '22px', height: '22px', borderRadius: '50%', background: 'var(--accent-blue)', color: '#fff', fontSize: '11px', fontWeight: '700', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '1px' }}>{n}</span>
-      <span style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5' }} dangerouslySetInnerHTML={{ __html: text }} />
+    <div
+      style={{
+        display: "flex",
+        gap: "10px",
+        marginBottom: "8px",
+        alignItems: "flex-start",
+      }}
+    >
+      <span
+        style={{
+          minWidth: "22px",
+          height: "22px",
+          borderRadius: "50%",
+          background: "var(--accent-blue)",
+          color: "#fff",
+          fontSize: "11px",
+          fontWeight: "700",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginTop: "1px",
+        }}
+      >
+        {n}
+      </span>
+      <span
+        style={{
+          fontSize: "13px",
+          color: "var(--text-secondary)",
+          lineHeight: "1.5",
+        }}
+        dangerouslySetInnerHTML={{ __html: text }}
+      />
     </div>
   );
 
   const Code = ({ children }: { children: string }) => (
-    <code style={{ background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '1px 6px', fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)' }}>{children}</code>
+    <code
+      style={{
+        background: "var(--bg-primary)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "4px",
+        padding: "1px 6px",
+        fontFamily: "monospace",
+        fontSize: "12px",
+        color: "var(--accent-blue)",
+      }}
+    >
+      {children}
+    </code>
   );
 
   return (
@@ -549,28 +832,63 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
         <div className="page-header-row">
           <div>
             <h2>⚙️ Connection Setup</h2>
-            <p>Step-by-step guides to connect all platforms for <strong>{brand.name}</strong></p>
+            <p>
+              Step-by-step guides to connect all platforms for{" "}
+              <strong>{brand.name}</strong>
+            </p>
           </div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
             <ThemeToggle />
-            <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving ? '⏳ Saving...' : saved ? '✅ Saved!' : '💾 Save Changes'}
+            <button
+              className="btn btn-primary"
+              onClick={save}
+              disabled={saving}
+            >
+              {saving
+                ? "⏳ Saving..."
+                : saved
+                  ? "✅ Saved!"
+                  : "💾 Save Changes"}
             </button>
           </div>
         </div>
       </div>
 
       <div className="page-body">
-
         {/* OAuth success/error banners at top */}
-        {(shopifySuccess || metaConnectedViaOAuth || googleAdsConnectedViaOAuth || ga4ConnectedViaOAuth) && (
-          <div style={{ padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)', color: '#22c55e', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '18px' }}>✅</span>
+        {(shopifySuccess ||
+          metaConnectedViaOAuth ||
+          googleAdsConnectedViaOAuth ||
+          ga4ConnectedViaOAuth) && (
+          <div
+            style={{
+              padding: "12px 16px",
+              borderRadius: "8px",
+              marginBottom: "16px",
+              fontSize: "13px",
+              background: "rgba(34,197,94,0.08)",
+              border: "1px solid rgba(34,197,94,0.25)",
+              color: "#22c55e",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
+            <span style={{ fontSize: "18px" }}>✅</span>
             <span>
-              {shopifySuccess && 'Shopify connected successfully!'}
-              {metaConnectedViaOAuth && 'Meta Ads connected successfully!'}
-              {googleAdsConnectedViaOAuth && 'Google Ads connected successfully!'}
-              {ga4ConnectedViaOAuth && 'Google Analytics connected successfully!'}
+              {shopifySuccess && "Shopify connected successfully!"}
+              {metaConnectedViaOAuth && "Meta Ads connected successfully!"}
+              {googleAdsConnectedViaOAuth &&
+                "Google Ads connected successfully!"}
+              {ga4ConnectedViaOAuth &&
+                "Google Analytics connected successfully!"}
             </span>
           </div>
         )}
@@ -582,11 +900,18 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           icon="🛒"
           isConnected={isConnected.shopify}
         >
-          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Enables orders, products, customers, revenue analytics, and Custom Metrics (ShopifyQL)
+          <div
+            style={{
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+            }}
+          >
+            Enables orders, products, customers, revenue analytics, and Custom
+            Metrics (ShopifyQL)
           </div>
           <ShopifyConnect
-            slug={params?.slug ?? ''}
+            slug={params?.slug ?? ""}
             brand={brand}
             isConnected={isConnected.shopify}
           />
@@ -599,25 +924,42 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           icon="📈"
           isConnected={isConnected.ga4}
         >
-          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+          <div
+            style={{
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+            }}
+          >
             Traffic sources, sessions, bounce rates, and conversion funnel data
           </div>
 
           {/* OAuth error banner */}
           {ga4Error && (
-            <div style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}>
-              ❌ Connection failed: {ga4Error.replace(/_/g, ' ')}. Please try again.
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: "8px",
+                marginBottom: "14px",
+                fontSize: "13px",
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                color: "#ef4444",
+              }}
+            >
+              ❌ Connection failed: {ga4Error.replace(/_/g, " ")}. Please try
+              again.
             </div>
           )}
 
           <GA4Connect
-            slug={params?.slug ?? ''}
+            slug={params?.slug ?? ""}
             isConnected={isConnected.ga4}
             propertyId={brand.ga4PropertyId}
             pendingProperties={ga4PendingProperties}
             needsManualPropertyId={ga4NeedsManualPropertyId}
             onPropertySelected={(id) => {
-              setBrand(b => b ? { ...b, ga4PropertyId: id } : b);
+              setBrand((b) => (b ? { ...b, ga4PropertyId: id } : b));
               setGa4PendingProperties([]);
             }}
           />
@@ -630,31 +972,49 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           icon="📱"
           isConnected={isConnected.meta}
         >
-          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Facebook and Instagram ad campaign performance, ROAS and spend analytics
+          <div
+            style={{
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+            }}
+          >
+            Facebook and Instagram ad campaign performance, ROAS and spend
+            analytics
           </div>
 
           {/* OAuth error banner */}
           {metaError && (
-            <div style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}>
-              ❌ Connection failed: {metaError.replace(/_/g, ' ')}. Please try again.
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: "8px",
+                marginBottom: "14px",
+                fontSize: "13px",
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                color: "#ef4444",
+              }}
+            >
+              ❌ Connection failed: {metaError.replace(/_/g, " ")}. Please try
+              again.
             </div>
           )}
 
           <MetaConnect
-            slug={params?.slug ?? ''}
+            slug={params?.slug ?? ""}
             isConnected={isConnected.meta}
             adAccountId={brand.metaAdAccountId}
             pendingAccounts={metaPendingAccounts}
             onAccountSelected={(id) => {
-              setBrand(b => b ? { ...b, metaAdAccountId: id } : b);
+              setBrand((b) => (b ? { ...b, metaAdAccountId: id } : b));
               setMetaPendingAccounts([]);
             }}
           />
 
           {/* Permission status + re-auth nudge */}
           {isConnected.meta && (
-            <MetaPermissionStatus slug={params?.slug ?? ''} />
+            <MetaPermissionStatus slug={params?.slug ?? ""} />
           )}
         </ConnectionAccordion>
 
@@ -665,24 +1025,41 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           icon="🎯"
           isConnected={isConnected.googleAds}
         >
-          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+          <div
+            style={{
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+            }}
+          >
             Search, Shopping and Display campaign performance and ROAS
           </div>
 
           {/* OAuth error banner */}
           {googleAdsError && (
-            <div style={{ padding: '10px 14px', borderRadius: '8px', marginBottom: '14px', fontSize: '13px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }}>
-              ❌ Connection failed: {googleAdsError.replace(/_/g, ' ')}. Please try again.
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: "8px",
+                marginBottom: "14px",
+                fontSize: "13px",
+                background: "rgba(239,68,68,0.08)",
+                border: "1px solid rgba(239,68,68,0.25)",
+                color: "#ef4444",
+              }}
+            >
+              ❌ Connection failed: {googleAdsError.replace(/_/g, " ")}. Please
+              try again.
             </div>
           )}
 
           <GoogleAdsConnect
-            slug={params?.slug ?? ''}
+            slug={params?.slug ?? ""}
             isConnected={isConnected.googleAds}
             customerId={brand.googleAdsCustomerId}
             pendingAccounts={googleAdsPendingAccounts}
             onAccountSelected={(id) => {
-              setBrand(b => b ? { ...b, googleAdsCustomerId: id } : b);
+              setBrand((b) => (b ? { ...b, googleAdsCustomerId: id } : b));
               setGoogleAdsPendingAccounts([]);
             }}
           />
@@ -695,28 +1072,79 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           icon="🤖"
           isConnected={isConnected.ai}
         >
-          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Powers the AI chat assistant with real-time brand data for consulting
+          <div
+            style={{
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+            }}
+          >
+            Powers the AI chat assistant with real-time brand data for
+            consulting
           </div>
 
-          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
-            <Step n={1} text='Go to <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent-blue)">aistudio.google.com</a> → Sign in with Google' />
-            <Step n={2} text='Click <strong>"Get API Key"</strong> → Create API Key in new project (free tier: 15 RPM, 1M tokens/day)' />
-            <Step n={3} text='Copy the key (starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">AIza</code>) and paste below' />
+          <div
+            style={{
+              background: "var(--bg-primary)",
+              borderRadius: "8px",
+              padding: "14px 16px",
+              marginBottom: "16px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: "700",
+                color: "var(--text-secondary)",
+                marginBottom: "10px",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              How to get credentials
+            </div>
+            <Step
+              n={1}
+              text='Go to <a href="https://aistudio.google.com" target="_blank" style="color:var(--accent-blue)">aistudio.google.com</a> → Sign in with Google'
+            />
+            <Step
+              n={2}
+              text='Click <strong>"Get API Key"</strong> → Create API Key in new project (free tier: 15 RPM, 1M tokens/day)'
+            />
+            <Step
+              n={3}
+              text='Copy the key (starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">AIza</code>) and paste below'
+            />
           </div>
 
           {isConnected.ai && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px',
-              background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)',
-              borderRadius: '8px', marginBottom: '12px', fontSize: '13px',
-            }}>
-              <span style={{ fontSize: '16px' }}>✅</span>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "10px 14px",
+                background: "rgba(16,185,129,0.1)",
+                border: "1px solid rgba(16,185,129,0.3)",
+                borderRadius: "8px",
+                marginBottom: "12px",
+                fontSize: "13px",
+              }}
+            >
+              <span style={{ fontSize: "16px" }}>✅</span>
               <div>
-                <strong style={{ color: 'var(--text-primary)' }}>API key is saved and active</strong>
-                <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  For security, the key is not shown. Enter a new key below only if you want to replace it.
+                <strong style={{ color: "var(--text-primary)" }}>
+                  API key is saved and active
+                </strong>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    color: "var(--text-muted)",
+                    marginTop: "2px",
+                  }}
+                >
+                  For security, the key is not shown. Enter a new key below only
+                  if you want to replace it.
                 </div>
               </div>
             </div>
@@ -724,14 +1152,20 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
 
           <div className="form-group">
             <label className="form-label">
-              {isConnected.ai ? 'Replace Gemini API Key (leave blank to keep current)' : 'Gemini API Key'}
+              {isConnected.ai
+                ? "Replace Gemini API Key (leave blank to keep current)"
+                : "Gemini API Key"}
             </label>
             <input
               className="form-input mono"
               type="password"
-              value={brand.geminiApiKey || ''}
-              onChange={(e) => updateField('geminiApiKey', e.target.value)}
-              placeholder={isConnected.ai ? 'Enter new key only to replace existing…' : 'AIza...'}
+              value={brand.geminiApiKey || ""}
+              onChange={(e) => updateField("geminiApiKey", e.target.value)}
+              placeholder={
+                isConnected.ai
+                  ? "Enter new key only to replace existing…"
+                  : "AIza..."
+              }
               autoComplete="new-password"
             />
           </div>
@@ -742,27 +1176,85 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           id="tiktok"
           title="TikTok Ads"
           icon="🎵"
-          isConnected={!!(brand as unknown as Record<string,string|null>).tiktokAdvertiserId}
+          isConnected={
+            !!(brand as unknown as Record<string, string | null>)
+              .tiktokAdvertiserId
+          }
         >
-          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+          <div
+            style={{
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+            }}
+          >
             Track TikTok Ads spend, ROAS, video views, and conversions
           </div>
 
-          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
-            <Step n={1} text='Go to <a href="https://ads.tiktok.com" target="_blank" style="color:var(--accent-blue)">TikTok Ads Manager</a> → Your Account → <strong>Assets → Business Account</strong>' />
-            <Step n={2} text='Go to <strong>My Apps</strong> → Create app → Select <strong>Standard Access</strong> → Enable Marketing API' />
-            <Step n={3} text='In your app dashboard, copy the <strong>Access Token</strong>' />
-            <Step n={4} text='Your <strong>Advertiser ID</strong> is shown in the URL: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">ads.tiktok.com/i18n/dashboard?aadvid=XXXXXXXXXX</code>' />
+          <div
+            style={{
+              background: "var(--bg-primary)",
+              borderRadius: "8px",
+              padding: "14px 16px",
+              marginBottom: "16px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: "700",
+                color: "var(--text-secondary)",
+                marginBottom: "10px",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              How to get credentials
+            </div>
+            <Step
+              n={1}
+              text='Go to <a href="https://ads.tiktok.com" target="_blank" style="color:var(--accent-blue)">TikTok Ads Manager</a> → Your Account → <strong>Assets → Business Account</strong>'
+            />
+            <Step
+              n={2}
+              text="Go to <strong>My Apps</strong> → Create app → Select <strong>Standard Access</strong> → Enable Marketing API"
+            />
+            <Step
+              n={3}
+              text="In your app dashboard, copy the <strong>Access Token</strong>"
+            />
+            <Step
+              n={4}
+              text='Your <strong>Advertiser ID</strong> is shown in the URL: <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">ads.tiktok.com/i18n/dashboard?aadvid=XXXXXXXXXX</code>'
+            />
           </div>
 
           <div className="form-group">
             <label className="form-label">Access Token</label>
-            <input className="form-input mono" type="password" value={(brand as unknown as Record<string,string>).tiktokAccessToken || ''} onChange={(e) => updateField('tiktokAccessToken', e.target.value)} placeholder="TikTok access token" />
+            <input
+              className="form-input mono"
+              type="password"
+              value={
+                (brand as unknown as Record<string, string>)
+                  .tiktokAccessToken || ""
+              }
+              onChange={(e) => updateField("tiktokAccessToken", e.target.value)}
+              placeholder="TikTok access token"
+            />
           </div>
           <div className="form-group">
             <label className="form-label">Advertiser ID</label>
-            <input className="form-input mono" value={(brand as unknown as Record<string,string>).tiktokAdvertiserId || ''} onChange={(e) => updateField('tiktokAdvertiserId', e.target.value)} placeholder="1234567890" />
+            <input
+              className="form-input mono"
+              value={
+                (brand as unknown as Record<string, string>)
+                  .tiktokAdvertiserId || ""
+              }
+              onChange={(e) =>
+                updateField("tiktokAdvertiserId", e.target.value)
+              }
+              placeholder="1234567890"
+            />
           </div>
         </ConnectionAccordion>
 
@@ -771,22 +1263,66 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           id="klaviyo"
           title="Klaviyo"
           icon="📧"
-          isConnected={!!(brand as unknown as Record<string,string|null>).klaviyoApiKey}
+          isConnected={
+            !!(brand as unknown as Record<string, string | null>).klaviyoApiKey
+          }
         >
-          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-            Track email revenue, open rates, click rates, flows, and subscriber growth
+          <div
+            style={{
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+            }}
+          >
+            Track email revenue, open rates, click rates, flows, and subscriber
+            growth
           </div>
 
-          <div style={{ background: 'var(--bg-primary)', borderRadius: '8px', padding: '14px 16px', marginBottom: '16px' }}>
-            <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>How to get credentials</div>
-            <Step n={1} text='Go to <a href="https://www.klaviyo.com/settings/account/api-keys" target="_blank" style="color:var(--accent-blue)">Klaviyo → Account → Settings → API Keys</a>' />
-            <Step n={2} text='Click <strong>"Create Private API Key"</strong> → Name it (e.g. "Brand Analytics") → Select <strong>Read-Only Access</strong>' />
-            <Step n={3} text='Copy the key (starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">pk_</code>) and paste below' />
+          <div
+            style={{
+              background: "var(--bg-primary)",
+              borderRadius: "8px",
+              padding: "14px 16px",
+              marginBottom: "16px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "12px",
+                fontWeight: "700",
+                color: "var(--text-secondary)",
+                marginBottom: "10px",
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+              }}
+            >
+              How to get credentials
+            </div>
+            <Step
+              n={1}
+              text='Go to <a href="https://www.klaviyo.com/settings/account/api-keys" target="_blank" style="color:var(--accent-blue)">Klaviyo → Account → Settings → API Keys</a>'
+            />
+            <Step
+              n={2}
+              text='Click <strong>"Create Private API Key"</strong> → Name it (e.g. "Brand Analytics") → Select <strong>Read-Only Access</strong>'
+            />
+            <Step
+              n={3}
+              text='Copy the key (starts with <code style="font-family:monospace;background:rgba(59,130,246,0.1);padding:1px 4px;border-radius:3px;font-size:11px">pk_</code>) and paste below'
+            />
           </div>
 
           <div className="form-group">
             <label className="form-label">Klaviyo Private API Key</label>
-            <input className="form-input mono" type="password" value={(brand as unknown as Record<string,string>).klaviyoApiKey || ''} onChange={(e) => updateField('klaviyoApiKey', e.target.value)} placeholder="pk_..." />
+            <input
+              className="form-input mono"
+              type="password"
+              value={
+                (brand as unknown as Record<string, string>).klaviyoApiKey || ""
+              }
+              onChange={(e) => updateField("klaviyoApiKey", e.target.value)}
+              placeholder="pk_..."
+            />
           </div>
         </ConnectionAccordion>
 
@@ -797,11 +1333,24 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           icon="💰"
           isConnected={!!(brand.cogsPercent || brand.avgShippingCost)}
         >
-          <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+          <div
+            style={{
+              marginBottom: "16px",
+              fontSize: "13px",
+              color: "var(--text-secondary)",
+            }}
+          >
             Set your cost assumptions for the Profitability P&amp;L calculator
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: "16px",
+              marginBottom: "20px",
+            }}
+          >
             <div className="form-group" style={{ marginBottom: 0 }}>
               <label className="form-label">COGS %</label>
               <input
@@ -814,7 +1363,15 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
                 onChange={(e) => setCogsPercent(e.target.value)}
                 placeholder="e.g. 35"
               />
-              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>Cost of goods as % of revenue</div>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "var(--text-dim)",
+                  marginTop: "4px",
+                }}
+              >
+                Cost of goods as % of revenue
+              </div>
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>
@@ -828,7 +1385,15 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
                 onChange={(e) => setAvgShippingCost(e.target.value)}
                 placeholder="e.g. 80"
               />
-              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>Average shipping cost per order in INR</div>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "var(--text-dim)",
+                  marginTop: "4px",
+                }}
+              >
+                Average shipping cost per order in INR
+              </div>
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>
@@ -843,57 +1408,126 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
                 onChange={(e) => setAvgReturnRate(e.target.value)}
                 placeholder="e.g. 3"
               />
-              <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>Return / refund rate %</div>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "var(--text-dim)",
+                  marginTop: "4px",
+                }}
+              >
+                Return / refund rate %
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <button className="btn btn-primary" onClick={saveCosts} disabled={costSaving}>
-              {costSaving ? '⏳ Saving...' : costSaved ? '✅ Saved!' : '💾 Save Costs'}
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <button
+              className="btn btn-primary"
+              onClick={saveCosts}
+              disabled={costSaving}
+            >
+              {costSaving
+                ? "⏳ Saving..."
+                : costSaved
+                  ? "✅ Saved!"
+                  : "💾 Save Costs"}
             </button>
-            {costSaved && <span style={{ fontSize: '13px', color: 'var(--accent-emerald)' }}>✅ Cost assumptions updated — Profitability P&amp;L will reflect these values</span>}
+            {costSaved && (
+              <span
+                style={{ fontSize: "13px", color: "var(--accent-emerald)" }}
+              >
+                ✅ Cost assumptions updated — Profitability P&amp;L will reflect
+                these values
+              </span>
+            )}
           </div>
         </ConnectionAccordion>
 
         {/* ── Competitor Tracking ── */}
-        <CompetitorTrackingCard brand={brand} onUpdate={(competitors) => setBrand({ ...brand, competitors })} params={params} />
+        <CompetitorTrackingCard
+          brand={brand}
+          onUpdate={(competitors) => setBrand({ ...brand, competitors })}
+          params={params}
+        />
 
         {/* Save */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            <button className="btn btn-primary" onClick={save} disabled={saving}>
-              {saving ? '⏳ Saving...' : saved ? '✅ Saved!' : '💾 Save All Changes'}
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <button
+              className="btn btn-primary"
+              onClick={save}
+              disabled={saving}
+            >
+              {saving
+                ? "⏳ Saving..."
+                : saved
+                  ? "✅ Saved!"
+                  : "💾 Save All Changes"}
             </button>
-            {saved && <span style={{ color: 'var(--accent-emerald)', fontSize: '13px' }}>✅ Changes saved — AI consultant will use the new key immediately</span>}
+            {saved && (
+              <span
+                style={{ color: "var(--accent-emerald)", fontSize: "13px" }}
+              >
+                ✅ Changes saved — AI consultant will use the new key
+                immediately
+              </span>
+            )}
           </div>
           {saveError && (
-            <div style={{
-              padding: '10px 14px', borderRadius: '8px', fontSize: '13px',
-              background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444',
-            }}>
+            <div
+              style={{
+                padding: "10px 14px",
+                borderRadius: "8px",
+                fontSize: "13px",
+                background: "rgba(239,68,68,0.1)",
+                border: "1px solid rgba(239,68,68,0.3)",
+                color: "#ef4444",
+              }}
+            >
               ❌ {saveError}
             </div>
           )}
         </div>
 
         {/* ── DANGER ZONE ── */}
-        <div className="form-card" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.05)' }}>
-          <div className="form-card-title" style={{ color: 'var(--text-danger)' }}>⚠️ Danger Zone</div>
-          <div className="form-card-desc">Permanently delete this brand and all associated data</div>
+        <div
+          className="form-card"
+          style={{
+            borderColor: "rgba(239, 68, 68, 0.3)",
+            background: "rgba(239, 68, 68, 0.05)",
+          }}
+        >
+          <div
+            className="form-card-title"
+            style={{ color: "var(--text-danger)" }}
+          >
+            ⚠️ Danger Zone
+          </div>
+          <div className="form-card-desc">
+            Permanently delete this brand and all associated data
+          </div>
 
-          {deleteConfirm === '' ? (
+          {deleteConfirm === "" ? (
             <div>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
-                This action cannot be undone. All analytics data, settings, and configurations for <strong>{brand.name}</strong> will be permanently deleted.
+              <p
+                style={{
+                  fontSize: "13px",
+                  color: "var(--text-secondary)",
+                  marginBottom: "16px",
+                }}
+              >
+                This action cannot be undone. All analytics data, settings, and
+                configurations for <strong>{brand.name}</strong> will be
+                permanently deleted.
               </p>
               <button
-                onClick={() => setDeleteConfirm('confirm')}
+                onClick={() => setDeleteConfirm("confirm")}
                 className="btn"
                 style={{
-                  background: '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  cursor: 'pointer',
+                  background: "#ef4444",
+                  color: "white",
+                  border: "none",
+                  cursor: "pointer",
                 }}
               >
                 🗑️ Delete Brand
@@ -901,38 +1535,49 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
             </div>
           ) : (
             <div>
-              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                Type the brand name <strong>&quot;{brand.name}&quot;</strong> to confirm deletion:
+              <p
+                style={{
+                  fontSize: "13px",
+                  color: "var(--text-secondary)",
+                  marginBottom: "12px",
+                }}
+              >
+                Type the brand name <strong>&quot;{brand.name}&quot;</strong> to
+                confirm deletion:
               </p>
               <input
                 type="text"
                 className="form-input"
                 placeholder={brand.name}
-                value={deleteConfirm === 'confirm' ? '' : deleteConfirm}
+                value={deleteConfirm === "confirm" ? "" : deleteConfirm}
                 onChange={(e) => setDeleteConfirm(e.target.value)}
                 autoFocus
-                style={{ marginBottom: '12px' }}
+                style={{ marginBottom: "12px" }}
               />
-              <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ display: "flex", gap: "8px" }}>
                 <button
                   onClick={deleteBrand}
                   disabled={deleteConfirm !== brand.name || deleting}
                   className="btn"
                   style={{
-                    background: '#ef4444',
-                    color: 'white',
-                    border: 'none',
-                    cursor: deleteConfirm === brand.name && !deleting ? 'pointer' : 'not-allowed',
-                    opacity: deleteConfirm === brand.name && !deleting ? 1 : 0.5,
+                    background: "#ef4444",
+                    color: "white",
+                    border: "none",
+                    cursor:
+                      deleteConfirm === brand.name && !deleting
+                        ? "pointer"
+                        : "not-allowed",
+                    opacity:
+                      deleteConfirm === brand.name && !deleting ? 1 : 0.5,
                   }}
                 >
-                  {deleting ? '⏳ Deleting...' : '✓ Confirm Delete'}
+                  {deleting ? "⏳ Deleting..." : "✓ Confirm Delete"}
                 </button>
                 <button
-                  onClick={() => setDeleteConfirm('')}
+                  onClick={() => setDeleteConfirm("")}
                   disabled={deleting}
                   className="btn btn-secondary"
-                  style={{ cursor: 'pointer' }}
+                  style={{ cursor: "pointer" }}
                 >
                   ✕ Cancel
                 </button>
