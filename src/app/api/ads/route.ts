@@ -91,6 +91,8 @@ export async function GET(request: Request) {
           return NextResponse.json(await meta.getDevices(config, dateRange));
         case 'countries':
           return NextResponse.json(await meta.getCountries(config, dateRange));
+        case 'comment_analytics':
+          return NextResponse.json(await meta.getAdCommentAnalytics(config, dateRange));
         case 'permissions':
           return NextResponse.json(await meta.getPermissions(config.accessToken));
         default:

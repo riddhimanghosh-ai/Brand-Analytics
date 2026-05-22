@@ -26,7 +26,10 @@ function MetaPermissionStatus({ slug }: { slug: string }) {
   if (!status) return null;
 
   const needed = [
-    { perm: 'pages_read_user_content', label: 'Page Comments', icon: '💬' },
+    { perm: 'ads_read', label: 'Ad Metrics', icon: '📊' },
+    { perm: 'pages_show_list', label: 'Managed Pages', icon: '📄' },
+    { perm: 'pages_read_engagement', label: 'Page Comments', icon: '💬' },
+    { perm: 'pages_read_user_content', label: 'Page Mentions', icon: '🗨️' },
     { perm: 'instagram_basic', label: 'Instagram Media', icon: '📸' },
     { perm: 'instagram_manage_comments', label: 'Instagram Comments', icon: '💬' },
   ];
@@ -899,7 +902,7 @@ export default function SettingsPage({ params: paramsPromise }: { params: Promis
           ) : (
             <div>
               <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
-                Type the brand name <strong>"{brand.name}"</strong> to confirm deletion:
+                Type the brand name <strong>&quot;{brand.name}&quot;</strong> to confirm deletion:
               </p>
               <input
                 type="text"

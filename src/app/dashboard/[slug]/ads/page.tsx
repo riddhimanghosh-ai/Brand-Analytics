@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import type {
   MetaKPIs, MetaCampaign, MetaSpendPoint, MetaAdSet, MetaAd,
-  MetaFunnel, MetaBreakdownRow,
+  MetaFunnel, MetaBreakdownRow, MetaAdCommentAnalytics,
 } from '@/lib/services/meta';
 import type { GoogleAdsKPIs, GoogleAdsCampaign, GoogleAdsSpendPoint } from '@/lib/services/google-ads';
 
@@ -149,6 +149,7 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
   const [demographics, setDemographics] = useState<MetaBreakdownRow[]>([]);
   const [placements, setPlacements] = useState<MetaBreakdownRow[]>([]);
   const [devices, setDevices] = useState<MetaBreakdownRow[]>([]);
+  const [commentAnalytics, setCommentAnalytics] = useState<MetaAdCommentAnalytics | null>(null);
   const [activeTable, setActiveTable] = useState<'campaigns' | 'adsets' | 'ads'>('campaigns');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -167,8 +168,9 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
       fetch(`/api/ads?${q}&action=demographics`).then((r) => r.json()).catch(() => []),
       fetch(`/api/ads?${q}&action=placements`).then((r) => r.json()).catch(() => []),
       fetch(`/api/ads?${q}&action=devices`).then((r) => r.json()).catch(() => []),
+      fetch(`/api/ads?${q}&action=comment_analytics`).then((r) => r.json()).catch(() => null),
     ])
-      .then(([k, c, as, a, s, dem, pl, dev]) => {
+      .then(([k, c, as, a, s, dem, pl, dev, cm]) => {
         if (k?.error) { setError(k.error); return; }
         setKpis(k);
         setCampaigns(Array.isArray(c) ? c : []);
@@ -178,6 +180,7 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
         setDemographics(Array.isArray(dem) ? dem : []);
         setPlacements(Array.isArray(pl) ? pl : []);
         setDevices(Array.isArray(dev) ? dev : []);
+        setCommentAnalytics(cm && !cm.error ? cm : null);
         if (k) {
           setFunnel({
             impressions: k.impressions,
@@ -193,7 +196,10 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
       .finally(() => setLoading(false));
   }, [slug, from, to, connected]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   if (!connected) {
     return (
@@ -399,6 +405,78 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
         <BreakdownCard title="🎯 Placement Performance" subtitle="Where your spend converts best" rows={placements} max={6} />
       </div>
 
+      {commentAnalytics && (
+        <div className="chart-card" style={{ marginTop: '24px' }}>
+          <div className="chart-card-header">
+            <div>
+              <div className="chart-card-title">Comment Analytics</div>
+              <div className="chart-card-subtitle">Ad-linked comment activity, with readable-text coverage where Meta allows it</div>
+            </div>
+          </div>
+          <div className="kpi-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '16px' }}>
+            {[
+              { label: 'Comment Actions', value: commentAnalytics.summary.totalCommentActions, color: '#3b82f6' },
+              { label: 'Readable Text', value: commentAnalytics.summary.readableComments, color: '#22c55e' },
+              { label: 'Blocked Text', value: commentAnalytics.summary.unreadableCommentEstimate, color: '#f59e0b' },
+              { label: 'Ads With Comments', value: commentAnalytics.summary.adsWithCommentActivity, color: '#8b5cf6' },
+            ].map((item) => (
+              <div key={item.label} className="kpi-card" style={{ textAlign: 'center' }}>
+                <div className="kpi-value" style={{ color: item.color }}>{formatNum(item.value)}</div>
+                <div className="kpi-label">{item.label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Ad</th>
+                  <th>Campaign / Ad set</th>
+                  <th>Platform</th>
+                  <th>Comment Actions</th>
+                  <th>Readable Text</th>
+                  <th>Spend</th>
+                  <th>Inbox</th>
+                </tr>
+              </thead>
+              <tbody>
+                {commentAnalytics.ads.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-dim)' }}>No ad comment activity in this date range.</td></tr>
+                ) : commentAnalytics.ads.slice(0, 12).map((ad) => (
+                  <tr key={ad.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        {ad.thumbnailUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={ad.thumbnailUrl} alt="" width={36} height={36} style={{ borderRadius: '6px', objectFit: 'cover', flex: 'none' }} />
+                        ) : (
+                          <div style={{ width: 36, height: 36, borderRadius: '6px', background: 'var(--bg-elevated)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', flex: 'none' }}>💬</div>
+                        )}
+                        <div className="highlight" style={{ maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ad.name}</div>
+                      </div>
+                    </td>
+                    <td style={{ fontSize: '11px', color: 'var(--text-muted)', maxWidth: '180px', lineHeight: 1.3 }}>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ad.campaignName ?? '—'}</div>
+                      <div style={{ color: 'var(--text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ad.adsetName ?? ''}</div>
+                    </td>
+                    <td style={{ textTransform: 'capitalize' }}>{ad.platform}</td>
+                    <td className="mono">{formatNum(ad.comments)}</td>
+                    <td>
+                      <span className={`badge ${ad.textAvailable ? 'green' : 'amber'}`}>
+                        {ad.textAvailable ? `${formatNum(ad.readableComments)} readable` : `${formatNum(ad.unreadableCommentEstimate)} blocked`}
+                      </span>
+                    </td>
+                    <td className="mono">{formatCurrency(ad.spend)}</td>
+                    <td><Link href={`/dashboard/${slug}/social?adId=${encodeURIComponent(ad.id)}`}>Open inbox</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Hierarchy tables — switch between Campaigns / Ad Sets / Ads */}
       <div className="data-table-wrapper" style={{ marginTop: '24px' }}>
         <div className="data-table-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -596,7 +674,10 @@ function GoogleAdsSection({ slug, from, to, connected, configError }: { slug: st
       .finally(() => setLoading(false));
   }, [slug, from, to, connected]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => { load(); }, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
 
   if (!connected) {
     return (

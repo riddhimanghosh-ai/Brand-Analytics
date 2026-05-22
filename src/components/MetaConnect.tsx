@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
 interface Props {
   slug: string;
@@ -29,7 +29,14 @@ export function MetaConnect({
     await fetch(`/api/brands/${slug}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ metaAccessToken: null, metaAdAccountId: null, metaAppId: null, metaAppSecret: null }),
+      body: JSON.stringify({
+        metaAccessToken: null,
+        metaAdAccountId: null,
+        metaAppId: null,
+        metaAppSecret: null,
+        metaManagedPages: null,
+        metaInstagramAccountIds: null,
+      }),
     });
     window.location.reload();
   };
@@ -126,7 +133,7 @@ export function MetaConnect({
   return (
     <div>
       <div style={{ marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
-        Click below to connect your Meta Ads account. You'll be redirected to Facebook to approve access — no manual API keys needed.
+        Click below to connect your Meta Ads account. You&apos;ll be redirected to Facebook to approve access and no manual API keys are needed.
       </div>
       <button
         onClick={handleConnect}
@@ -147,7 +154,7 @@ export function MetaConnect({
         Connect with Meta
       </button>
       <div style={{ marginTop: '10px', fontSize: '12px', color: 'var(--text-dim)' }}>
-        You'll be taken to Facebook to approve permissions, then automatically redirected back.
+        You&apos;ll be taken to Facebook to approve permissions, then automatically redirected back.
       </div>
     </div>
   );

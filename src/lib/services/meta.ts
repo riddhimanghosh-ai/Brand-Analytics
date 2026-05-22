@@ -1,4 +1,7 @@
+import type { SocialInboxItem } from './social';
+
 const BASE = 'https://graph.facebook.com/v21.0';
+const META_FALLBACK_ACCESS_TOKEN = process.env.META_FALLBACK_ACCESS_TOKEN?.trim() || '';
 
 const DATE_PRESETS: Record<string, string> = {
   '7d':  'last_7d',
@@ -98,6 +101,37 @@ export interface MetaAd {
   roas: number;
   thumbnailUrl?: string;
   objectStoryId?: string;
+  effectiveInstagramMediaId?: string;
+}
+
+export interface MetaAdCommentRow {
+  id: string;
+  name: string;
+  campaignName?: string;
+  adsetName?: string;
+  platform: 'facebook' | 'instagram' | 'unknown';
+  contentObjectId?: string;
+  spend: number;
+  impressions: number;
+  comments: number;
+  readableComments: number;
+  unreadableCommentEstimate: number;
+  textAvailable: boolean;
+  thumbnailUrl?: string;
+}
+
+export interface MetaAdCommentAnalytics {
+  summary: {
+    totalAds: number;
+    totalCommentActions: number;
+    readableComments: number;
+    unreadableCommentEstimate: number;
+    adsWithReadableText: number;
+    adsWithCommentActivity: number;
+  };
+  ads: MetaAdCommentRow[];
+  comments: SocialInboxItem[];
+  warnings: string[];
 }
 
 export interface MetaSpendPoint {
@@ -160,20 +194,70 @@ function extractAction(actions: ActionRow[] | undefined, ...types: string[]): nu
 }
 
 async function fetchMeta<T>(path: string, params: Record<string, string>): Promise<T> {
-  const url = new URL(`${BASE}/${path}`);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  type MetaErrorPayload = {
+    error?: { message: string; code?: number; error_subcode?: number };
+  };
 
-  const res = await fetch(url.toString());
-  const data = (await res.json()) as T & { error?: { message: string; code?: number } };
+  const tokens = [params.access_token, META_FALLBACK_ACCESS_TOKEN]
+    .filter((token, index, arr): token is string => Boolean(token) && arr.indexOf(token) === index);
 
-  if ((data as { error?: { message: string } }).error) {
-    throw new Error(
-      `Meta API: ${(data as { error: { message: string } }).error.message}`
+  const isRateLimited = (payload: MetaErrorPayload, status: number) => {
+    const code = payload.error?.code;
+    const subcode = payload.error?.error_subcode;
+    const message = payload.error?.message || '';
+    return (
+      status === 429 ||
+      code === 4 ||
+      code === 17 ||
+      code === 32 ||
+      code === 613 ||
+      subcode === 2446079 ||
+      /rate|limit|too many calls/i.test(message)
     );
-  }
-  if (!res.ok) throw new Error(`Meta API HTTP ${res.status}`);
+  };
 
-  return data;
+  let lastError: Error | null = null;
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    const url = new URL(`${BASE}/${path}`);
+    Object.entries(params).forEach(([k, v]) => {
+      url.searchParams.set(k, k === 'access_token' ? token : v);
+    });
+
+    const res = await fetch(url.toString());
+    const data = (await res.json()) as T & MetaErrorPayload;
+
+    if (!res.ok || data.error) {
+      const error = new Error(
+        data.error?.message
+          ? `Meta API: ${data.error.message}`
+          : `Meta API HTTP ${res.status}`
+      );
+      lastError = error;
+
+      const canRetryWithFallback =
+        i === 0 &&
+        tokens.length > 1 &&
+        token !== META_FALLBACK_ACCESS_TOKEN &&
+        isRateLimited(data, res.status);
+
+      if (canRetryWithFallback) {
+        console.warn(`[meta] Primary token rate-limited on ${path}; retrying with META_FALLBACK_ACCESS_TOKEN.`);
+        continue;
+      }
+
+      throw error;
+    }
+
+    if (i > 0 && token === META_FALLBACK_ACCESS_TOKEN) {
+      console.warn(`[meta] Using META_FALLBACK_ACCESS_TOKEN for ${path}.`);
+    }
+
+    return data;
+  }
+
+  throw lastError || new Error('Meta API request failed');
 }
 
 // ---- Insights field set ----
@@ -386,24 +470,29 @@ export async function getAds(config: MetaConfig, dateRange: string): Promise<Met
     const ids = rows.map((r) => r.id).filter(Boolean).slice(0, 25);
     if (ids.length === 0) return rows;
     const creativesData = await fetchMeta<{
-      data: Array<{ id: string; creative?: { thumbnail_url?: string; effective_object_story_id?: string; object_story_id?: string } }>;
+      data: Array<{ id: string; creative?: { thumbnail_url?: string; effective_object_story_id?: string; object_story_id?: string; effective_instagram_media_id?: string } }>;
     }>(`${acct}/ads`, {
       access_token: config.accessToken,
-      fields: 'id,creative{thumbnail_url,effective_object_story_id,object_story_id}',
+      fields: 'id,creative{thumbnail_url,effective_object_story_id,object_story_id,effective_instagram_media_id}',
       filtering: JSON.stringify([{ field: 'ad.id', operator: 'IN', value: ids }]),
       limit: String(ids.length),
     }).catch(() => ({ data: [] }));
 
-    const byId = new Map<string, { thumbnail_url?: string; object_story_id?: string }>();
+    const byId = new Map<string, { thumbnail_url?: string; object_story_id?: string; effective_instagram_media_id?: string }>();
     for (const ad of creativesData.data ?? []) {
       byId.set(ad.id, {
         thumbnail_url: ad.creative?.thumbnail_url,
         object_story_id: ad.creative?.effective_object_story_id || ad.creative?.object_story_id,
+        effective_instagram_media_id: ad.creative?.effective_instagram_media_id,
       });
     }
     for (const r of rows) {
       const c = byId.get(r.id);
-      if (c) { r.thumbnailUrl = c.thumbnail_url; r.objectStoryId = c.object_story_id; }
+      if (c) {
+        r.thumbnailUrl = c.thumbnail_url;
+        r.objectStoryId = c.object_story_id;
+        r.effectiveInstagramMediaId = c.effective_instagram_media_id;
+      }
     }
   } catch { /* ignore enrichment failure */ }
 
@@ -1015,52 +1104,218 @@ export interface AdComment {
   date: string;
 }
 
-export async function getCommentsFromAds(config: MetaConfig, dateRange: string): Promise<AdComment[]> {
+export async function getAdCommentAnalytics(config: MetaConfig, dateRange: string): Promise<MetaAdCommentAnalytics> {
   const acct = accountId(config.adAccountId);
-  const since = dateParams(dateRange);
+  const warnings: string[] = [];
+  const engagement = await getAdEngagement(config, dateRange);
+  const rankedAds = [...engagement.ads].sort((a, b) => b.comments - a.comments || b.spend - a.spend);
+  const adsForText = rankedAds.slice(0, 25);
+  const adIds = adsForText.map((ad) => ad.id).filter(Boolean);
+  if (rankedAds.length > adsForText.length) {
+    warnings.push(`Readable comment text is capped to the top ${adsForText.length} ads by comment activity for this request.`);
+  }
+  if (rankedAds.length === 0) {
+    return {
+      summary: {
+        totalAds: 0,
+        totalCommentActions: 0,
+        readableComments: 0,
+        unreadableCommentEstimate: 0,
+        adsWithReadableText: 0,
+        adsWithCommentActivity: 0,
+      },
+      ads: [],
+      comments: [],
+      warnings,
+    };
+  }
 
-  // Step 1: list ads with object_story_id
-  const adsData = await fetchMeta<{
+  const creativeData = await fetchMeta<{
     data: Array<{
       id: string;
-      name: string;
-      creative?: { effective_object_story_id?: string; object_story_id?: string };
+      creative?: {
+        thumbnail_url?: string;
+        effective_object_story_id?: string;
+        object_story_id?: string;
+        effective_instagram_media_id?: string;
+      };
     }>;
   }>(`${acct}/ads`, {
     access_token: config.accessToken,
-    fields: 'id,name,creative{effective_object_story_id,object_story_id}',
-    limit: '25',
-    ...since,
-  });
+    fields: 'id,creative{thumbnail_url,effective_object_story_id,object_story_id,effective_instagram_media_id}',
+    filtering: JSON.stringify([{ field: 'ad.id', operator: 'IN', value: adIds }]),
+    limit: String(adIds.length),
+  }).catch(() => ({ data: [] }));
 
-  const comments: AdComment[] = [];
+  const creativeByAdId = new Map(creativeData.data.map((row) => [row.id, row.creative]));
+  const comments: SocialInboxItem[] = [];
+  const commentIds = new Set<string>();
+  const ads: MetaAdCommentRow[] = [];
 
-  for (const ad of (adsData.data ?? []).slice(0, 25)) {
-    const postId = ad.creative?.effective_object_story_id || ad.creative?.object_story_id;
-    if (!postId) continue;
+  for (const ad of adsForText) {
+    const creative = creativeByAdId.get(ad.id);
+    const facebookPostId = creative?.effective_object_story_id || creative?.object_story_id;
+    const instagramMediaId = creative?.effective_instagram_media_id;
+    let readableComments = 0;
+    let platform: MetaAdCommentRow['platform'] = 'unknown';
+    let contentObjectId: string | undefined;
 
-    try {
-      const cmnt = await fetchMeta<{
-        data: Array<{ id: string; message?: string; from?: { name?: string }; created_time: string }>;
-      }>(`${postId}/comments`, {
-        access_token: config.accessToken,
-        fields: 'id,message,from,created_time',
-        limit: '50',
-      });
-
-      for (const c of cmnt.data ?? []) {
-        comments.push({
-          id: c.id,
-          adId: ad.id,
-          adName: ad.name,
-          postId,
-          message: c.message ?? '',
-          author: c.from?.name ?? 'Facebook user',
-          date: c.created_time,
+    if (facebookPostId) {
+      platform = 'facebook';
+      contentObjectId = facebookPostId;
+      try {
+        const response = await fetchMeta<{
+          data: Array<{
+            id: string;
+            message?: string;
+            from?: { name?: string; id?: string };
+            created_time: string;
+            parent?: { id?: string };
+          }>;
+        }>(`${facebookPostId}/comments`, {
+          access_token: config.accessToken,
+          fields: 'id,message,from,created_time,parent',
+          limit: '50',
         });
+
+        for (const comment of response.data ?? []) {
+          const uniqueId = `ad_comment:${comment.id}`;
+          if (commentIds.has(uniqueId)) continue;
+          commentIds.add(uniqueId);
+          readableComments += 1;
+          comments.push({
+            id: uniqueId,
+            platform: 'facebook',
+            sourceType: 'ad_comment',
+            contentObjectId: facebookPostId,
+            postPreview: ad.name ? `Ad: ${ad.name.slice(0, 56)}` : '[Meta ad]',
+            message: comment.message ?? '',
+            authorName: comment.from?.name ?? 'Facebook user',
+            authorPlatformId: comment.from?.id ?? '',
+            createdAt: comment.created_time,
+            parentCommentId: comment.parent?.id ?? null,
+            adId: ad.id,
+            adName: ad.name,
+          });
+        }
+      } catch (error) {
+        if (ad.comments > 0) {
+          warnings.push(`Unable to read Facebook ad comment text for ad ${ad.id}: ${(error as Error).message}`);
+        }
       }
-    } catch { /* comments edge may not be readable for this ad */ }
+    }
+
+    if (instagramMediaId) {
+      platform = 'instagram';
+      contentObjectId = instagramMediaId;
+      try {
+        const response = await fetchMeta<{
+          data: Array<{
+            id: string;
+            text?: string;
+            username?: string;
+            timestamp: string;
+            replies?: { data?: Array<{ id: string; text?: string; username?: string; timestamp: string }> };
+          }>;
+        }>(`${instagramMediaId}/comments`, {
+          access_token: config.accessToken,
+          fields: 'id,text,username,timestamp,replies{id,text,username,timestamp}',
+          limit: '50',
+        });
+
+        for (const comment of response.data ?? []) {
+          const uniqueId = `ad_comment:${comment.id}`;
+          if (!commentIds.has(uniqueId)) {
+            commentIds.add(uniqueId);
+            readableComments += 1;
+            comments.push({
+              id: uniqueId,
+              platform: 'instagram',
+              sourceType: 'ad_comment',
+              contentObjectId: instagramMediaId,
+              postPreview: ad.name ? `Ad: ${ad.name.slice(0, 56)}` : '[Instagram ad]',
+              message: comment.text ?? '',
+              authorName: comment.username ? `@${comment.username}` : '@instagram-user',
+              authorPlatformId: comment.username ?? '',
+              createdAt: comment.timestamp,
+              parentCommentId: null,
+              adId: ad.id,
+              adName: ad.name,
+            });
+          }
+
+          for (const reply of comment.replies?.data ?? []) {
+            const replyId = `ad_comment:${reply.id}`;
+            if (commentIds.has(replyId)) continue;
+            commentIds.add(replyId);
+            readableComments += 1;
+            comments.push({
+              id: replyId,
+              platform: 'instagram',
+              sourceType: 'ad_comment',
+              contentObjectId: instagramMediaId,
+              postPreview: ad.name ? `Ad: ${ad.name.slice(0, 56)}` : '[Instagram ad]',
+              message: reply.text ?? '',
+              authorName: reply.username ? `@${reply.username}` : '@instagram-user',
+              authorPlatformId: reply.username ?? '',
+              createdAt: reply.timestamp,
+              parentCommentId: comment.id,
+              adId: ad.id,
+              adName: ad.name,
+            });
+          }
+        }
+      } catch (error) {
+        if (ad.comments > 0) {
+          warnings.push(`Unable to read Instagram ad comment text for ad ${ad.id}: ${(error as Error).message}`);
+        }
+      }
+    }
+
+    ads.push({
+      id: ad.id,
+      name: ad.name,
+      campaignName: ad.campaignName,
+      adsetName: ad.adsetName,
+      platform,
+      contentObjectId,
+      spend: ad.spend,
+      impressions: ad.impressions,
+      comments: ad.comments,
+      readableComments,
+      unreadableCommentEstimate: Math.max(0, ad.comments - readableComments),
+      textAvailable: readableComments > 0 || ad.comments === 0,
+      thumbnailUrl: ad.thumbnailUrl,
+    });
   }
 
-  return comments.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const sortedComments = comments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const summary = {
+    totalAds: rankedAds.length,
+    totalCommentActions: engagement.summary.totalComments,
+    readableComments: ads.reduce((sum, ad) => sum + ad.readableComments, 0),
+    unreadableCommentEstimate: ads.reduce((sum, ad) => sum + ad.unreadableCommentEstimate, 0),
+    adsWithReadableText: ads.filter((ad) => ad.readableComments > 0).length,
+    adsWithCommentActivity: rankedAds.filter((ad) => ad.comments > 0).length,
+  };
+
+  return {
+    summary,
+    ads: ads.sort((a, b) => b.comments - a.comments || b.readableComments - a.readableComments),
+    comments: sortedComments,
+    warnings,
+  };
+}
+
+export async function getCommentsFromAds(config: MetaConfig, dateRange: string): Promise<AdComment[]> {
+  const analytics = await getAdCommentAnalytics(config, dateRange);
+  return analytics.comments.map((comment) => ({
+    id: comment.id,
+    adId: comment.adId || '',
+    adName: comment.adName || '[Meta ad]',
+    postId: comment.contentObjectId,
+    message: comment.message,
+    author: comment.authorName,
+    date: comment.createdAt,
+  }));
 }

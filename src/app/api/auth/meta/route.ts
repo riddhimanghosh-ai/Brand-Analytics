@@ -28,11 +28,9 @@ export async function GET(request: NextRequest) {
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
-    // ads_read covers ad metrics; page + IG scopes needed for Social Comments feature
+    // Keep this read-oriented scope set aligned with the social inbox feature.
     scope: [
       'ads_read',
-      'ads_management',
-      'business_management',
       'pages_show_list',
       'pages_read_engagement',
       'pages_read_user_content',

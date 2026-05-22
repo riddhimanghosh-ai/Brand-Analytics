@@ -7,6 +7,12 @@ interface AdAccount {
   account_status: number; // 1 = ACTIVE
 }
 
+interface ManagedPage {
+  id: string;
+  name: string;
+  instagram_business_account?: { id: string };
+}
+
 // GET /api/auth/meta/callback
 // Meta redirects here after the user approves the connection.
 export async function GET(request: NextRequest) {
@@ -105,6 +111,19 @@ export async function GET(request: NextRequest) {
     console.warn('Could not fetch Meta ad accounts:', err);
   }
 
+  let managedPages: ManagedPage[] = [];
+  try {
+    const pagesRes = await fetch(
+      `https://graph.facebook.com/v21.0/me/accounts?fields=id,name,instagram_business_account{id}&limit=50&access_token=${longToken}`
+    );
+    if (pagesRes.ok) {
+      const pagesData = await pagesRes.json() as { data: ManagedPage[] };
+      managedPages = pagesData.data ?? [];
+    }
+  } catch (err) {
+    console.warn('Could not fetch managed Meta pages:', err);
+  }
+
   // ── Step 4: Save to brand ─────────────────────────────────────────────────
   try {
     // Always save the access token (and clear app ID/secret — no longer needed via OAuth)
@@ -113,7 +132,17 @@ export async function GET(request: NextRequest) {
       // If exactly one active ad account, auto-select it
       ...(adAccounts.length === 1 ? { metaAdAccountId: adAccounts[0].id } : {}),
     };
-    await updateBrand(slug, updates);
+    await updateBrand(slug, {
+      ...updates,
+      metaManagedPages: managedPages.map((page) => ({
+        id: page.id,
+        name: page.name,
+        hasInstagram: Boolean(page.instagram_business_account?.id),
+      })),
+      metaInstagramAccountIds: managedPages
+        .map((page) => page.instagram_business_account?.id)
+        .filter((id): id is string => Boolean(id)),
+    });
   } catch (err) {
     console.error('Failed to save Meta credentials:', err);
     return NextResponse.redirect(

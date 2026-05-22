@@ -50,6 +50,7 @@ export async function PUT(
       'name', 'logoUrl', 'shopifyStoreUrl', 'shopifyAccessToken',
       'ga4PropertyId', 'ga4ServiceAccountJson', 'ga4RefreshToken',
       'metaAppId', 'metaAppSecret', 'metaAccessToken', 'metaAdAccountId',
+      'metaManagedPages', 'metaInstagramAccountIds',
       'googleAdsDevToken', 'googleAdsClientId', 'googleAdsClientSecret',
       'googleAdsRefreshToken', 'googleAdsCustomerId',
       'geminiApiKey',

@@ -15,6 +15,8 @@ export interface BrandData {
   metaAppSecret?: string | null;
   metaAccessToken?: string | null;
   metaAdAccountId?: string | null;
+  metaManagedPages?: Array<{ id: string; name: string; hasInstagram: boolean }> | null;
+  metaInstagramAccountIds?: string[] | null;
   googleAdsDevToken?: string | null;
   googleAdsClientId?: string | null;
   googleAdsClientSecret?: string | null;
@@ -115,6 +117,8 @@ export async function createBrand(data: any) {
       metaAppSecret: data.metaAppSecret || null,
       metaAccessToken: data.metaAccessToken || null,
       metaAdAccountId: data.metaAdAccountId || null,
+      metaManagedPages: data.metaManagedPages || null,
+      metaInstagramAccountIds: data.metaInstagramAccountIds || null,
       googleAdsDevToken: data.googleAdsDevToken || null,
       googleAdsClientId: data.googleAdsClientId || null,
       googleAdsClientSecret: data.googleAdsClientSecret || null,

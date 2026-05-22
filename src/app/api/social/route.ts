@@ -1,7 +1,8 @@
 import { getBrand } from '@/lib/mongodb-store';
-import { getPageComments, getAdComments, analyzeSentiment, type SocialComment } from '@/lib/services/social';
-import { getCommentsFromAds, getPermissions, getPageCoverage, getAdEngagement, probeReviewPermissions } from '@/lib/services/meta';
+import { analyzeSentiment, getFacebookPageInbox, getInstagramInbox, type SocialInboxItem } from '@/lib/services/social';
+import { getAdCommentAnalytics, getPermissions, getPageCoverage, getAdEngagement, probeReviewPermissions } from '@/lib/services/meta';
 import { NextResponse } from 'next/server';
+import { requireBrandAccess } from '@/lib/auth-server';
 import { demoSocialComments, demoSocialStats } from '@/lib/demo-data';
 
 export const maxDuration = 60;
@@ -11,8 +12,14 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get('slug');
     const withSentiment = searchParams.get('sentiment') !== 'false';
+    const fromParam = searchParams.get('from');
+    const toParam = searchParams.get('to');
+    const range = fromParam && toParam ? `${fromParam}:${toParam}` : (searchParams.get('range') || '30d');
 
     if (!slug) return NextResponse.json({ error: 'slug required' }, { status: 400 });
+
+    const { denied } = await requireBrandAccess(slug);
+    if (denied) return denied;
 
     const brand = await getBrand(slug);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
@@ -35,92 +42,52 @@ export async function GET(request: Request) {
     };
 
     const permissions = await getPermissions(brand.metaAccessToken).catch(() => null);
-
-    // Page-coverage diagnostic — explains "permissions ok but no comments"
     const coverage = brand.metaAdAccountId
       ? await getPageCoverage({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }).catch(() => null)
       : null;
-
-    // Ad engagement counts — works with ads_read only, gives real numbers
-    // even when comment-text is blocked (e.g. influencer Partnership Ads)
-    const range = searchParams.get('range') || '30d';
     const engagement = brand.metaAdAccountId
       ? await getAdEngagement({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }, range).catch(() => null)
       : null;
-
-    // App Review probe — fires API calls for pending permissions
-    // (pages_manage_ads, instagram_branded_content_ads_brand) so Meta's
-    // "0 of 1 API call(s)" counters tick upward. Silent in normal use.
     const probeReview = searchParams.get('probe') === '1';
     const probe = probeReview && brand.metaAdAccountId
       ? await probeReviewPermissions({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }).catch(() => null)
       : null;
 
-    let comments: SocialComment[] = [];
-    let source: 'pages' | 'ads' | 'none' = 'none';
+    const warnings: string[] = [];
+    const adAnalytics = brand.metaAdAccountId
+      ? await getAdCommentAnalytics({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }, range).catch((error) => {
+          warnings.push(`Ad comments unavailable: ${(error as Error).message}`);
+          return null;
+        })
+      : null;
 
-    // Path 1: full page access — fetch Facebook + Instagram comments
+    let comments: SocialInboxItem[] = adAnalytics?.comments ?? [];
+    let pageAccessError: string | null = null;
+
     try {
-      comments = await getPageComments(config);
-      source = 'pages';
-    } catch (e) {
-      const msg = (e as Error).message;
-
-      // Path 2: page access denied — fall back to ad-creative comments
-      // (works with just ads_read on the user's promoted/dark posts)
-      if (msg === 'PAGE_ACCESS_REQUIRED' && brand.metaAdAccountId) {
-        try {
-          const adCmnts = await getCommentsFromAds(
-            { accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId },
-            '30d',
-          );
-          comments = adCmnts.map((c) => ({
-            id: c.id,
-            platform: 'Facebook' as const,
-            postPreview: c.adName ? `Ad: ${c.adName.slice(0, 56)}` : '[Ad post]',
-            postId: c.postId,
-            comment: c.message,
-            author: c.author,
-            authorId: '',
-            date: c.date,
-            source: 'post_comment' as const,
-          }));
-          source = 'ads';
-        } catch {
-          // both paths failed — surface helpful guidance
-          return NextResponse.json({
-            error: 'page_access_required',
-            message: 'Your Meta connection has ads access but not Page access. Re-authorize and grant pages_show_list + pages_read_engagement, or add a Facebook Page to your Meta Business account.',
-            permissions,
-            coverage,
-            engagement,
-            source: null,
-          }, { status: 200 });
-        }
-      } else if (msg === 'PAGE_ACCESS_REQUIRED') {
-        return NextResponse.json({
-          error: 'page_access_required',
-          message: 'Your Meta connection has ads access but not Page access. Re-authorize and grant pages_show_list + pages_read_engagement.',
-          permissions,
-          coverage,
-          engagement,
-          source: null,
-        }, { status: 200 });
+      comments = comments.concat(await getFacebookPageInbox(config));
+    } catch (error) {
+      if ((error as Error).message === 'PAGE_ACCESS_REQUIRED') {
+        pageAccessError = 'Your Meta connection has ad-account access but not Page access. Re-authorize with pages_show_list + pages_read_engagement, and make sure this user is added to the Pages your ads run from.';
       } else {
-        throw e;
+        warnings.push(`Facebook Page inbox unavailable: ${(error as Error).message}`);
       }
     }
 
-    // If no comments from either page or ad-creative path, try ad-level comments as last resort
-    if (comments.length === 0 && brand.metaAdAccountId) {
-      try {
-        comments = await getAdComments({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId });
-        console.log(`[social] Got ${comments.length} ad-level comments as fallback`);
-        if (comments.length > 0) source = 'ads';
-      } catch (err) {
-        console.warn('[social] getAdComments also failed:', (err as Error).message);
+    try {
+      comments = comments.concat(await getInstagramInbox(config));
+    } catch (error) {
+      if ((error as Error).message !== 'PAGE_ACCESS_REQUIRED') {
+        warnings.push(`Instagram inbox unavailable: ${(error as Error).message}`);
       }
     }
+
+    const deduped = new Map<string, SocialInboxItem>();
+    for (const comment of comments) {
+      const key = `${comment.id}:${comment.sourceType}`;
+      if (!deduped.has(key)) deduped.set(key, comment);
+    }
+    comments = Array.from(deduped.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     if (withSentiment && comments.length > 0) {
       const geminiKey = brand.geminiApiKey || process.env.GEMINI_API_KEY || '';
@@ -134,11 +101,28 @@ export async function GET(request: Request) {
       positive: comments.filter(c => c.sentiment === 'positive').length,
       neutral:  comments.filter(c => c.sentiment === 'neutral').length,
       negative: comments.filter(c => c.sentiment === 'negative').length,
-      facebook: comments.filter(c => c.platform === 'Facebook').length,
-      instagram: comments.filter(c => c.platform === 'Instagram').length,
+      facebook: comments.filter(c => c.platform === 'facebook').length,
+      instagram: comments.filter(c => c.platform === 'instagram').length,
     };
 
-    return NextResponse.json({ comments, stats, permissions, coverage, engagement, source, probe });
+    const access = {
+      hasAdAccountAccess: Boolean(brand.metaAdAccountId),
+      hasPageAccess: Boolean(permissions?.hasPageAccess),
+      hasInstagramAccess: Boolean(permissions?.hasInstagramAccess),
+      pageAccessError,
+    };
+
+    return NextResponse.json({
+      comments,
+      stats,
+      permissions,
+      coverage,
+      engagement,
+      adAnalytics,
+      access,
+      warnings: [...warnings, ...(adAnalytics?.warnings ?? [])],
+      probe,
+    });
   } catch (err) {
     console.error('Social route error:', err);
     return NextResponse.json({ error: 'Failed to fetch social comments', message: (err as Error).message }, { status: 500 });
