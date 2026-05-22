@@ -7,11 +7,28 @@ import { demoSocialComments, demoSocialStats } from '@/lib/demo-data';
 
 export const maxDuration = 60;
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const slug = searchParams.get('slug');
-    const withSentiment = searchParams.get('sentiment') !== 'false';
+    const withSentiment = searchParams.get('sentiment') === 'true';
+    const includeDiagnostics = searchParams.get('diagnostics') === '1';
     const fromParam = searchParams.get('from');
     const toParam = searchParams.get('to');
     const range = fromParam && toParam ? `${fromParam}:${toParam}` : (searchParams.get('range') || '30d');
@@ -41,44 +58,75 @@ export async function GET(request: Request) {
       adAccountId: brand.metaAdAccountId ?? null,
     };
 
-    const permissions = await getPermissions(brand.metaAccessToken).catch(() => null);
-    const coverage = brand.metaAdAccountId
-      ? await getPageCoverage({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }).catch(() => null)
+    const permissions = includeDiagnostics
+      ? await withTimeout(getPermissions(brand.metaAccessToken), 8_000, 'Meta permissions').catch(() => null)
       : null;
-    const engagement = brand.metaAdAccountId
-      ? await getAdEngagement({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }, range).catch(() => null)
+    const coverage = includeDiagnostics && brand.metaAdAccountId
+      ? await withTimeout(
+          getPageCoverage({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }),
+          10_000,
+          'Meta page coverage'
+        ).catch(() => null)
+      : null;
+    const engagement = includeDiagnostics && brand.metaAdAccountId
+      ? await withTimeout(
+          getAdEngagement({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }, range),
+          12_000,
+          'Meta engagement'
+        ).catch(() => null)
       : null;
     const probeReview = searchParams.get('probe') === '1';
-    const probe = probeReview && brand.metaAdAccountId
-      ? await probeReviewPermissions({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }).catch(() => null)
+    const probe = includeDiagnostics && probeReview && brand.metaAdAccountId
+      ? await withTimeout(
+          probeReviewPermissions({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }),
+          12_000,
+          'Meta review probe'
+        ).catch(() => null)
       : null;
 
     const warnings: string[] = [];
-    const adAnalytics = brand.metaAdAccountId
-      ? await getAdCommentAnalytics({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }, range).catch((error) => {
-          warnings.push(`Ad comments unavailable: ${(error as Error).message}`);
-          return null;
-        })
-      : null;
+    const commentSources = await Promise.allSettled([
+      brand.metaAdAccountId
+        ? withTimeout(
+            getAdCommentAnalytics({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }, range),
+            15_000,
+            'Meta ad comments'
+          )
+        : Promise.resolve(null),
+      withTimeout(getFacebookPageInbox(config), 12_000, 'Facebook Page inbox'),
+      withTimeout(getInstagramInbox(config), 12_000, 'Instagram inbox'),
+    ]);
+
+    const adAnalyticsResult = commentSources[0];
+    const adAnalytics =
+      adAnalyticsResult.status === 'fulfilled'
+        ? adAnalyticsResult.value
+        : null;
+    if (adAnalyticsResult.status === 'rejected' && brand.metaAdAccountId) {
+      warnings.push(`Ad comments unavailable: ${adAnalyticsResult.reason instanceof Error ? adAnalyticsResult.reason.message : String(adAnalyticsResult.reason)}`);
+    }
 
     let comments: SocialInboxItem[] = adAnalytics?.comments ?? [];
     let pageAccessError: string | null = null;
-
-    try {
-      comments = comments.concat(await getFacebookPageInbox(config));
-    } catch (error) {
-      if ((error as Error).message === 'PAGE_ACCESS_REQUIRED') {
+    const facebookResult = commentSources[1];
+    if (facebookResult.status === 'fulfilled') {
+      comments = comments.concat(facebookResult.value);
+    } else {
+      const message = facebookResult.reason instanceof Error ? facebookResult.reason.message : String(facebookResult.reason);
+      if (message === 'PAGE_ACCESS_REQUIRED') {
         pageAccessError = 'Your Meta connection has ad-account access but not Page access. Re-authorize with pages_show_list + pages_read_engagement, and make sure this user is added to the Pages your ads run from.';
       } else {
-        warnings.push(`Facebook Page inbox unavailable: ${(error as Error).message}`);
+        warnings.push(`Facebook Page inbox unavailable: ${message}`);
       }
     }
 
-    try {
-      comments = comments.concat(await getInstagramInbox(config));
-    } catch (error) {
-      if ((error as Error).message !== 'PAGE_ACCESS_REQUIRED') {
-        warnings.push(`Instagram inbox unavailable: ${(error as Error).message}`);
+    const instagramResult = commentSources[2];
+    if (instagramResult.status === 'fulfilled') {
+      comments = comments.concat(instagramResult.value);
+    } else {
+      const message = instagramResult.reason instanceof Error ? instagramResult.reason.message : String(instagramResult.reason);
+      if (message !== 'PAGE_ACCESS_REQUIRED') {
+        warnings.push(`Instagram inbox unavailable: ${message}`);
       }
     }
 
