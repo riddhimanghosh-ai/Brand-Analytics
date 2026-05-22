@@ -1,5 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+function getAppUrl(request: NextRequest): string {
+  const configured = process.env.APP_URL?.trim();
+  if (configured) return configured.replace(/\/$/, '');
+
+  // On AWS Lambda/Amplify, request.url can show an internal host.
+  const reqUrl = new URL(request.url);
+  const host = request.headers.get('x-forwarded-host') || reqUrl.host;
+  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0] || reqUrl.protocol.replace(':', '');
+  return `${proto}://${host}`;
+}
+
 // GET /api/auth/meta?slug=brand-slug
 // Starts the Meta / Facebook OAuth flow.
 export async function GET(request: NextRequest) {
@@ -15,11 +26,8 @@ export async function GET(request: NextRequest) {
     return new NextResponse('META_APP_ID not configured on server', { status: 500 });
   }
 
-  // On AWS Lambda/Amplify, request.url shows internal localhost — use
-  // x-forwarded-host + x-forwarded-proto to get the real public URL instead.
-  const host  = request.headers.get('x-forwarded-host') || new URL(request.url).host;
-  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0] || new URL(request.url).protocol.replace(':', '');
-  const redirectUri = `${proto}://${host}/api/auth/meta/callback`;
+  const appUrl = getAppUrl(request);
+  const redirectUri = `${appUrl}/api/auth/meta/callback`;
 
   // Always request the full scope set; if `rerequest=1`, force Facebook to
   // re-prompt for any permissions the user previously declined.
@@ -33,7 +41,6 @@ export async function GET(request: NextRequest) {
       'ads_read',
       'pages_show_list',
       'pages_read_engagement',
-      'pages_read_user_content',
       'instagram_basic',
       'instagram_manage_comments',
     ].join(','),

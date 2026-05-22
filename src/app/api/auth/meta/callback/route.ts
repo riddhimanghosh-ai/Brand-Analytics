@@ -13,13 +13,21 @@ interface ManagedPage {
   instagram_business_account?: { id: string };
 }
 
+function getAppUrl(request: NextRequest): string {
+  const configured = process.env.APP_URL?.trim();
+  if (configured) return configured.replace(/\/$/, '');
+
+  const reqUrl = new URL(request.url);
+  const host = request.headers.get('x-forwarded-host') || reqUrl.host;
+  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0] || reqUrl.protocol.replace(':', '');
+  return `${proto}://${host}`;
+}
+
 // GET /api/auth/meta/callback
 // Meta redirects here after the user approves the connection.
 export async function GET(request: NextRequest) {
   const reqUrl = new URL(request.url);
-  const host  = request.headers.get('x-forwarded-host') || reqUrl.host;
-  const proto = request.headers.get('x-forwarded-proto')?.split(',')[0] || reqUrl.protocol.replace(':', '');
-  const APP_URL = `${proto}://${host}`;
+  const APP_URL = getAppUrl(request);
   const { searchParams } = reqUrl;
   const code  = searchParams.get('code');
   const slug  = searchParams.get('state');
