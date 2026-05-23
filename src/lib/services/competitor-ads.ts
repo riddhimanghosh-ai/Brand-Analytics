@@ -139,6 +139,8 @@ async function fetchLibrary(
 
 /**
  * Fetch ads for specific Facebook page IDs (saved competitor tracking).
+ * If a pageId is non-numeric (e.g. a username like "secretalchemist"), falls
+ * back to keyword search so competitors work before numeric IDs are resolved.
  */
 export async function getAdsByPageIds(
   config: CompetitorConfig,
@@ -147,15 +149,38 @@ export async function getAdsByPageIds(
 ): Promise<CompetitorAd[]> {
   if (pageIds.length === 0) return [];
 
-  return fetchLibrary(
-    {
-      ad_reached_countries: JSON.stringify(DEFAULT_COUNTRIES),
-      search_page_ids: pageIds.join(','),
-      ad_active_status: adActiveStatus,
-      ad_type: 'ALL',
-    },
-    config.accessToken
-  );
+  const numericIds  = pageIds.filter(id => /^\d+$/.test(id));
+  const usernameIds = pageIds.filter(id => !/^\d+$/.test(id));
+
+  const results = await Promise.all([
+    // Numeric IDs → use search_page_ids (exact match)
+    numericIds.length > 0
+      ? fetchLibrary(
+          {
+            ad_reached_countries: JSON.stringify(DEFAULT_COUNTRIES),
+            search_page_ids: numericIds.join(','),
+            ad_active_status: adActiveStatus,
+            ad_type: 'ALL',
+          },
+          config.accessToken
+        )
+      : Promise.resolve([] as CompetitorAd[]),
+
+    // Usernames → fall back to keyword search
+    ...usernameIds.map(username =>
+      fetchLibrary(
+        {
+          ad_reached_countries: JSON.stringify(DEFAULT_COUNTRIES),
+          search_terms: username.replace(/[._-]/g, ' '),
+          ad_active_status: adActiveStatus,
+          ad_type: 'ALL',
+        },
+        config.accessToken
+      ).catch(() => [] as CompetitorAd[])
+    ),
+  ]);
+
+  return results.flat();
 }
 
 /**

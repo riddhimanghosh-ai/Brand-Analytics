@@ -33,6 +33,9 @@ export interface SocialInboxItem {
 interface MetaConfig {
   accessToken: string;
   adAccountId?: string | null;
+  /** If set, use these IG account IDs directly instead of discovering via me/accounts.
+   *  Prevents picking up wrong test/demo pages that share the same OAuth token. */
+  instagramAccountIds?: string[] | null;
 }
 
 interface ManagedPage {
@@ -182,13 +185,24 @@ export async function getFacebookPageInbox(config: MetaConfig): Promise<SocialIn
 }
 
 export async function getInstagramInbox(config: MetaConfig): Promise<SocialInboxItem[]> {
-  const pages = await getManagedPages(config.accessToken);
   const items: SocialInboxItem[] = [];
 
-  for (const page of pages.slice(0, 5)) {
-    const igId = page.instagram_business_account?.id;
-    if (!igId) continue;
+  // Resolve which IG account IDs to query.
+  // Priority: explicit override (e.g. stored metaInstagramAccountIds from brand config)
+  // → avoids picking up wrong test/demo pages connected to the same OAuth token.
+  let igAccountIds: string[];
 
+  if (config.instagramAccountIds && config.instagramAccountIds.length > 0) {
+    igAccountIds = config.instagramAccountIds;
+  } else {
+    // Discover via me/accounts — may return wrong accounts if test pages are connected
+    const pages = await getManagedPages(config.accessToken);
+    igAccountIds = pages
+      .map((p) => p.instagram_business_account?.id)
+      .filter((id): id is string => Boolean(id));
+  }
+
+  for (const igId of igAccountIds) {
     try {
       const mediaData = await metaGet(`${igId}/media`, config.accessToken, {
         fields: 'id,caption,timestamp,comments.limit(50){id,text,username,timestamp,replies{id,text,username,timestamp}}',

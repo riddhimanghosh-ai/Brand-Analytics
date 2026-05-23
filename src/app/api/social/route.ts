@@ -56,6 +56,8 @@ export async function GET(request: Request) {
     const config = {
       accessToken: brand.metaAccessToken,
       adAccountId: brand.metaAdAccountId ?? null,
+      // Use stored IG account IDs if available — avoids picking up wrong test/demo pages
+      instagramAccountIds: (brand as any).metaInstagramAccountIds ?? null,
     };
 
     const permissions = includeDiagnostics

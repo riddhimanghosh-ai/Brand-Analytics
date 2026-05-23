@@ -41,8 +41,11 @@ export async function GET(request: NextRequest) {
       'ads_read',
       'pages_show_list',
       'pages_read_engagement',
-      'instagram_basic',
+      'pages_read_user_content',
+      'instagram_business_basic',       // new name for instagram_basic (Meta renamed it)
       'instagram_manage_comments',
+      'instagram_business_manage_messages',
+      'instagram_branded_content_ads_brand',
     ].join(','),
     response_type: 'code',
     state: slug,
