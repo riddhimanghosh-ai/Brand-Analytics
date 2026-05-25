@@ -39,12 +39,12 @@ export async function GET(request: NextRequest) {
     // Keep this read-oriented scope set aligned with the social inbox feature.
     scope: [
       'ads_read',
+      'ads_management',
+      'business_management',
       'pages_show_list',
       'pages_read_engagement',
-      'pages_read_user_content',
-      'instagram_business_basic',       // new name for instagram_basic (Meta renamed it)
+      'instagram_basic',
       'instagram_manage_comments',
-      'instagram_business_manage_messages',
       'instagram_branded_content_ads_brand',
     ].join(','),
     response_type: 'code',
