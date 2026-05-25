@@ -149,6 +149,7 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
   const [demographics, setDemographics] = useState<MetaBreakdownRow[]>([]);
   const [placements, setPlacements] = useState<MetaBreakdownRow[]>([]);
   const [devices, setDevices] = useState<MetaBreakdownRow[]>([]);
+  const [countries, setCountries] = useState<MetaBreakdownRow[]>([]);
   const [commentAnalytics, setCommentAnalytics] = useState<MetaAdCommentAnalytics | null>(null);
   const [activeTable, setActiveTable] = useState<'campaigns' | 'adsets' | 'ads'>('campaigns');
   const [loading, setLoading] = useState(true);
@@ -168,9 +169,10 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
       fetch(`/api/ads?${q}&action=demographics`).then((r) => r.json()).catch(() => []),
       fetch(`/api/ads?${q}&action=placements`).then((r) => r.json()).catch(() => []),
       fetch(`/api/ads?${q}&action=devices`).then((r) => r.json()).catch(() => []),
+      fetch(`/api/ads?${q}&action=countries`).then((r) => r.json()).catch(() => []),
       fetch(`/api/ads?${q}&action=comment_analytics`).then((r) => r.json()).catch(() => null),
     ])
-      .then(([k, c, as, a, s, dem, pl, dev, cm]) => {
+      .then(([k, c, as, a, s, dem, pl, dev, ctry, cm]) => {
         if (k?.error) { setError(k.error); return; }
         setKpis(k);
         setCampaigns(Array.isArray(c) ? c : []);
@@ -180,6 +182,7 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
         setDemographics(Array.isArray(dem) ? dem : []);
         setPlacements(Array.isArray(pl) ? pl : []);
         setDevices(Array.isArray(dev) ? dev : []);
+        setCountries(Array.isArray(ctry) ? ctry : []);
         setCommentAnalytics(cm && !cm.error ? cm : null);
         if (k) {
           setFunnel({
@@ -403,6 +406,85 @@ function MetaSection({ slug, from, to, connected }: { slug: string; from: string
       <div className="charts-grid cols-2" style={{ marginTop: '24px' }}>
         <BreakdownCard title="📱 Devices" subtitle="Spend by device — iPhone, Android, desktop" rows={devices} />
         <BreakdownCard title="🎯 Placement Performance" subtitle="Where your spend converts best" rows={placements} max={6} />
+      </div>
+
+      {/* Countries + Frequency row */}
+      <div className="charts-grid cols-2" style={{ marginTop: '24px' }}>
+        <BreakdownCard title="🌍 Top Countries" subtitle="Spend distribution by country — colored by ROAS" rows={countries} max={8} />
+
+        {kpis && (
+          <div className="chart-card">
+            <div className="chart-card-header">
+              <div>
+                <div className="chart-card-title">🔁 Reach & Frequency</div>
+                <div className="chart-card-subtitle">How many unique people saw your ads and how often</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '8px 0' }}>
+              {/* Frequency gauge */}
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Avg Frequency</span>
+                  <span style={{
+                    fontWeight: 600,
+                    color: kpis.frequency > 5 ? '#f43f5e' : kpis.frequency > 3 ? '#f59e0b' : '#10b981'
+                  }}>
+                    {kpis.frequency.toFixed(2)}x
+                    {kpis.frequency > 5 ? ' ⚠️ Oversaturated' : kpis.frequency > 3 ? ' · Refresh creatives soon' : ' · Healthy'}
+                  </span>
+                </div>
+                <div style={{ height: '8px', background: 'var(--glass-border)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${Math.min((kpis.frequency / 7) * 100, 100)}%`,
+                    background: kpis.frequency > 5 ? '#f43f5e' : kpis.frequency > 3 ? '#f59e0b' : '#10b981',
+                    borderRadius: '4px',
+                    transition: 'width 0.5s ease',
+                  }} />
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                  <span>1x</span><span style={{ color: '#f59e0b' }}>3x refresh</span><span style={{ color: '#f43f5e' }}>5x saturated</span><span>7x</span>
+                </div>
+              </div>
+              {/* Reach stats */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                {[
+                  { label: 'Unique Reach', value: formatNum(kpis.reach), color: '#3b82f6' },
+                  { label: 'Impressions', value: formatNum(kpis.impressions), color: '#8b5cf6' },
+                  { label: 'CPM', value: formatCurrency(kpis.cpm), color: '#f59e0b' },
+                ].map((s) => (
+                  <div key={s.label} style={{ background: 'var(--bg-elevated)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '18px', fontWeight: 700, color: s.color }}>{s.value}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '2px' }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Video completion if available */}
+              {kpis.videoPlays > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Video Completion Rate</span>
+                    <span style={{ fontWeight: 600, color: '#3b82f6' }}>
+                      {kpis.videoPlays > 0 ? ((kpis.videoCompletions / kpis.videoPlays) * 100).toFixed(1) : 0}%
+                    </span>
+                  </div>
+                  <div style={{ height: '8px', background: 'var(--glass-border)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%',
+                      width: `${kpis.videoPlays > 0 ? Math.min((kpis.videoCompletions / kpis.videoPlays) * 100, 100) : 0}%`,
+                      background: 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
+                      borderRadius: '4px',
+                    }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-dim)', marginTop: '4px' }}>
+                    <span>{formatNum(kpis.videoPlays)} plays</span>
+                    <span>{formatNum(kpis.videoCompletions)} completed</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {commentAnalytics && (
