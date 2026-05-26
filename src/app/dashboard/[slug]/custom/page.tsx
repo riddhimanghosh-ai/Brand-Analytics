@@ -10,48 +10,48 @@ import { DateRangeDropdown } from '@/components/DateRangeDropdown';
 // ─── Widget Catalog ──────────────────────────────────────────────────────────
 const WIDGET_CATALOG = [
   // ── Shopify ──
-  { id: 'shopify_revenue',          source: 'Shopify',     metric: 'revenue',           label: '💰 Revenue',              unit: '₹',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'totalRevenue' },
-  { id: 'shopify_orders',           source: 'Shopify',     metric: 'orders',            label: '📦 Orders',               unit: '',   chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'totalOrders' },
-  { id: 'shopify_aov',              source: 'Shopify',     metric: 'aov',               label: '🛒 AOV',                  unit: '₹',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'averageOrderValue' },
-  { id: 'shopify_customers',        source: 'Shopify',     metric: 'customers',         label: '👥 Customers',            unit: '',   chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'totalCustomers' },
-  { id: 'shopify_repeat_rate',      source: 'Shopify',     metric: 'repeat_rate',       label: '🔄 Repeat Rate',          unit: '%',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'repeatCustomerRate' },
-  { id: 'shopify_refund_rate',      source: 'Shopify',     metric: 'refund_rate',       label: '↩️ Refund Rate',         unit: '%',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'refundRate' },
-  { id: 'shopify_cvr',              source: 'Shopify',     metric: 'cvr',               label: '🎯 Conversion Rate',      unit: '%',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'conversionRate' },
-  { id: 'shopify_cart_abandon',     source: 'Shopify',     metric: 'cart_abandon',      label: '🛒 Cart Abandonment',     unit: '%',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'cartAbandonmentRate' },
-  { id: 'shopify_items_per_order',  source: 'Shopify',     metric: 'items_per_order',   label: '🔢 Items / Order',        unit: '',   chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'averageItemsPerOrder' },
-  { id: 'shopify_new_rev',          source: 'Shopify',     metric: 'new_rev',           label: '🆕 New Customer Rev',     unit: '₹',  chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'newCustomerRevenue' },
-  { id: 'shopify_returning_rev',    source: 'Shopify',     metric: 'returning_rev',     label: '🔁 Returning Rev',        unit: '₹',  chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'returningCustomerRevenue' },
-  { id: 'shopify_fulfillment',      source: 'Shopify',     metric: 'fulfillment',       label: '🚚 Avg Fulfillment Days', unit: 'd',  chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'averageFulfillmentDays' },
+  { id: 'shopify_revenue',          source: 'Shopify',     metric: 'revenue',           label: 'Revenue',              unit: '₹',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'totalRevenue' },
+  { id: 'shopify_orders',           source: 'Shopify',     metric: 'orders',            label: 'Orders',               unit: '',   chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'totalOrders' },
+  { id: 'shopify_aov',              source: 'Shopify',     metric: 'aov',               label: 'AOV',                  unit: '₹',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'averageOrderValue' },
+  { id: 'shopify_customers',        source: 'Shopify',     metric: 'customers',         label: 'Customers',            unit: '',   chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'totalCustomers' },
+  { id: 'shopify_repeat_rate',      source: 'Shopify',     metric: 'repeat_rate',       label: 'Repeat Rate',          unit: '%',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'repeatCustomerRate' },
+  { id: 'shopify_refund_rate',      source: 'Shopify',     metric: 'refund_rate',       label: 'Refund Rate',          unit: '%',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'refundRate' },
+  { id: 'shopify_cvr',              source: 'Shopify',     metric: 'cvr',               label: 'Conversion Rate',      unit: '%',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'conversionRate' },
+  { id: 'shopify_cart_abandon',     source: 'Shopify',     metric: 'cart_abandon',      label: 'Cart Abandonment',     unit: '%',  chartType: 'line', endpoint: '/api/shopify?action=kpis', path: 'cartAbandonmentRate' },
+  { id: 'shopify_items_per_order',  source: 'Shopify',     metric: 'items_per_order',   label: 'Items / Order',        unit: '',   chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'averageItemsPerOrder' },
+  { id: 'shopify_new_rev',          source: 'Shopify',     metric: 'new_rev',           label: 'New Customer Rev',     unit: '₹',  chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'newCustomerRevenue' },
+  { id: 'shopify_returning_rev',    source: 'Shopify',     metric: 'returning_rev',     label: 'Returning Rev',        unit: '₹',  chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'returningCustomerRevenue' },
+  { id: 'shopify_fulfillment',      source: 'Shopify',     metric: 'fulfillment',       label: 'Avg Fulfillment Days', unit: 'd',  chartType: 'bar',  endpoint: '/api/shopify?action=kpis', path: 'averageFulfillmentDays' },
   // ── GA4 ──
-  { id: 'ga4_sessions',             source: 'GA4',         metric: 'sessions',          label: '📊 Sessions',             unit: '',   chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'sessions' },
-  { id: 'ga4_users',                source: 'GA4',         metric: 'users',             label: '👤 Users',                unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'users' },
-  { id: 'ga4_new_users',            source: 'GA4',         metric: 'new_users',         label: '🆕 New Users',            unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'newUsers' },
-  { id: 'ga4_bounce',               source: 'GA4',         metric: 'bounce_rate',       label: '📉 Bounce Rate',          unit: '%',  chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'bounceRate' },
-  { id: 'ga4_session_duration',     source: 'GA4',         metric: 'session_duration',  label: '⏱ Avg Session Duration',  unit: 's',  chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'avgSessionDuration' },
-  { id: 'ga4_pages_per_session',    source: 'GA4',         metric: 'pages_per_session', label: '📄 Pages / Session',      unit: '',   chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'pagesPerSession' },
-  { id: 'ga4_cvr',                  source: 'GA4',         metric: 'cvr',               label: '🎯 CVR (GA4)',            unit: '%',  chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'conversionRate' },
-  { id: 'ga4_add_to_carts',         source: 'GA4',         metric: 'add_to_carts',      label: '🛒 Add to Carts',         unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'addToCarts' },
-  { id: 'ga4_checkouts',            source: 'GA4',         metric: 'checkouts',         label: '🔀 Checkouts',            unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'checkouts' },
-  { id: 'ga4_transactions',         source: 'GA4',         metric: 'transactions',      label: '✅ Transactions',         unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'transactions' },
+  { id: 'ga4_sessions',             source: 'GA4',         metric: 'sessions',          label: 'Sessions',             unit: '',   chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'sessions' },
+  { id: 'ga4_users',                source: 'GA4',         metric: 'users',             label: 'Users',                unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'users' },
+  { id: 'ga4_new_users',            source: 'GA4',         metric: 'new_users',         label: 'New Users',            unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'newUsers' },
+  { id: 'ga4_bounce',               source: 'GA4',         metric: 'bounce_rate',       label: 'Bounce Rate',          unit: '%',  chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'bounceRate' },
+  { id: 'ga4_session_duration',     source: 'GA4',         metric: 'session_duration',  label: 'Avg Session Duration', unit: 's',  chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'avgSessionDuration' },
+  { id: 'ga4_pages_per_session',    source: 'GA4',         metric: 'pages_per_session', label: 'Pages / Session',      unit: '',   chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'pagesPerSession' },
+  { id: 'ga4_cvr',                  source: 'GA4',         metric: 'cvr',               label: 'CVR (GA4)',            unit: '%',  chartType: 'line', endpoint: '/api/analytics?action=kpis', path: 'conversionRate' },
+  { id: 'ga4_add_to_carts',         source: 'GA4',         metric: 'add_to_carts',      label: 'Add to Carts',         unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'addToCarts' },
+  { id: 'ga4_checkouts',            source: 'GA4',         metric: 'checkouts',         label: 'Checkouts',            unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'checkouts' },
+  { id: 'ga4_transactions',         source: 'GA4',         metric: 'transactions',      label: 'Transactions',         unit: '',   chartType: 'bar',  endpoint: '/api/analytics?action=kpis', path: 'transactions' },
   // ── Meta Ads ──
-  { id: 'meta_spend',               source: 'Meta',        metric: 'spend',             label: '💸 Meta Spend',           unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'spend' },
-  { id: 'meta_roas',                source: 'Meta',        metric: 'roas',              label: '📈 Meta ROAS',            unit: 'x',  chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'roas' },
-  { id: 'meta_purchases',           source: 'Meta',        metric: 'purchases',         label: '🛍️ Meta Purchases',      unit: '',   chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'purchases' },
-  { id: 'meta_purchase_value',      source: 'Meta',        metric: 'purchase_value',    label: '💰 Meta Purchase Value',  unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'purchaseValue' },
-  { id: 'meta_ctr',                 source: 'Meta',        metric: 'ctr',               label: '👆 Meta CTR',             unit: '%',  chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'ctr' },
-  { id: 'meta_cpc',                 source: 'Meta',        metric: 'cpc',               label: '🖱️ Meta CPC',            unit: '₹',  chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'cpc' },
-  { id: 'meta_cpm',                 source: 'Meta',        metric: 'cpm',               label: '📢 Meta CPM',             unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'cpm' },
-  { id: 'meta_reach',               source: 'Meta',        metric: 'reach',             label: '🌐 Meta Reach',           unit: '',   chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'reach' },
-  { id: 'meta_atc',                 source: 'Meta',        metric: 'meta_atc',          label: '🛒 Meta Add to Carts',    unit: '',   chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'addToCarts' },
-  { id: 'meta_cpp',                 source: 'Meta',        metric: 'cpp',               label: '🎯 Cost / Purchase',      unit: '₹',  chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'costPerPurchase' },
+  { id: 'meta_spend',               source: 'Meta',        metric: 'spend',             label: 'Meta Spend',           unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'spend' },
+  { id: 'meta_roas',                source: 'Meta',        metric: 'roas',              label: 'Meta ROAS',            unit: 'x',  chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'roas' },
+  { id: 'meta_purchases',           source: 'Meta',        metric: 'purchases',         label: 'Meta Purchases',       unit: '',   chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'purchases' },
+  { id: 'meta_purchase_value',      source: 'Meta',        metric: 'purchase_value',    label: 'Meta Purchase Value',  unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'purchaseValue' },
+  { id: 'meta_ctr',                 source: 'Meta',        metric: 'ctr',               label: 'Meta CTR',             unit: '%',  chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'ctr' },
+  { id: 'meta_cpc',                 source: 'Meta',        metric: 'cpc',               label: 'Meta CPC',             unit: '₹',  chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'cpc' },
+  { id: 'meta_cpm',                 source: 'Meta',        metric: 'cpm',               label: 'Meta CPM',             unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'cpm' },
+  { id: 'meta_reach',               source: 'Meta',        metric: 'reach',             label: 'Meta Reach',           unit: '',   chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'reach' },
+  { id: 'meta_atc',                 source: 'Meta',        metric: 'meta_atc',          label: 'Meta Add to Carts',    unit: '',   chartType: 'bar',  endpoint: '/api/ads?platform=meta', path: 'addToCarts' },
+  { id: 'meta_cpp',                 source: 'Meta',        metric: 'cpp',               label: 'Cost / Purchase',      unit: '₹',  chartType: 'line', endpoint: '/api/ads?platform=meta', path: 'costPerPurchase' },
   // ── Google Ads ──
-  { id: 'gads_spend',               source: 'Google Ads',  metric: 'spend',             label: '💸 GAds Spend',           unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=google', path: 'spend' },
-  { id: 'gads_roas',                source: 'Google Ads',  metric: 'roas',              label: '📈 GAds ROAS',            unit: 'x',  chartType: 'line', endpoint: '/api/ads?platform=google', path: 'roas' },
-  { id: 'gads_conversions',         source: 'Google Ads',  metric: 'conversions',       label: '✅ GAds Conversions',     unit: '',   chartType: 'bar',  endpoint: '/api/ads?platform=google', path: 'conversions' },
-  { id: 'gads_conv_value',          source: 'Google Ads',  metric: 'conv_value',        label: '💰 GAds Conv. Value',     unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=google', path: 'conversionValue' },
-  { id: 'gads_ctr',                 source: 'Google Ads',  metric: 'ctr',               label: '👆 GAds CTR',             unit: '%',  chartType: 'line', endpoint: '/api/ads?platform=google', path: 'ctr' },
-  { id: 'gads_cpc',                 source: 'Google Ads',  metric: 'cpc',               label: '🖱️ GAds CPC',            unit: '₹',  chartType: 'line', endpoint: '/api/ads?platform=google', path: 'avgCpc' },
-  { id: 'gads_cpa',                 source: 'Google Ads',  metric: 'cpa',               label: '🎯 Cost / Conversion',    unit: '₹',  chartType: 'line', endpoint: '/api/ads?platform=google', path: 'costPerConversion' },
+  { id: 'gads_spend',               source: 'Google Ads',  metric: 'spend',             label: 'GAds Spend',           unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=google', path: 'spend' },
+  { id: 'gads_roas',                source: 'Google Ads',  metric: 'roas',              label: 'GAds ROAS',            unit: 'x',  chartType: 'line', endpoint: '/api/ads?platform=google', path: 'roas' },
+  { id: 'gads_conversions',         source: 'Google Ads',  metric: 'conversions',       label: 'GAds Conversions',     unit: '',   chartType: 'bar',  endpoint: '/api/ads?platform=google', path: 'conversions' },
+  { id: 'gads_conv_value',          source: 'Google Ads',  metric: 'conv_value',        label: 'GAds Conv. Value',     unit: '₹',  chartType: 'bar',  endpoint: '/api/ads?platform=google', path: 'conversionValue' },
+  { id: 'gads_ctr',                 source: 'Google Ads',  metric: 'ctr',               label: 'GAds CTR',             unit: '%',  chartType: 'line', endpoint: '/api/ads?platform=google', path: 'ctr' },
+  { id: 'gads_cpc',                 source: 'Google Ads',  metric: 'cpc',               label: 'GAds CPC',             unit: '₹',  chartType: 'line', endpoint: '/api/ads?platform=google', path: 'avgCpc' },
+  { id: 'gads_cpa',                 source: 'Google Ads',  metric: 'cpa',               label: 'Cost / Conversion',    unit: '₹',  chartType: 'line', endpoint: '/api/ads?platform=google', path: 'costPerConversion' },
 ];
 
 const SOURCE_COLOR: Record<string, string> = {
@@ -276,10 +276,7 @@ export default function CustomDashboardPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '700' }}>🎛️ My Dashboard</h1>
-          <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '13px' }}>
-            Drag to reorder · Add any metric from any connected platform
-          </p>
+          <h1 style={{ margin: 0, fontSize: '22px', fontWeight: '700' }}>My Dashboard</h1>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           {savedMsg && <span style={{ fontSize: '13px', color: 'var(--accent-blue)' }}>{savedMsg}</span>}
@@ -289,7 +286,7 @@ export default function CustomDashboardPage() {
               padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--glass-border)',
               background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '13px',
             }}>
-              💾 {saving ? 'Saving...' : 'Save Layout'}
+              {saving ? 'Saving...' : 'Save Layout'}
             </button>
           )}
           <button onClick={() => setShowPicker(true)} style={{
@@ -308,15 +305,12 @@ export default function CustomDashboardPage() {
         border: '1px solid rgba(59,130,246,0.18)',
         borderRadius: '12px', padding: '14px 20px', gap: '16px',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <span style={{ fontSize: '26px', lineHeight: 1 }}>👋</span>
-          <div>
-            <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '2px' }}>
-              Your command centre for brand performance
-            </div>
-            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
-              Pin the metrics that matter most — revenue, CVR, ROAS, repeat rate — all in one view, updated live.
-            </div>
+        <div>
+          <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '2px' }}>
+            Your command centre for brand performance
+          </div>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+            Pin the metrics that matter most: revenue, CVR, ROAS, repeat rate. All in one view, updated live.
           </div>
         </div>
         <a
