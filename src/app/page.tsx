@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { BrandCard } from '@/components/BrandCard';
+import { LogoutButton } from '@/components/LogoutButton';
 import { verifySession, filterBrandsForUser, COOKIE_NAME } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -41,6 +42,7 @@ export default async function HomePage() {
             Brand Analytics
           </span>
         </div>
+        {user && <LogoutButton variant="header" />}
       </header>
 
       <div style={{ maxWidth: '1100px', margin: '0 auto', padding: '48px 40px' }}>

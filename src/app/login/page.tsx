@@ -20,14 +20,15 @@ export default function LoginPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
-        redirect: 'manual',
       });
 
-      if (res.ok || res.status === 307 || res.status === 308 || res.type === 'opaqueredirect') {
-        router.push('/');
+      const data = await res.json().catch(() => ({}));
+
+      if (res.ok && data.success) {
+        // Scoped users (e.g. hira) go straight to their brand dashboard; admins go to brands list
+        router.push(data.redirectTo || '/');
         router.refresh();
       } else {
-        const data = await res.json().catch(() => ({}));
         setError(data.error || 'Invalid credentials');
       }
     } catch {

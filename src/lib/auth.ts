@@ -23,11 +23,14 @@ export const USERS: User[] = [
 ];
 
 export function findUser(username: string, password: string): User | null {
-  return USERS.find((u) => u.username === username && u.password === password) ?? null;
+  // Case-insensitive username match so "riddhiman" == "Riddhiman"
+  return USERS.find(
+    (u) => u.username.toLowerCase() === username?.toLowerCase() && u.password === password
+  ) ?? null;
 }
 
 export function getUserByName(username: string): User | null {
-  return USERS.find((u) => u.username === username) ?? null;
+  return USERS.find((u) => u.username.toLowerCase() === username?.toLowerCase()) ?? null;
 }
 
 async function hmacHex(data: string): Promise<string> {
