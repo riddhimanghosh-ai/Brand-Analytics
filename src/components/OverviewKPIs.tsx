@@ -52,19 +52,35 @@ function KpiSkeleton() {
 export function OverviewKPIs({ slug, connections }: Props) {
   const [kpis, setKpis] = useState<KPIs | null>(null);
   const [loading, setLoading] = useState(connections.shopify);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [metaSpend, setMetaSpend] = useState<number | null>(null);
 
-  useEffect(() => {
+  const fetchKPIs = (bustCache = false) => {
     if (!connections.shopify) return;
-    fetch(`/api/shopify?action=kpis&slug=${slug}&range=30d`)
+    const url = bustCache
+      ? `/api/shopify?action=kpis&slug=${slug}&range=30d&_ts=${Date.now()}`
+      : `/api/shopify?action=kpis&slug=${slug}&range=30d`;
+    fetch(url)
       .then(r => r.json())
       .then(data => {
         if (data.error) setError(data.error);
         else setKpis(data);
       })
       .catch(() => setError('Failed to load Shopify data'))
-      .finally(() => setLoading(false));
+      .finally(() => { setLoading(false); setRefreshing(false); });
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    // Invalidate cache first, then re-fetch
+    await fetch(`/api/shopify?action=refresh&slug=${slug}`).catch(() => {});
+    fetchKPIs(true);
+  };
+
+  useEffect(() => {
+    fetchKPIs();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, connections.shopify]);
 
   useEffect(() => {
@@ -161,9 +177,25 @@ export function OverviewKPIs({ slug, connections }: Props) {
         </div>
       )}
 
-      <div className="section-title">
-        <span className="section-icon">💰</span>
-        Revenue &amp; Sales
+      <div className="section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="section-icon">💰</span>
+          Revenue &amp; Sales
+        </div>
+        <button
+          onClick={handleRefresh}
+          disabled={refreshing}
+          title="Refresh data"
+          style={{
+            padding: '4px 10px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
+            border: '1px solid var(--glass-border)', background: 'transparent',
+            color: refreshing ? 'var(--text-dim)' : 'var(--text-secondary)',
+            cursor: refreshing ? 'default' : 'pointer', fontFamily: 'var(--font-sans)',
+            letterSpacing: '0.03em',
+          }}
+        >
+          {refreshing ? '⟳ Refreshing…' : '⟳ Refresh'}
+        </button>
       </div>
 
       <div className="kpi-grid">

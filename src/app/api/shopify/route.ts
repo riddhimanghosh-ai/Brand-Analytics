@@ -89,8 +89,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: true, message: 'Cache cleared' });
     }
 
-    // Actions that should never be cached
-    const noCache = action === 'test' || action === 'orders' || action === 'shop';
+    // Actions that should never be cached (or when caller explicitly bypasses with _ts param)
+    const noCache = action === 'test' || action === 'orders' || action === 'shop' ||
+      !!searchParams.get('_ts'); // timestamp param = force fresh fetch
 
     // Build effective date range string
     const effectiveDateRange = fromParam && toParam ? `${fromParam}:${toParam}` : dateRange;

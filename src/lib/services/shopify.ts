@@ -237,6 +237,7 @@ function buildOrderQuery(startDate: string, endDate: string, afterClause: string
                 }
               }
             }
+            email
             customer { id numberOfOrders }
             shippingAddress { city province country countryCode }
             discountCodes
@@ -495,11 +496,17 @@ function computeMetrics(orders: Array<Record<string, unknown>>) {
     totalRefunded += refund;
 
     const customer = order.customer as { id: string; numberOfOrders: number } | null;
-    if (customer?.id) {
-      customerIds.add(customer.id);
-      const orderCount = customer.numberOfOrders || 0;
+    // Use customer ID for logged-in customers, email for guest checkouts.
+    // This ensures guest orders are counted (most Shopify stores use guest checkout).
+    const orderEmail = (order.email as string) || '';
+    const customerId = customer?.id || orderEmail || null;
+    if (customerId) {
+      customerIds.add(customerId);
+      const orderCount = customer?.numberOfOrders || 0;
+      // numberOfOrders > 1 means repeat buyer. For guest checkouts (no customer record),
+      // they always appear as new (can't track cross-session without login).
       if (orderCount > 1) {
-        repeatCustomers.add(customer.id);
+        repeatCustomers.add(customerId);
         returningCustomerRevenue += price;
       } else {
         newCustomerRevenue += price;
@@ -569,14 +576,17 @@ export async function getKPIs(
 
   // ── Try ShopifyQL first (fast path — sub-second, no pagination) ───────────
   try {
+    // NOTE: 'customers', 'returning_customers', 'returning_customer_rate' are NOT used here
+    // because they only count logged-in customers (returns 0 for guest-checkout stores).
+    // Customer metrics are derived from the GraphQL email query below instead.
     const [curRows, prevRows, sessionRows] = await Promise.all([
       runShopifyQL(
         config,
-        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, customers, returning_customers, returning_customer_rate SINCE ${currentStart} UNTIL ${currentEnd}`,
+        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value SINCE ${currentStart} UNTIL ${currentEnd}`,
       ),
       runShopifyQL(
         config,
-        `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`,
+        `FROM sales SHOW orders, net_sales, average_order_value SINCE ${prevStart} UNTIL ${prevEnd}`,
       ),
       runShopifyQL(
         config,
@@ -588,57 +598,88 @@ export async function getKPIs(
     const prev    = prevRows[0]    ?? {};
     const session = sessionRows[0] ?? {};
 
-    const totalRevenue       = Number(cur.net_sales              ?? 0);
-    const totalOrders        = Number(cur.orders                 ?? 0);
-    const grossSales         = Number(cur.gross_sales            ?? 0);
-    const totalReturns       = Math.abs(Number(cur.returns       ?? 0));
-    const aov                = Number(cur.average_order_value    ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
-    const refundRate         = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
-    const totalCustomers     = Number(cur.customers              ?? 0);
-    const returningCustomers = Number(cur.returning_customers    ?? 0);
-    // returning_customer_rate is a PERCENT column — already multiplied by 100
-    const repeatCustomerRate = Number(cur.returning_customer_rate ?? 0) ||
-      (totalCustomers > 0 ? (returningCustomers / totalCustomers) * 100 : 0);
-    // Estimate new/returning revenue by customer ratio (ShopifyQL has no revenue-by-type column)
-    const returningFrac         = totalCustomers > 0 ? returningCustomers / totalCustomers : 0;
-    const returningCustomerRevenue = totalRevenue * returningFrac;
-    const newCustomerRevenue       = totalRevenue * (1 - returningFrac);
+    const totalRevenue = Number(cur.net_sales              ?? 0);
+    const totalOrders  = Number(cur.orders                 ?? 0);
+    const grossSales   = Number(cur.gross_sales            ?? 0);
+    const totalReturns = Math.abs(Number(cur.returns       ?? 0));
+    const aov          = Number(cur.average_order_value    ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+    const refundRate   = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
 
-    const prevRevenue  = Number(prev.net_sales           ?? 0);
-    const prevOrders   = Number(prev.orders              ?? 0);
-    const prevAOV      = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
-    const prevCustomers = Number(prev.customers          ?? 0);
+    const prevRevenue = Number(prev.net_sales           ?? 0);
+    const prevOrders  = Number(prev.orders              ?? 0);
+    const prevAOV     = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
 
     // Sessions funnel — mirrors the Slack bot's get_funnel tool logic
-    const totalSessions = Number(session.sessions        ?? 0);
-    const atcRate       = Number(session.added_to_cart_rate ?? 0); // already *100 (PERCENT col)
-    // Derive conversion rate from orders/sessions for accuracy (matches bot approach)
-    const conversionRate = totalSessions > 0 ? (totalOrders / totalSessions) * 100 : Number(session.conversion_rate ?? 0);
+    const totalSessions       = Number(session.sessions            ?? 0);
+    const atcRate             = Number(session.added_to_cart_rate  ?? 0); // PERCENT col — already *100
+    const conversionRate      = totalSessions > 0 ? (totalOrders / totalSessions) * 100 : Number(session.conversion_rate ?? 0);
     const cartAbandonmentRate = atcRate > 0 ? Math.max(0, ((atcRate - conversionRate) / atcRate) * 100) : 0;
 
-    // Optional: top product
-    let topProduct = '';
+    // ── Customer metrics via GraphQL (email-based — covers guest checkouts) ─
+    let totalCustomers = 0;
+    let repeatCustomerRate = 0;
+    let returningCustomerRevenue = 0;
+    let newCustomerRevenue = totalRevenue; // default: all revenue is "new"
+    let prevCustomers = 0;
     try {
-      const productRows = await runShopifyQL(
-        config,
-        `FROM sales SHOW net_sales GROUP BY product_title ORDER BY net_sales DESC LIMIT 1 SINCE ${currentStart} UNTIL ${currentEnd}`,
-      );
-      topProduct = String(productRows[0]?.product_title ?? '');
-    } catch { /* keep empty if it fails */ }
-
-    // Items per order — ShopifyQL has no quantity column; fetch a capped sample via GraphQL
-    let averageItemsPerOrder = 0;
-    try {
-      const itemsQuery = `{
-        orders(first: 250, query: "created_at:>=${currentStart} AND created_at:<=${currentEnd} AND financial_status:paid") {
-          edges { node { lineItems(first: 50) { edges { node { quantity } } } } }
+      const custQuery = `{
+        orders(first: 250, query: "created_at:>=${currentStart} AND created_at:<=${currentEnd}") {
+          edges { node { email totalPriceSet { shopMoney { amount } } customer { numberOfOrders } } }
         }
       }`;
-      const itemsRes = await fetch(
+      const custRes = await fetch(
         `https://${config.storeUrl}/admin/api/2025-10/graphql.json`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken }, body: JSON.stringify({ query: itemsQuery }) }
+        { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken }, body: JSON.stringify({ query: custQuery }) }
       );
-      if (itemsRes.ok) {
+      if (custRes.ok) {
+        const custData = await custRes.json() as { data?: { orders?: { edges: Array<{ node: { email: string; totalPriceSet: { shopMoney: { amount: string } }; customer: { numberOfOrders: number } | null } }> } } };
+        const edges = custData.data?.orders?.edges ?? [];
+        const emails = new Set<string>();
+        let retRevenue = 0;
+        let newRevenue = 0;
+        for (const e of edges) {
+          const email = e.node.email || '';
+          const rev = parseFloat(e.node.totalPriceSet?.shopMoney?.amount || '0');
+          if (email) emails.add(email);
+          const numOrders = e.node.customer?.numberOfOrders ?? 1;
+          if (numOrders > 1) { retRevenue += rev; } else { newRevenue += rev; }
+        }
+        totalCustomers = emails.size || edges.length; // fallback to order count if no emails
+        const repeatCount = edges.filter(e => (e.node.customer?.numberOfOrders ?? 1) > 1).length;
+        repeatCustomerRate = edges.length > 0 ? (repeatCount / edges.length) * 100 : 0;
+        returningCustomerRevenue = retRevenue;
+        newCustomerRevenue = newRevenue;
+      }
+    } catch { /* non-critical — keep defaults */ }
+
+    // Prev period customer count (lightweight)
+    try {
+      const prevCustRes = await fetch(
+        `https://${config.storeUrl}/admin/api/2025-10/graphql.json`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken },
+          body: JSON.stringify({ query: `{ orders(first: 250, query: "created_at:>=${prevStart} AND created_at:<=${prevEnd}") { edges { node { email } } } }` }) }
+      );
+      if (prevCustRes.ok) {
+        const pd = await prevCustRes.json() as { data?: { orders?: { edges: Array<{ node: { email: string } }> } } };
+        const prevEmails = new Set((pd.data?.orders?.edges ?? []).map(e => e.node.email).filter(Boolean));
+        prevCustomers = prevEmails.size || (pd.data?.orders?.edges?.length ?? 0);
+      }
+    } catch { /* non-critical */ }
+
+    // ── Top product + items/order (run in parallel) ──────────────────────────
+    let topProduct = '';
+    let averageItemsPerOrder = 0;
+    try {
+      const [productRows, itemsRes] = await Promise.all([
+        runShopifyQL(config, `FROM sales SHOW net_sales GROUP BY product_title ORDER BY net_sales DESC LIMIT 1 SINCE ${currentStart} UNTIL ${currentEnd}`).catch(() => []),
+        fetch(`https://${config.storeUrl}/admin/api/2025-10/graphql.json`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken },
+          body: JSON.stringify({ query: `{ orders(first: 250, query: "created_at:>=${currentStart} AND created_at:<=${currentEnd} AND financial_status:paid") { edges { node { lineItems(first: 50) { edges { node { quantity } } } } } }` }),
+        }).catch(() => null),
+      ]);
+      topProduct = String(productRows[0]?.product_title ?? '');
+      if (itemsRes?.ok) {
         const itemsData = await itemsRes.json() as { data?: { orders?: { edges: Array<{ node: { lineItems: { edges: Array<{ node: { quantity: number } }> } } }> } } };
         const orderEdges = itemsData.data?.orders?.edges ?? [];
         if (orderEdges.length > 0) {
@@ -647,7 +688,7 @@ export async function getKPIs(
           averageItemsPerOrder = totalItems / orderEdges.length;
         }
       }
-    } catch { /* non-critical — leave as 0 */ }
+    } catch { /* non-critical */ }
 
     return {
       totalRevenue,
@@ -1407,8 +1448,8 @@ async function buildAllAnalyticsFromShopifyQL(
   conversionFunnel: ConversionFunnel[];
 }> {
   const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows] = await Promise.all([
-    // Current period: sales totals
-    runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, customers, returning_customers, returning_customer_rate SINCE ${startDate} UNTIL ${endDate}`),
+    // Current period: sales totals (no customer columns — unreliable for guest checkouts; handled via GraphQL below)
+    runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value SINCE ${startDate} UNTIL ${endDate}`),
     // Current period: daily timeseries
     runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
     // Top 15 products by gross sales
@@ -1417,7 +1458,7 @@ async function buildAllAnalyticsFromShopifyQL(
     runShopifyQL(config, `FROM sales SHOW orders, net_sales GROUP BY shipping_country ORDER BY orders DESC LIMIT 20 SINCE ${startDate} UNTIL ${endDate}`)
       .catch(() => [] as Array<Record<string, number | string>>),
     // Previous period: totals for comparison
-    runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`),
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value SINCE ${prevStart} UNTIL ${prevEnd}`),
     // Sessions funnel — same queries the Slack bot's get_funnel tool uses
     runShopifyQL(config, `FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE ${startDate} UNTIL ${endDate}`)
       .catch(() => [] as Array<Record<string, number | string>>),
@@ -1425,16 +1466,12 @@ async function buildAllAnalyticsFromShopifyQL(
 
   // ── Parse current period KPIs ────────────────────────────────────────────
   const kpi = kpiRows[0] ?? {};
-  const totalOrders        = Number(kpi.orders              ?? 0);
-  const totalRevenue       = Number(kpi.net_sales           ?? 0);
-  const grossSales         = Number(kpi.gross_sales         ?? 0);
-  const totalReturns       = Number(kpi.returns             ?? 0);
-  const aov                = Number(kpi.average_order_value ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
-  const totalCustomers     = Number(kpi.customers           ?? 0);
-  const returningCustomers = Number(kpi.returning_customers ?? 0);
-  // returning_customer_rate is a PERCENT column — runShopifyQL already multiplied by 100
-  const returningRate      = Number(kpi.returning_customer_rate ?? 0);
-  const refundRate         = grossSales > 0 ? (Math.abs(totalReturns) / grossSales) * 100 : 0;
+  const totalOrders  = Number(kpi.orders              ?? 0);
+  const totalRevenue = Number(kpi.net_sales           ?? 0);
+  const grossSales   = Number(kpi.gross_sales         ?? 0);
+  const totalReturns = Number(kpi.returns             ?? 0);
+  const aov          = Number(kpi.average_order_value ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+  const refundRate   = grossSales > 0 ? (Math.abs(totalReturns) / grossSales) * 100 : 0;
 
   // ── Parse sessions funnel (mirrors bot's get_funnel) ────────────────────
   const session       = sessionRows[0] ?? {};
@@ -1446,10 +1483,46 @@ async function buildAllAnalyticsFromShopifyQL(
 
   // ── Parse previous period ────────────────────────────────────────────────
   const prev = prevRows[0] ?? {};
-  const prevOrders    = Number(prev.orders              ?? 0);
-  const prevRevenue   = Number(prev.net_sales           ?? 0);
-  const prevAOV       = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
-  const prevCustomers = Number(prev.customers           ?? 0);
+  const prevOrders  = Number(prev.orders              ?? 0);
+  const prevRevenue = Number(prev.net_sales           ?? 0);
+  const prevAOV     = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
+  let prevCustomers = 0;
+
+  // ── Customer metrics via GraphQL (email-based — covers guest checkouts) ─
+  // ShopifyQL's 'customers' column only counts logged-in customers (returns 0 for guest stores)
+  let totalCustomers = 0;
+  let returningCustomers = 0;
+  let returningRate = 0;
+  try {
+    const custQuery = `{
+      orders(first: 250, query: "created_at:>=${startDate} AND created_at:<=${endDate}") {
+        edges { node { email customer { numberOfOrders } } }
+      }
+    }`;
+    const custRes = await fetch(
+      `https://${config.storeUrl}/admin/api/2025-10/graphql.json`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken }, body: JSON.stringify({ query: custQuery }) }
+    );
+    if (custRes.ok) {
+      const cd = await custRes.json() as { data?: { orders?: { edges: Array<{ node: { email: string; customer: { numberOfOrders: number } | null } }> } } };
+      const edges = cd.data?.orders?.edges ?? [];
+      const emails = new Set(edges.map(e => e.node.email).filter(Boolean));
+      totalCustomers = emails.size || edges.length;
+      returningCustomers = edges.filter(e => (e.node.customer?.numberOfOrders ?? 1) > 1).length;
+      returningRate = edges.length > 0 ? (returningCustomers / edges.length) * 100 : 0;
+    }
+    // Prev period customer count
+    const prevCustRes = await fetch(
+      `https://${config.storeUrl}/admin/api/2025-10/graphql.json`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken },
+        body: JSON.stringify({ query: `{ orders(first: 250, query: "created_at:>=${prevStart} AND created_at:<=${prevEnd}") { edges { node { email } } } }` }) }
+    );
+    if (prevCustRes.ok) {
+      const pd = await prevCustRes.json() as { data?: { orders?: { edges: Array<{ node: { email: string } }> } } };
+      const prevEmails = new Set((pd.data?.orders?.edges ?? []).map(e => e.node.email).filter(Boolean));
+      prevCustomers = prevEmails.size || (pd.data?.orders?.edges?.length ?? 0);
+    }
+  } catch { /* non-critical — customer metrics default to 0 */ }
 
   // ── Build revenue time series ────────────────────────────────────────────
   const revenueByDate: Record<string, { revenue: number; orders: number }> = {};
