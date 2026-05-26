@@ -225,7 +225,7 @@ function EventForm({
 }) {
   const inp: React.CSSProperties = {
     padding: '9px 12px', background: 'var(--bg-primary)',
-    border: '1px solid var(--border-color)', borderRadius: '8px',
+    border: '1.5px solid rgba(150,150,160,0.5)', borderRadius: '8px',
     color: 'var(--text-primary)', fontSize: '13px', width: '100%', boxSizing: 'border-box',
     lineHeight: '1.4',
   };
