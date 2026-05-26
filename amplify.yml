@@ -8,7 +8,7 @@ frontend:
       commands:
         # Export all required env vars to .env.production so Next.js SSR runtime can read them.
         # Add new env vars to this list as platforms are added.
-        - env | grep -E '^(MONGODB_URI|ENCRYPTION_KEY|GITHUB_TOKEN|GITHUB_REPO|GITHUB_BRANCH|SHOPIFY_CLIENT_ID|SHOPIFY_CLIENT_SECRET|GEMINI_API_KEY|GROQ_API_KEY|GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|GOOGLE_ADS_DEV_TOKEN|GOOGLE_ADS_LOGIN_CUSTOMER_ID|META_APP_ID|META_APP_SECRET)=' >> .env.production
+        - env | grep -E '^(MONGODB_URI|ENCRYPTION_KEY|GITHUB_TOKEN|GITHUB_REPO|GITHUB_BRANCH|SHOPIFY_CLIENT_ID|SHOPIFY_CLIENT_SECRET|ANTHROPIC_API_KEY|GEMINI_API_KEY|GROQ_API_KEY|GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|GOOGLE_ADS_DEV_TOKEN|GOOGLE_ADS_LOGIN_CUSTOMER_ID|META_APP_ID|META_APP_SECRET|APP_URL)=' >> .env.production
         - npm run build
   artifacts:
     baseDirectory: .next
