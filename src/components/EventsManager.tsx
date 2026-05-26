@@ -474,7 +474,7 @@ const METRIC_PRESETS = [
   { id: 'orders',    label: 'Orders & AOV', emoji: '📦', group: 'Sales',    query: (s: string, e: string) => `FROM sales SHOW orders, average_order_value SINCE ${s} UNTIL ${e}` },
   { id: 'products',  label: 'Top Products', emoji: '🏆', group: 'Sales',    query: (s: string, e: string) => `FROM sales SHOW net_sales, orders GROUP BY product_title ORDER BY net_sales DESC LIMIT 10 SINCE ${s} UNTIL ${e}` },
   { id: 'cvr',       label: 'CVR & ATC',   emoji: '🛒', group: 'Sessions', query: (s: string, e: string) => `FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate, reached_checkout_rate SINCE ${s} UNTIL ${e}` },
-  { id: 'funnel',    label: 'Full Funnel',  emoji: '🔀', group: 'Sessions', query: (s: string, e: string) => `FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout SINCE ${s} UNTIL ${e}` },
+  { id: 'funnel',    label: 'Full Funnel',  emoji: '🔀', group: 'Sessions', query: (s: string, e: string) => `FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout SINCE ${s} UNTIL ${e}` },
   { id: 'bounce',    label: 'Engagement',   emoji: '📊', group: 'Sessions', query: (s: string, e: string) => `FROM sessions SHOW sessions, bounce_rate, pageviews, pageviews_per_session, average_session_duration SINCE ${s} UNTIL ${e}` },
 ] as const;
 
@@ -501,6 +501,7 @@ function prettyColName(col: string): string {
     .replace('Net Sales', 'Net Revenue')
     .replace('Average Order Value', 'AOV')
     .replace('Sessions That Completed Checkout', 'Completed Checkout')
+    .replace(/^Orders$/, 'Orders (Converted)')
     .replace('Sessions That Reached Checkout', 'Reached Checkout')
     .replace('Sessions With Cart Additions', 'Added To Cart')
     .replace('Added To Cart Rate', 'ATC Rate')
@@ -533,15 +534,46 @@ function EventMetricsPanel({ ev, slug }: { ev: BrandEvent; slug: string }) {
     setResult(null);
     setError(null);
     try {
-      const query = preset.query(ev.startDate, ev.endDate);
-      const res = await fetch('/api/metrics', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, query }),
-      });
-      const data = await res.json();
-      if (data.error) { setError(data.error); }
-      else { setResult(data); }
+      if (presetId === 'funnel') {
+        // Fetch sessions funnel + orders (from sales) in parallel.
+        // We use orders instead of sessions_that_completed_checkout because
+        // checkout is handled via Gokwik — session completion data is unreliable.
+        const [sessRes, ordRes] = await Promise.all([
+          fetch('/api/metrics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug, query: preset.query(ev.startDate, ev.endDate) }),
+          }),
+          fetch('/api/metrics', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ slug, query: `FROM sales SHOW orders SINCE ${ev.startDate} UNTIL ${ev.endDate}` }),
+          }),
+        ]);
+        const sessData = await sessRes.json();
+        const ordData  = await ordRes.json();
+        if (sessData.error) { setError(sessData.error); return; }
+        // Merge: sessions columns + orders column
+        const mergedColumns = [
+          ...(sessData.columns ?? []),
+          { name: 'orders', dataType: 'Int' },
+        ];
+        const mergedRow = [
+          ...(sessData.rows?.[0] ?? []),
+          ordData.rows?.[0]?.[0] ?? '0',
+        ];
+        setResult({ columns: mergedColumns, rows: [mergedRow] });
+      } else {
+        const query = preset.query(ev.startDate, ev.endDate);
+        const res = await fetch('/api/metrics', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ slug, query }),
+        });
+        const data = await res.json();
+        if (data.error) { setError(data.error); }
+        else { setResult(data); }
+      }
     } catch {
       setError('Failed to fetch metric.');
     } finally {
