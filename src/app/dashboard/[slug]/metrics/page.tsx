@@ -522,35 +522,73 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
         {/* ShopifyQL Reference */}
         <div className="form-card">
           <div className="form-card-title">📖 ShopifyQL Quick Reference</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '12px' }}>
-            {[
-              { title: 'Data Sources (FROM)', items: ['sales', 'sessions'] },
-              { title: 'Time Ranges (SINCE)', items: ['startOfDay(-30d)', 'startOfMonth(-3m)', 'startOfYear(-1y)', '"2024-01-01"'] },
-              { title: 'Grouping (GROUP BY)', items: ['GROUP BY product_title', 'GROUP BY shipping_country'] },
-              { title: 'Modifiers', items: ['TIMESERIES day', 'TIMESERIES week', 'TIMESERIES month', 'ORDER BY ... ASC/DESC'] },
-            ].map(section => (
-              <div key={section.title}>
-                <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-                  {section.title}
-                </div>
-                {section.items.map(item => (
-                  <div
-                    key={item}
-                    onClick={() => setQuery(q => q + ' ' + item)}
-                    style={{
-                      fontFamily: 'monospace',
-                      fontSize: '12px',
-                      color: 'var(--accent-blue)',
-                      padding: '3px 0',
-                      cursor: 'pointer',
-                    }}
-                    title="Click to append to query"
-                  >
-                    {item}
-                  </div>
-                ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginTop: '12px' }}>
+
+            {/* FROM sales */}
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                FROM sales — columns
               </div>
-            ))}
+              {['orders', 'gross_sales', 'net_sales', 'returns', 'average_order_value'].map(item => (
+                <div key={item} onClick={() => setQuery(q => q + ' ' + item)}
+                  style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)', padding: '3px 0', cursor: 'pointer' }}
+                  title="Click to append">
+                  {item}
+                </div>
+              ))}
+              <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                GROUP BY (sales only)
+              </div>
+              {['GROUP BY product_title', 'GROUP BY shipping_country'].map(item => (
+                <div key={item} onClick={() => setQuery(q => q + ' ' + item)}
+                  style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)', padding: '3px 0', cursor: 'pointer' }}
+                  title="Click to append">
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            {/* FROM sessions */}
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                FROM sessions — columns
+              </div>
+              {['sessions', 'conversion_rate', 'added_to_cart_rate'].map(item => (
+                <div key={item} onClick={() => setQuery(q => q + ' ' + item)}
+                  style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)', padding: '3px 0', cursor: 'pointer' }}
+                  title="Click to append">
+                  {item}
+                </div>
+              ))}
+              <div style={{ marginTop: '8px', fontSize: '11px', color: '#f59e0b', background: 'rgba(245,158,11,0.08)', borderRadius: '4px', padding: '4px 8px' }}>
+                ⚠️ sessions does not support GROUP BY or TIMESERIES
+              </div>
+            </div>
+
+            {/* Date ranges + Modifiers */}
+            <div>
+              <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
+                Date Ranges (SINCE … UNTIL today)
+              </div>
+              {['startOfDay(-7d)', 'startOfDay(-30d)', 'startOfDay(-90d)', 'startOfDay(-365d)'].map(item => (
+                <div key={item} onClick={() => setQuery(q => q + ' SINCE ' + item + ' UNTIL today')}
+                  style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)', padding: '3px 0', cursor: 'pointer' }}
+                  title="Click to append full SINCE…UNTIL clause">
+                  {item}
+                </div>
+              ))}
+              <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                Modifiers (sales only)
+              </div>
+              {['TIMESERIES day', 'TIMESERIES week', 'ORDER BY net_sales DESC', 'LIMIT 20'].map(item => (
+                <div key={item} onClick={() => setQuery(q => q + ' ' + item)}
+                  style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)', padding: '3px 0', cursor: 'pointer' }}
+                  title="Click to append">
+                  {item}
+                </div>
+              ))}
+            </div>
+
           </div>
         </div>
       </div>
