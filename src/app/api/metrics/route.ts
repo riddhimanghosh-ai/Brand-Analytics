@@ -199,32 +199,47 @@ export async function POST(request: Request) {
 
     const storeUrl = brand.shopifyStoreUrl.replace(/^https?:\/\//, '');
 
-    // ── Try ShopifyQL first (requires Advanced/Plus plan) ──
+    // ── Try ShopifyQL first (requires read_analytics scope) ──
+    // API 2025-10: shopifyqlQuery is a QUERY field (not a mutation).
+    // tableData.rows is an array of objects (not rowData array-of-arrays).
+    // parseErrors is [String!]! (not [{ code, message }]).
     try {
-      const gql = `
-        mutation {
-          queryShopifyql(query: ${JSON.stringify(query)}) {
-            tableData {
-              columns { name dataType }
-              rowData
-            }
-            parseErrors { code message }
+      const gql = `{
+        shopifyqlQuery(query: ${JSON.stringify(query)}) {
+          tableData {
+            columns { name dataType }
+            rows
           }
-        }`;
+          parseErrors
+        }
+      }`;
       const data = await shopifyGQL(storeUrl, brand.shopifyAccessToken, gql);
-      const result = data?.queryShopifyql;
-      if (result && !result.parseErrors?.length) {
-        return NextResponse.json({
-          columns: result.tableData?.columns || [],
-          rows: result.tableData?.rowData || [],
-          source: 'shopifyql',
-        });
-      }
+      const result = data?.shopifyqlQuery as {
+        tableData?: { columns: Array<{ name: string; dataType: string }>; rows: unknown };
+        parseErrors?: string[];
+      } | null;
+
       if (result?.parseErrors?.length) {
-        return NextResponse.json({ error: `Query syntax error: ${result.parseErrors[0].message}` }, { status: 400 });
+        return NextResponse.json({ error: `Query syntax error: ${result.parseErrors.join('; ')}` }, { status: 400 });
+      }
+
+      if (result?.tableData) {
+        const columns = result.tableData.columns || [];
+        const rawRows = result.tableData.rows;
+
+        // 2025-10: rows is an array of objects keyed by column name.
+        // Convert to string[][] that MetricChart expects.
+        let rows: string[][] = [];
+        if (Array.isArray(rawRows)) {
+          rows = (rawRows as Array<Record<string, unknown>>).map(rowObj =>
+            columns.map(col => String(rowObj[col.name] ?? ''))
+          );
+        }
+
+        return NextResponse.json({ columns, rows, source: 'shopifyql' });
       }
     } catch {
-      // ShopifyQL not available — fall through to orders-based fallback
+      // ShopifyQL not available (missing read_analytics scope) — fall through to orders-based fallback
     }
 
     // ── Fallback: orders-based analytics (works on ALL plans) ──
