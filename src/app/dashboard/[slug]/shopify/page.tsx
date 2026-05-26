@@ -68,8 +68,8 @@ interface CustomerData {
 }
 
 interface OrderStatusPoint {
-  status: string;
-  count: number;
+  name: string;
+  value: number;
 }
 
 interface AdvancedCROMetrics {
@@ -208,15 +208,22 @@ export default function ShopifyDashboard({
       if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
       setLoading(false);
 
-      // Step 2: advanced — fires AFTER combined finishes so it doesn't compete
-      // for the Shopify GraphQL bucket with the combined request.
-      fetch(`/api/shopify?slug=${slugVal}&action=advanced&from=${from}&to=${to}`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (!data?.error) setAdvanced(data);
-          setAdvancedLoading(false);
-        })
-        .catch(() => setAdvancedLoading(false));
+      // Step 2: advanced + supplementary data — fire after combined to avoid API throttle
+      Promise.allSettled([
+        fetch(`/api/shopify?slug=${slugVal}&action=advanced&from=${from}&to=${to}`).then((r) => r.json()),
+        fetch(`/api/shopify?slug=${slugVal}&action=customers&from=${from}&to=${to}`).then((r) => r.json()),
+        fetch(`/api/shopify?slug=${slugVal}&action=order-status&from=${from}&to=${to}`).then((r) => r.json()),
+        fetch(`/api/shopify?slug=${slugVal}&action=conversion-funnel&from=${from}&to=${to}`).then((r) => r.json()),
+      ]).then(([advRes, custRes, statusRes, funnelRes]) => {
+        if (advRes.status === 'fulfilled' && !advRes.value?.error) setAdvanced(advRes.value);
+        // Override combined's zeroed-out customer revenue with real paginated data
+        if (custRes.status === 'fulfilled' && !custRes.value?.error) setCustomers(custRes.value);
+        // Override combined's shipping-country proxy with real fulfillment counts
+        if (statusRes.status === 'fulfilled' && Array.isArray(statusRes.value)) setOrderStatus(statusRes.value);
+        // Override combined's single-stage funnel with full paid/fulfilled/refunded breakdown
+        if (funnelRes.status === 'fulfilled' && Array.isArray(funnelRes.value)) setConversionFunnel(funnelRes.value);
+        setAdvancedLoading(false);
+      }).catch(() => setAdvancedLoading(false));
     });
   };
 
@@ -896,42 +903,6 @@ export default function ShopifyDashboard({
           )}
         </div>
 
-        <div className="section-title" style={{ marginBottom: '1rem' }}>
-          <span className="section-icon">🏆</span> Top Customers
-        </div>
-
-        <div className="chart-card">
-          <div className="data-table-wrapper">
-            {loading ? (
-              <div className="skeleton skeleton-chart" />
-            ) : (
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>Orders</th>
-                    <th>Total Spent</th>
-                    <th>Avg Order</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(customers?.topCustomers ?? []).map((c, i) => (
-                    <tr key={c.id}>
-                      <td className="text-muted mono">{i + 1}</td>
-                      <td>{[c.firstName, c.lastName].filter(Boolean).join(' ') || '—'}</td>
-                      <td className="text-muted mono">{maskEmail(c.email)}</td>
-                      <td className="mono">{c.ordersCount}</td>
-                      <td className="mono">{formatCurrency(c.totalSpent)}</td>
-                      <td className="mono">{c.ordersCount > 0 ? formatCurrency(c.totalSpent / c.ordersCount) : '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
       </>
     );
   }
@@ -1071,8 +1042,8 @@ export default function ShopifyDashboard({
               <PieChart>
                 <Pie
                   data={orderStatus}
-                  dataKey="count"
-                  nameKey="status"
+                  dataKey="value"
+                  nameKey="name"
                   cx="50%"
                   cy="50%"
                   outerRadius={95}
@@ -1146,88 +1117,184 @@ export default function ShopifyDashboard({
   }
 
   function FunnelsTab() {
+    const totalOrders = conversionFunnel[0]?.count ?? 0;
+    const FUNNEL_COLORS = ['#1E6FFF', '#0A7C53', '#B45309', '#C0392B'];
+
     return (
       <>
-        <div className="section-title" style={{ marginBottom: '1rem' }}>
-          <span className="section-icon">🔄</span> Order Conversion Funnel
+        {/* ── Visual Funnel Steps ── */}
+        <div className="chart-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="chart-card-header">
+            <div>
+              <div className="chart-card-title">Order Conversion Funnel</div>
+              <div className="chart-card-subtitle">From placement to fulfillment — exact counts &amp; conversion rates</div>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="skeleton skeleton-chart" />
+          ) : conversionFunnel.length === 0 ? (
+            <p style={{ padding: '1.5rem', color: 'var(--muted)', fontSize: '13px' }}>No funnel data for this period.</p>
+          ) : (
+            <div style={{ padding: '1.5rem 2rem 2rem' }}>
+              {conversionFunnel.map((stage, i) => {
+                const pctOfTotal = totalOrders > 0 ? (stage.count / totalOrders) * 100 : 0;
+                const prevCount = i > 0 ? conversionFunnel[i - 1].count : stage.count;
+                const convRate = prevCount > 0 ? (stage.count / prevCount) * 100 : 100;
+                const barWidth = `${Math.max(pctOfTotal, 8)}%`;
+                const color = FUNNEL_COLORS[i % FUNNEL_COLORS.length];
+
+                return (
+                  <div key={stage.stage}>
+                    {/* Stage row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '6px' }}>
+                      {/* Step number */}
+                      <div style={{
+                        width: '24px', height: '24px', flexShrink: 0,
+                        border: `2px solid ${color}`, color,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontFamily: 'var(--f-mono)', fontSize: '11px', fontWeight: 700,
+                      }}>
+                        {i + 1}
+                      </div>
+
+                      {/* Stage name */}
+                      <div style={{ width: '110px', flexShrink: 0, fontFamily: 'var(--f-mono)', fontSize: '11px', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--ink-2)' }}>
+                        {stage.stage}
+                      </div>
+
+                      {/* Bar */}
+                      <div style={{ flex: 1, height: '32px', background: 'var(--paper-3)', position: 'relative', overflow: 'hidden' }}>
+                        <div style={{
+                          position: 'absolute', top: 0, left: 0, height: '100%',
+                          width: barWidth, background: color, opacity: 0.85,
+                          transition: 'width 0.4s ease',
+                        }} />
+                        <span style={{
+                          position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)',
+                          fontFamily: 'var(--f-mono)', fontSize: '12px', fontWeight: 700,
+                          color: pctOfTotal > 18 ? '#fff' : 'var(--ink)',
+                          zIndex: 1,
+                        }}>
+                          {stage.count.toLocaleString('en-IN')}
+                        </span>
+                        <span style={{
+                          position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                          fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--muted)',
+                          zIndex: 1,
+                        }}>
+                          {pctOfTotal.toFixed(1)}% of total
+                        </span>
+                      </div>
+
+                      {/* Conv rate badge */}
+                      <div style={{ width: '90px', flexShrink: 0, textAlign: 'right' }}>
+                        {i === 0 ? (
+                          <span style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', color: 'var(--muted-2)' }}>base</span>
+                        ) : (
+                          <span style={{
+                            fontFamily: 'var(--f-mono)', fontSize: '11px', fontWeight: 600,
+                            color: convRate >= 80 ? 'var(--ok)' : convRate >= 50 ? '#B45309' : 'var(--warn)',
+                          }}>
+                            {convRate.toFixed(1)}% conv.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Dropoff arrow between stages */}
+                    {i < conversionFunnel.length - 1 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '6px', paddingLeft: '40px' }}>
+                        <div style={{ width: '110px', flexShrink: 0 }} />
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '1px', height: '20px', background: 'var(--rule)', marginLeft: '15px' }} />
+                          {stage.dropoffRate > 0 && (
+                            <span style={{
+                              fontFamily: 'var(--f-mono)', fontSize: '10px',
+                              color: 'var(--warn)', letterSpacing: '0.04em',
+                              background: 'rgba(192,57,43,0.07)', padding: '2px 7px',
+                            }}>
+                              -{stage.dropoffRate.toFixed(1)}% dropoff ({(prevCount - stage.count).toLocaleString('en-IN')} lost)
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
+        {/* ── Bar Chart ── */}
         <div className="chart-card" style={{ marginBottom: '1.5rem' }}>
+          <div className="chart-card-header">
+            <div className="chart-card-title">Funnel Volume by Stage</div>
+          </div>
           {loading ? (
             <div className="skeleton skeleton-chart" />
           ) : (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={conversionFunnel}
-                margin={{ top: 20, right: 30, left: 0, bottom: 60 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
-                <XAxis
-                  dataKey="stage"
-                  angle={-45}
-                  textAnchor="end"
-                  height={100}
-                  tick={{ fontSize: 12 }}
-                />
-                <YAxis />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--bg-secondary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                  }}
-                  formatter={(v) => (typeof v === 'number' ? [v.toLocaleString('en-IN'), 'Orders'] : v)}
-                />
-                <Bar dataKey="count" fill="var(--accent-blue)" radius={[8, 8, 0, 0]} />
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={conversionFunnel} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--rule)" />
+                <XAxis dataKey="stage" tick={{ fontSize: 12, fontFamily: 'var(--f-mono)' }} tickLine={false} />
+                <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
+                <Tooltip formatter={(v) => (typeof v === 'number' ? [v.toLocaleString('en-IN'), 'Orders'] : v)} />
+                <Bar dataKey="count" radius={[0, 0, 0, 0]}>
+                  {conversionFunnel.map((_, i) => (
+                    <Cell key={i} fill={FUNNEL_COLORS[i % FUNNEL_COLORS.length]} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           )}
         </div>
 
-        <div className="data-grid">
-          {conversionFunnel.map((stage, i) => (
-            <div key={i} className="data-card">
-              <div className="data-label">{stage.stage}</div>
-              <div className="data-value">{stage.count.toLocaleString('en-IN')}</div>
-              {stage.dropoffRate > 0 && (
-                <div className="data-secondary">
-                  {stage.dropoffRate.toFixed(1)}% dropoff
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="section-title" style={{ marginTop: '2rem', marginBottom: '1rem' }}>
-          <span className="section-icon">📊</span> Funnel Summary
-        </div>
-
+        {/* ── Summary Table ── */}
         {conversionFunnel.length > 0 && (
           <div className="chart-card">
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-color)' }}>
-                  <th style={{ textAlign: 'left', padding: '0.75rem', fontSize: '0.875rem', fontWeight: 600 }}>Stage</th>
-                  <th style={{ textAlign: 'center', padding: '0.75rem', fontSize: '0.875rem', fontWeight: 600 }}>Count</th>
-                  <th style={{ textAlign: 'center', padding: '0.75rem', fontSize: '0.875rem', fontWeight: 600 }}>% of Previous</th>
-                  <th style={{ textAlign: 'center', padding: '0.75rem', fontSize: '0.875rem', fontWeight: 600 }}>Dropoff %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {conversionFunnel.map((stage, i) => {
-                  const prevStage = i > 0 ? conversionFunnel[i - 1].count : stage.count;
-                  const pctOfPrev = prevStage > 0 ? (stage.count / prevStage) * 100 : 0;
-                  return (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ padding: '0.75rem' }}>{stage.stage}</td>
-                      <td style={{ textAlign: 'center', padding: '0.75rem' }}>{stage.count.toLocaleString('en-IN')}</td>
-                      <td style={{ textAlign: 'center', padding: '0.75rem' }}>{pctOfPrev.toFixed(1)}%</td>
-                      <td style={{ textAlign: 'center', padding: '0.75rem' }}>{stage.dropoffRate.toFixed(1)}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <div className="chart-card-header">
+              <div className="chart-card-title">Stage Breakdown</div>
+            </div>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Stage</th>
+                    <th>Orders</th>
+                    <th>% of Total</th>
+                    <th>Conv. from Prev</th>
+                    <th>Lost Orders</th>
+                    <th>Dropoff %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {conversionFunnel.map((stage, i) => {
+                    const prevCount = i > 0 ? conversionFunnel[i - 1].count : stage.count;
+                    const pctOfTotal = totalOrders > 0 ? (stage.count / totalOrders) * 100 : 0;
+                    const convRate = i === 0 ? 100 : (prevCount > 0 ? (stage.count / prevCount) * 100 : 0);
+                    const lost = i === 0 ? 0 : prevCount - stage.count;
+                    return (
+                      <tr key={i}>
+                        <td className="mono text-muted">{i + 1}</td>
+                        <td style={{ fontFamily: 'var(--f-mono)', fontWeight: 600, fontSize: '12px' }}>{stage.stage}</td>
+                        <td className="mono">{stage.count.toLocaleString('en-IN')}</td>
+                        <td className="mono">{pctOfTotal.toFixed(1)}%</td>
+                        <td className="mono" style={{ color: convRate >= 80 ? 'var(--ok)' : convRate >= 50 ? '#B45309' : 'var(--warn)' }}>
+                          {i === 0 ? '—' : `${convRate.toFixed(1)}%`}
+                        </td>
+                        <td className="mono text-muted">{lost > 0 ? lost.toLocaleString('en-IN') : '—'}</td>
+                        <td className="mono" style={{ color: stage.dropoffRate > 20 ? 'var(--warn)' : 'var(--muted)' }}>
+                          {stage.dropoffRate > 0 ? `${stage.dropoffRate.toFixed(1)}%` : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </>
