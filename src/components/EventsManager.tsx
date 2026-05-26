@@ -467,12 +467,232 @@ function EventForm({
   );
 }
 
+// ── Metric presets ────────────────────────────────────────────────────────────
+
+const METRIC_PRESETS = [
+  { id: 'revenue',   label: 'Revenue',      emoji: '💰', group: 'Sales',    query: (s: string, e: string) => `FROM sales SHOW gross_sales, net_sales, returns SINCE ${s} UNTIL ${e}` },
+  { id: 'orders',    label: 'Orders & AOV', emoji: '📦', group: 'Sales',    query: (s: string, e: string) => `FROM sales SHOW orders, average_order_value SINCE ${s} UNTIL ${e}` },
+  { id: 'products',  label: 'Top Products', emoji: '🏆', group: 'Sales',    query: (s: string, e: string) => `FROM sales SHOW net_sales, orders GROUP BY product_title ORDER BY net_sales DESC LIMIT 10 SINCE ${s} UNTIL ${e}` },
+  { id: 'cvr',       label: 'CVR & ATC',   emoji: '🛒', group: 'Sessions', query: (s: string, e: string) => `FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate, reached_checkout_rate SINCE ${s} UNTIL ${e}` },
+  { id: 'funnel',    label: 'Full Funnel',  emoji: '🔀', group: 'Sessions', query: (s: string, e: string) => `FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout SINCE ${s} UNTIL ${e}` },
+  { id: 'bounce',    label: 'Engagement',   emoji: '📊', group: 'Sessions', query: (s: string, e: string) => `FROM sessions SHOW sessions, bounce_rate, pageviews, pageviews_per_session, average_session_duration SINCE ${s} UNTIL ${e}` },
+] as const;
+
+// Column formatting helpers
+function formatMetricValue(colName: string, raw: string): string {
+  const n = parseFloat(raw);
+  if (isNaN(n)) return raw;
+  const col = colName.toLowerCase();
+  if (/gross_sales|net_sales|returns|average_order_value|total_sales/.test(col))
+    return `₹${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
+  if (/rate|_pct/.test(col))
+    return `${n.toFixed(2)}%`;
+  if (/duration/.test(col)) {
+    const mins = Math.floor(n / 60); const secs = Math.round(n % 60);
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  }
+  if (/pageviews_per_session/.test(col)) return n.toFixed(2);
+  return n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+}
+
+function prettyColName(col: string): string {
+  return col.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    .replace('Gross Sales', 'Gross Revenue')
+    .replace('Net Sales', 'Net Revenue')
+    .replace('Average Order Value', 'AOV')
+    .replace('Sessions That Completed Checkout', 'Completed Checkout')
+    .replace('Sessions That Reached Checkout', 'Reached Checkout')
+    .replace('Sessions With Cart Additions', 'Added To Cart')
+    .replace('Added To Cart Rate', 'ATC Rate')
+    .replace('Reached Checkout Rate', 'Checkout Rate')
+    .replace('Pageviews Per Session', 'Pages/Session')
+    .replace('Average Session Duration', 'Avg Duration')
+    .replace('Conversion Rate', 'CVR');
+}
+
+// ── Metrics panel inside each event card ─────────────────────────────────────
+
+type MetricResult = {
+  columns: { name: string; dataType: string }[];
+  rows: string[][];
+  error?: string;
+};
+
+function EventMetricsPanel({ ev, slug }: { ev: BrandEvent; slug: string }) {
+  const [open, setOpen] = useState(false);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<MetricResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function fetchMetric(presetId: string) {
+    const preset = METRIC_PRESETS.find(p => p.id === presetId);
+    if (!preset) return;
+    setActivePreset(presetId);
+    setLoading(true);
+    setResult(null);
+    setError(null);
+    try {
+      const query = preset.query(ev.startDate, ev.endDate);
+      const res = await fetch('/api/metrics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slug, query }),
+      });
+      const data = await res.json();
+      if (data.error) { setError(data.error); }
+      else { setResult(data); }
+    } catch {
+      setError('Failed to fetch metric.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const isGroupBy = result && result.rows.length > 1 && result.columns[0]?.dataType === 'String' && result.columns.length === 3;
+  // aggregate: 1 row of numbers; table: GROUP BY results
+
+  return (
+    <div style={{ marginTop: '14px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+      {/* Toggle button */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '6px',
+          background: open ? 'rgba(59,130,246,0.1)' : 'var(--bg-primary)',
+          border: `1px solid ${open ? 'rgba(59,130,246,0.35)' : 'var(--border-color)'}`,
+          borderRadius: '8px', padding: '6px 12px', cursor: 'pointer',
+          fontSize: '12px', fontWeight: '600',
+          color: open ? 'var(--accent-blue)' : 'var(--text-secondary)',
+          transition: 'all 0.15s',
+        }}
+      >
+        📊 Pull Event Metrics
+        <span style={{ fontSize: '10px', opacity: 0.7 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: '12px' }}>
+          {/* Preset buttons, grouped */}
+          {(['Sales', 'Sessions'] as const).map(group => (
+            <div key={group} style={{ marginBottom: '10px' }}>
+              <div style={{ fontSize: '10px', fontWeight: '700', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '6px' }}>
+                {group}
+              </div>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {METRIC_PRESETS.filter(p => p.group === group).map(preset => {
+                  const isActive = activePreset === preset.id;
+                  return (
+                    <button
+                      key={preset.id}
+                      onClick={() => fetchMetric(preset.id)}
+                      disabled={loading}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '5px',
+                        padding: '5px 12px', borderRadius: '8px', cursor: loading ? 'not-allowed' : 'pointer',
+                        fontSize: '12px', fontWeight: '600', border: '1px solid',
+                        background: isActive ? (group === 'Sales' ? 'rgba(34,197,94,0.12)' : 'rgba(168,85,247,0.12)') : 'var(--bg-primary)',
+                        borderColor: isActive ? (group === 'Sales' ? 'rgba(34,197,94,0.4)' : 'rgba(168,85,247,0.4)') : 'var(--border-color)',
+                        color: isActive ? (group === 'Sales' ? '#22c55e' : '#a855f7') : 'var(--text-secondary)',
+                        transition: 'all 0.15s',
+                        opacity: loading && !isActive ? 0.5 : 1,
+                      }}
+                    >
+                      {isActive && loading ? '⏳' : preset.emoji} {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          {/* Period note */}
+          <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginBottom: '10px', fontStyle: 'italic' }}>
+            Showing data for {fmtDate(ev.startDate)} → {fmtDate(ev.endDate)}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div style={{ fontSize: '12px', color: '#ef4444', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', padding: '8px 12px' }}>
+              ⚠️ {error}
+            </div>
+          )}
+
+          {/* Results */}
+          {result && !error && (
+            <div>
+              {isGroupBy ? (
+                // Table view for GROUP BY results (e.g. Top Products)
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr>
+                        {result.columns.map(col => (
+                          <th key={col.name} style={{
+                            textAlign: col.dataType === 'String' ? 'left' : 'right',
+                            padding: '6px 10px', fontSize: '10px', fontWeight: '700',
+                            color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em',
+                            borderBottom: '1px solid var(--border-color)',
+                          }}>
+                            {prettyColName(col.name)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.rows.slice(0, 10).map((row, i) => (
+                        <tr key={i} style={{ borderBottom: i < result.rows.length - 1 ? '1px solid var(--border-color)' : 'none' }}>
+                          {row.map((cell, j) => (
+                            <td key={j} style={{
+                              padding: '7px 10px',
+                              textAlign: result.columns[j]?.dataType === 'String' ? 'left' : 'right',
+                              color: j === 0 ? 'var(--text-primary)' : 'var(--text-secondary)',
+                              fontWeight: j === 0 ? '500' : '400',
+                            }}>
+                              {j === 0 ? cell : formatMetricValue(result.columns[j]?.name ?? '', cell)}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                // Stat card grid for aggregate results
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '8px' }}>
+                  {result.columns.map((col, i) => {
+                    const val = result.rows[0]?.[i] ?? '—';
+                    return (
+                      <div key={col.name} style={{
+                        background: 'var(--bg-primary)', border: '1px solid var(--border-color)',
+                        borderRadius: '8px', padding: '10px 12px',
+                      }}>
+                        <div style={{ fontSize: '10px', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                          {prettyColName(col.name)}
+                        </div>
+                        <div style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)' }}>
+                          {formatMetricValue(col.name, val)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Event card ────────────────────────────────────────────────────────────────
 
 function EventCard({
-  ev, onEdit, onDuplicate, onDelete,
+  ev, slug, onEdit, onDuplicate, onDelete,
 }: {
   ev: BrandEvent;
+  slug: string;
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
@@ -558,6 +778,9 @@ function EventCard({
           📝 {ev.notes}
         </div>
       )}
+
+      {/* Metrics panel */}
+      <EventMetricsPanel ev={ev} slug={slug} />
     </div>
   );
 }
@@ -787,6 +1010,7 @@ export function EventsManager({ slug, initialEvents }: EventsManagerProps) {
             <EventCard
               key={ev.id}
               ev={ev}
+              slug={slug}
               onEdit={() => openEdit(ev)}
               onDuplicate={() => openDuplicate(ev)}
               onDelete={() => handleDelete(ev.id)}
