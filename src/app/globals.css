@@ -1319,11 +1319,24 @@ textarea.form-input:focus {
 .mono { font-family: var(--f-mono); font-feature-settings: "tnum"; }
 
 /* ---- Responsive ---- */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 35;
+}
+
+.sidebar-overlay.active {
+  display: block;
+}
+
 @media (max-width: 900px) {
   .sidebar {
     transform: translateX(-100%);
+    z-index: 45;
   }
-  .sidebar.open {
+  .sidebar.active {
     transform: translateX(0);
     box-shadow: var(--shadow-md);
   }
