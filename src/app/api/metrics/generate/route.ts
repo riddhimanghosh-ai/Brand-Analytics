@@ -42,16 +42,27 @@ WORKING EXAMPLES for FROM sales:
 ═══════════════════════════════════════════════════════
 VALID SOURCE 2: FROM sessions
 ═══════════════════════════════════════════════════════
-SHOW columns:
-  sessions, conversion_rate, added_to_cart_rate
+SHOW columns (pick one or more):
+  sessions, online_store_visitors, pageviews, pageviews_per_session,
+  bounce_rate, bounces, average_session_duration,
+  added_to_cart_rate, sessions_with_cart_additions,
+  reached_checkout_rate, sessions_that_reached_checkout,
+  checkout_conversion_rate, sessions_that_completed_checkout,
+  sessions_that_reached_and_completed_checkout,
+  completed_checkout_rate, conversion_rate
+
+WHERE clause (optional): WHERE human_or_bot_session IN ('human')
 
 ⚠️ FROM sessions does NOT support GROUP BY — never add it.
 ⚠️ FROM sessions does NOT support TIMESERIES — never add it.
 ⚠️ FROM sessions only returns aggregate totals for the date window.
 
 WORKING EXAMPLES for FROM sessions:
-  Conversion summary: FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE startOfDay(-30d) UNTIL today
-  7-day sessions:     FROM sessions SHOW sessions, conversion_rate SINCE startOfDay(-7d) UNTIL today
+  Conversion summary:  FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE startOfDay(-30d) UNTIL today
+  7-day sessions:      FROM sessions SHOW sessions, conversion_rate SINCE startOfDay(-7d) UNTIL today
+  Bounce & pageviews:  FROM sessions SHOW sessions, pageviews, bounce_rate, pageviews_per_session SINCE startOfDay(-30d) UNTIL today
+  Funnel summary:      FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout SINCE startOfDay(-30d) UNTIL today
+  Human sessions only: FROM sessions SHOW sessions, conversion_rate WHERE human_or_bot_session IN ('human') SINCE startOfDay(-30d) UNTIL today
 
 ═══════════════════════════════════════════════════════
 ABSOLUTE RULES — violating these will produce an error
@@ -68,6 +79,14 @@ MAPPING COMMON QUESTIONS:
 - "revenue over time" → FROM sales TIMESERIES day
 - "conversion rate" → FROM sessions SHOW conversion_rate
 - "add to cart rate" → FROM sessions SHOW added_to_cart_rate
+- "cart additions" → FROM sessions SHOW sessions_with_cart_additions, added_to_cart_rate
+- "checkout rate" → FROM sessions SHOW sessions_that_reached_checkout, reached_checkout_rate
+- "checkout conversion" → FROM sessions SHOW sessions_that_completed_checkout, checkout_conversion_rate
+- "funnel" → FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout
+- "bounce rate" → FROM sessions SHOW sessions, bounce_rate, bounces
+- "pageviews" → FROM sessions SHOW pageviews, pageviews_per_session, sessions
+- "session duration" → FROM sessions SHOW sessions, average_session_duration
+- "visitors" → FROM sessions SHOW online_store_visitors, sessions
 - "orders by country" → FROM sales GROUP BY shipping_country
 - "refund rate" → FROM sales SHOW gross_sales, net_sales, returns
 - "AOV trend" → FROM sales SHOW average_order_value TIMESERIES day

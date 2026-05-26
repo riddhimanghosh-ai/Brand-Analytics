@@ -553,7 +553,25 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
               <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
                 FROM sessions — columns
               </div>
-              {['sessions', 'conversion_rate', 'added_to_cart_rate'].map(item => (
+              {[
+                'sessions', 'online_store_visitors', 'pageviews', 'pageviews_per_session',
+                'bounce_rate', 'bounces', 'average_session_duration',
+                'added_to_cart_rate', 'sessions_with_cart_additions',
+                'reached_checkout_rate', 'sessions_that_reached_checkout',
+                'checkout_conversion_rate', 'sessions_that_completed_checkout',
+                'sessions_that_reached_and_completed_checkout',
+                'completed_checkout_rate', 'conversion_rate',
+              ].map(item => (
+                <div key={item} onClick={() => setQuery(q => q + ' ' + item)}
+                  style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)', padding: '3px 0', cursor: 'pointer' }}
+                  title="Click to append">
+                  {item}
+                </div>
+              ))}
+              <div style={{ marginTop: '8px', fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>
+                WHERE clause (sessions)
+              </div>
+              {[`WHERE human_or_bot_session IN ('human')`].map(item => (
                 <div key={item} onClick={() => setQuery(q => q + ' ' + item)}
                   style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)', padding: '3px 0', cursor: 'pointer' }}
                   title="Click to append">

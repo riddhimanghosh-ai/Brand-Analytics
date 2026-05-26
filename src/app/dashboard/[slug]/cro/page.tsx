@@ -168,6 +168,13 @@ export default async function CROPage({ params }: { params: Promise<{ slug: stri
     aov, repeatRate, refundRate, totalOrders, totalRevenue, purchaseFrequency, revenuePerOrder,
   };
 
+  const prevValues: Record<string, number> = {
+    aov: prevAov,
+    totalOrders: prevOrders,
+    totalRevenue: kpis?.prevTotalRevenue ?? 0,
+    totalCustomers: kpis?.prevTotalCustomers ?? 0,
+  };
+
   const fmt  = (n: number) => Math.round(n).toLocaleString('en-IN');
   const fmtL = (n: number) => n >= 100000 ? `₹${(n / 100000).toFixed(2)}L` : `₹${fmt(n)}`;
 
@@ -302,11 +309,11 @@ export default async function CROPage({ params }: { params: Promise<{ slug: stri
           <div className="chart-card-subtitle" style={{ marginBottom: '20px' }}>
             Get notified on this page when a metric crosses your threshold. Alerts are evaluated live against your current 30-day data.
           </div>
-          <AlertRules slug={slug} initialRules={alertRules} currentValues={currentValues} />
+          <AlertRules slug={slug} initialRules={alertRules} currentValues={currentValues} prevValues={prevValues} />
           <div style={{ marginTop: '20px', padding: '14px', background: 'var(--bg-elevated)', borderRadius: '8px' }}>
             <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>💡 Alert ideas</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-              {['AOV drops below ₹900','Repeat rate drops below 15%','Refund rate rises above 5%','Orders drop below 100/month','Revenue drops below ₹10L','Purchase frequency drops below 1.2×'].map(idea => (
+              {['AOV drops below ₹900','Repeat rate drops below 15%','Refund rate rises above 5%','Orders drop below 100/month','Revenue drops below ₹10L','Purchase frequency drops below 1.2×','CVR drops >20% vs last period','Revenue drops >15% vs last period'].map(idea => (
                 <span key={idea} style={{ fontSize: '11px', color: 'var(--text-secondary)', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '4px', padding: '3px 8px' }}>{idea}</span>
               ))}
             </div>

@@ -6,7 +6,7 @@ export interface AlertRule {
   id: string;
   name: string;
   metric: string;
-  operator: 'drops_below' | 'rises_above';
+  operator: 'drops_below' | 'rises_above' | 'drops_by_pct' | 'spikes_by_pct';
   threshold: number;
   enabled: boolean;
 }
@@ -15,6 +15,7 @@ interface AlertRulesProps {
   slug: string;
   initialRules: AlertRule[];
   currentValues: Record<string, number>; // metric key → current value
+  prevValues?: Record<string, number>;   // metric key → previous period value
 }
 
 const METRICS = [
@@ -27,24 +28,38 @@ const METRICS = [
   { key: 'revenuePerOrder',   label: 'Revenue per Order (₹)',    format: (v: number) => `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 0 })}` },
 ];
 
-function isTriggered(rule: AlertRule, current: Record<string, number>): boolean {
+function isTriggered(rule: AlertRule, current: Record<string, number>, prev: Record<string, number>): boolean {
   const val = current[rule.metric];
   if (val === undefined || val === null) return false;
+
   if (rule.operator === 'drops_below') return val < rule.threshold;
   if (rule.operator === 'rises_above') return val > rule.threshold;
+
+  const prevVal = prev[rule.metric];
+  if (prevVal === undefined || prevVal === null || prevVal === 0) return false;
+
+  const pctChange = ((val - prevVal) / Math.abs(prevVal)) * 100;
+
+  if (rule.operator === 'drops_by_pct') return pctChange < -rule.threshold;
+  if (rule.operator === 'spikes_by_pct') return pctChange > rule.threshold;
+
   return false;
 }
 
-export function AlertRules({ slug, initialRules, currentValues }: AlertRulesProps) {
+function isPctOperator(op: AlertRule['operator']): boolean {
+  return op === 'drops_by_pct' || op === 'spikes_by_pct';
+}
+
+export function AlertRules({ slug, initialRules, currentValues, prevValues = {} }: AlertRulesProps) {
   const [rules, setRules] = useState<AlertRule[]>(initialRules);
   const [saving, setSaving] = useState(false);
 
   // New rule form state
-  const [newMetric, setNewMetric]     = useState(METRICS[0].key);
-  const [newOperator, setNewOperator] = useState<'drops_below' | 'rises_above'>('drops_below');
+  const [newMetric, setNewMetric]       = useState(METRICS[0].key);
+  const [newOperator, setNewOperator]   = useState<AlertRule['operator']>('drops_below');
   const [newThreshold, setNewThreshold] = useState('');
-  const [newName, setNewName]         = useState('');
-  const [adding, setAdding]           = useState(false);
+  const [newName, setNewName]           = useState('');
+  const [adding, setAdding]             = useState(false);
 
   async function persist(updated: AlertRule[]) {
     setSaving(true);
@@ -62,7 +77,13 @@ export function AlertRules({ slug, initialRules, currentValues }: AlertRulesProp
   const addRule = async () => {
     if (!newThreshold || isNaN(parseFloat(newThreshold))) return;
     const label = METRICS.find(m => m.key === newMetric)?.label ?? newMetric;
-    const name = newName.trim() || `${label} ${newOperator === 'drops_below' ? 'drops below' : 'rises above'} ${newThreshold}`;
+    const opLabel =
+      newOperator === 'drops_below'   ? 'drops below' :
+      newOperator === 'rises_above'   ? 'rises above' :
+      newOperator === 'drops_by_pct'  ? 'drops >' :
+      'spikes >';
+    const suffix = isPctOperator(newOperator) ? `${newThreshold}% vs prev` : newThreshold;
+    const name = newName.trim() || `${label} ${opLabel} ${suffix}`;
     const rule: AlertRule = {
       id: Date.now().toString(),
       name,
@@ -91,7 +112,7 @@ export function AlertRules({ slug, initialRules, currentValues }: AlertRulesProp
     await persist(updated);
   };
 
-  const triggeredRules = rules.filter(r => r.enabled && isTriggered(r, currentValues));
+  const triggeredRules = rules.filter(r => r.enabled && isTriggered(r, currentValues, prevValues));
 
   const inputStyle: React.CSSProperties = {
     padding: '7px 10px',
@@ -114,10 +135,14 @@ export function AlertRules({ slug, initialRules, currentValues }: AlertRulesProp
           </div>
           {triggeredRules.map(r => {
             const meta = METRICS.find(m => m.key === r.metric);
-            const cur = currentValues[r.metric];
+            const cur  = currentValues[r.metric];
+            const prev = prevValues[r.metric];
+            const pctBased = isPctOperator(r.operator);
             return (
               <div key={r.id} style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-                ⚠️ <strong>{r.name}</strong> — current: {meta ? meta.format(cur) : cur} (threshold: {r.threshold})
+                ⚠️ <strong>{r.name}</strong> — current: {meta ? meta.format(cur) : cur}
+                {pctBased && prev !== undefined && ` · prev: ${meta ? meta.format(prev) : prev}`}
+                {!pctBased && ` (threshold: ${r.threshold})`}
               </div>
             );
           })}
@@ -134,7 +159,15 @@ export function AlertRules({ slug, initialRules, currentValues }: AlertRulesProp
         {rules.map(rule => {
           const meta  = METRICS.find(m => m.key === rule.metric);
           const cur   = currentValues[rule.metric];
-          const fired = rule.enabled && isTriggered(rule, currentValues);
+          const prev  = prevValues[rule.metric];
+          const fired = rule.enabled && isTriggered(rule, currentValues, prevValues);
+          const pctBased = isPctOperator(rule.operator);
+          const opSymbol =
+            rule.operator === 'drops_below'  ? '< ' :
+            rule.operator === 'rises_above'  ? '> ' :
+            rule.operator === 'drops_by_pct' ? 'drops >' :
+            'spikes >';
+          const thresholdDisplay = pctBased ? `${rule.threshold}% vs prev` : rule.threshold;
           return (
             <div
               key={rule.id}
@@ -171,8 +204,9 @@ export function AlertRules({ slug, initialRules, currentValues }: AlertRulesProp
                   {rule.name}
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                  {meta?.label} {rule.operator === 'drops_below' ? '< ' : '> '}{rule.threshold}
+                  {meta?.label} {opSymbol}{thresholdDisplay}
                   {cur !== undefined && ` · now: ${meta ? meta.format(cur) : cur}`}
+                  {pctBased && prev !== undefined && ` · prev: ${meta ? meta.format(prev) : prev}`}
                 </div>
               </div>
 
@@ -211,21 +245,34 @@ export function AlertRules({ slug, initialRules, currentValues }: AlertRulesProp
             </div>
             <div>
               <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>CONDITION</label>
-              <select value={newOperator} onChange={e => setNewOperator(e.target.value as 'drops_below' | 'rises_above')} style={{ ...selectStyle, width: '100%' }}>
+              <select
+                value={newOperator}
+                onChange={e => setNewOperator(e.target.value as AlertRule['operator'])}
+                style={{ ...selectStyle, width: '100%' }}
+              >
                 <option value="drops_below">Drops below</option>
                 <option value="rises_above">Rises above</option>
+                <option value="drops_by_pct">Drops by % vs prev period</option>
+                <option value="spikes_by_pct">Spikes by % vs prev period</option>
               </select>
             </div>
             <div>
-              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>THRESHOLD VALUE</label>
+              <label style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                {isPctOperator(newOperator) ? '% CHANGE THRESHOLD' : 'THRESHOLD VALUE'}
+              </label>
               <input
                 type="number"
                 value={newThreshold}
                 onChange={e => setNewThreshold(e.target.value)}
-                placeholder="e.g. 1000"
+                placeholder={isPctOperator(newOperator) ? 'e.g. 10' : 'e.g. 1000'}
                 style={{ ...inputStyle, width: '100%', boxSizing: 'border-box' }}
                 onKeyDown={e => e.key === 'Enter' && addRule()}
               />
+              {isPctOperator(newOperator) && (
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  e.g. 10 = alert when {newOperator === 'drops_by_pct' ? 'drops' : 'spikes'} more than 10%
+                </div>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
