@@ -59,6 +59,7 @@ export async function PUT(
       'pinterestAccessToken', 'pinterestAdAccountId',
       'customDashboard', 'savedMetrics', 'competitors',
       'cogsPercent', 'avgShippingCost', 'avgReturnRate',
+      'alertRules',
     ];
     const updates = Object.fromEntries(
       allowedFields
