@@ -6,6 +6,7 @@ import * as ga4 from '@/lib/services/ga4';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
 import { getDemoChatResponse } from '@/lib/demo-data';
+import { requireBrandAccess } from '@/lib/auth-server';
 
 // Detect which platforms are relevant to the user's question.
 // Returns a set of platform keys. Falls back to all connected platforms if unclear.
@@ -66,6 +67,10 @@ export async function POST(request: Request) {
     if (!slug || !messages?.length) {
       return NextResponse.json({ error: 'Missing slug or messages' }, { status: 400 });
     }
+
+    // ── Auth: ensure the logged-in user can access this brand ────────────────
+    const { denied } = await requireBrandAccess(slug);
+    if (denied) return denied;
 
     const brand = await getBrand(slug);
     if (!brand) {
@@ -135,6 +140,18 @@ export async function POST(request: Request) {
     const lastUserMsg = messages.filter((m: { role: string }) => m.role === 'user').slice(-1)[0]?.content?.toLowerCase() ?? '';
     const wantsProducts = /product|best.sell|top.sell|item|sku|variant|collection|inventory/.test(lastUserMsg);
 
+    // Fetch shop currency so we can label ad spend correctly (INR, USD, etc.)
+    let shopCurrency = 'INR'; // safe default for Hira
+    if (shopifyConfig) {
+      try {
+        const shopInfo = await shopify.getShopInfo(shopifyConfig) as { currencyCode?: string } | null;
+        if (shopInfo?.currencyCode) shopCurrency = shopInfo.currencyCode;
+      } catch { /* non-fatal */ }
+    }
+    // Map ISO currency code → symbol
+    const currencySymbol: Record<string, string> = { INR: '₹', USD: '$', GBP: '£', EUR: '€', AUD: 'A$', CAD: 'C$' };
+    const sym = currencySymbol[shopCurrency] ?? shopCurrency + ' ';
+
     // Fetch only the platforms we need, in parallel
     const [shopifyResult, ga4Result, metaResult, googleAdsResult, productsResult] = await Promise.allSettled([
       shopifyConfig
@@ -203,7 +220,7 @@ export async function POST(request: Request) {
     if (metaResult.status === 'fulfilled') {
       const k = metaResult.value;
       sections.push(
-        `Meta Ads (last 30d): spend $${k.spend.toFixed(2)}, ROAS ${k.roas.toFixed(2)}x, purchases ${k.purchases}, purchase value $${k.purchaseValue.toFixed(2)}, CTR ${k.ctr.toFixed(2)}%, CPC $${k.cpc.toFixed(2)}, CPM $${k.cpm.toFixed(2)}, reach ${k.reach.toLocaleString()}, add to carts ${k.addToCarts}, cost/purchase $${k.costPerPurchase.toFixed(2)}`
+        `Meta Ads (last 30d, currency: ${shopCurrency}): spend ${sym}${k.spend.toFixed(2)}, ROAS ${k.roas.toFixed(2)}x, purchases ${k.purchases}, purchase value ${sym}${k.purchaseValue.toFixed(2)}, CTR ${k.ctr.toFixed(2)}%, CPC ${sym}${k.cpc.toFixed(2)}, CPM ${sym}${k.cpm.toFixed(2)}, reach ${k.reach.toLocaleString()}, add to carts ${k.addToCarts}, cost/purchase ${sym}${k.costPerPurchase.toFixed(2)}`
       );
     } else if (shouldFetch.meta === false && intent.has('meta')) {
       sections.push('Meta Ads: not connected');
@@ -212,7 +229,7 @@ export async function POST(request: Request) {
     if (googleAdsResult.status === 'fulfilled') {
       const k = googleAdsResult.value;
       sections.push(
-        `Google Ads (last 30d): spend $${k.spend.toFixed(2)}, ROAS ${k.roas.toFixed(2)}x, conversions ${k.conversions.toFixed(1)}, conversion value $${k.conversionValue.toFixed(2)}, CTR ${k.ctr.toFixed(2)}%, CPC $${k.avgCpc.toFixed(2)}, cost/conversion $${k.costPerConversion.toFixed(2)}`
+        `Google Ads (last 30d, currency: ${shopCurrency}): spend ${sym}${k.spend.toFixed(2)}, ROAS ${k.roas.toFixed(2)}x, conversions ${k.conversions.toFixed(1)}, conversion value ${sym}${k.conversionValue.toFixed(2)}, CTR ${k.ctr.toFixed(2)}%, CPC ${sym}${k.avgCpc.toFixed(2)}, cost/conversion ${sym}${k.costPerConversion.toFixed(2)}`
       );
     } else if (shouldFetch.googleAds === false && intent.has('googleAds')) {
       sections.push('Google Ads: not connected');

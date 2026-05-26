@@ -16,7 +16,7 @@ ${brandContext}
 
 RULES:
 1. Use ONLY the numbers above. Never invent, estimate, or round unless rounding a raw number for readability.
-2. Use ₹ for rupees, $ for USD. Be exact.
+2. Use the currency symbol shown in the data context for all monetary values. The brand context includes "currency: INR/USD/etc." for ad platforms — use that symbol, never assume USD. If Shopify data shows ₹, use ₹ throughout.
 3. When product data is present, rank/compare products by name with their exact revenue and order count.
 4. Every recommendation must cite a specific metric from the data.
 5. Be direct. No preamble ("Great question!"), no sign-off, no generic advice.

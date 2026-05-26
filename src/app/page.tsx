@@ -13,6 +13,9 @@ export default async function HomePage() {
   const cookieStore = await cookies();
   const user = await verifySession(cookieStore.get(COOKIE_NAME)?.value);
 
+  // Not logged in → always send to login page
+  if (!user) redirect('/login');
+
   const allBrands = await getBrands().catch(() => []);
   const visibleBrands = filterBrandsForUser(allBrands, user);
 
