@@ -616,6 +616,29 @@ export async function getKPIs(
       topProduct = String(productRows[0]?.product_title ?? '');
     } catch { /* keep empty if it fails */ }
 
+    // Items per order — ShopifyQL has no quantity column; fetch a capped sample via GraphQL
+    let averageItemsPerOrder = 0;
+    try {
+      const itemsQuery = `{
+        orders(first: 250, query: "created_at:>=${currentStart} AND created_at:<=${currentEnd} AND financial_status:paid") {
+          edges { node { lineItems(first: 50) { edges { node { quantity } } } } }
+        }
+      }`;
+      const itemsRes = await fetch(
+        `https://${config.storeUrl}/admin/api/2025-10/graphql.json`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken }, body: JSON.stringify({ query: itemsQuery }) }
+      );
+      if (itemsRes.ok) {
+        const itemsData = await itemsRes.json() as { data?: { orders?: { edges: Array<{ node: { lineItems: { edges: Array<{ node: { quantity: number } }> } } }> } } };
+        const orderEdges = itemsData.data?.orders?.edges ?? [];
+        if (orderEdges.length > 0) {
+          const totalItems = orderEdges.reduce((sum, e) =>
+            sum + e.node.lineItems.edges.reduce((s, li) => s + (li.node.quantity || 0), 0), 0);
+          averageItemsPerOrder = totalItems / orderEdges.length;
+        }
+      }
+    } catch { /* non-critical — leave as 0 */ }
+
     return {
       totalRevenue,
       totalOrders,
@@ -625,7 +648,7 @@ export async function getKPIs(
       conversionRate,
       cartAbandonmentRate,
       refundRate,
-      averageItemsPerOrder:     0,
+      averageItemsPerOrder,
       returningCustomerRevenue: 0,
       newCustomerRevenue:       0,
       topSellingProduct:        topProduct,

@@ -1,8 +1,10 @@
-import { getBrand } from '@/lib/mongodb-store';
+import { getBrand, getBrands } from '@/lib/mongodb-store';
 import { redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { ChatPanel } from '@/components/ChatPanel';
 import { NavLink } from '@/components/NavLink';
 import { SidebarToggle } from '@/components/SidebarToggle';
+import { verifySession, canAccessBrand, filterBrandsForUser, COOKIE_NAME } from '@/lib/auth';
 
 export default async function DashboardLayout({
   children,
@@ -13,10 +15,16 @@ export default async function DashboardLayout({
 }) {
   const { slug } = await params;
 
+  const cookieStore = await cookies();
+  const user = await verifySession(cookieStore.get(COOKIE_NAME)?.value);
+  if (!canAccessBrand(user, slug)) redirect('/');
+
   const brand = await getBrand(slug);
-  if (!brand) {
-    redirect('/');
-  }
+  if (!brand) redirect('/');
+
+  const allBrandsData = await getBrands();
+  const visibleBrands = filterBrandsForUser(allBrandsData, user);
+  const allBrands = visibleBrands.map((b) => ({ name: b.name, slug: b.slug }));
 
   const isDemoMode = slug === 'demo';
   const connections = isDemoMode
@@ -31,18 +39,41 @@ export default async function DashboardLayout({
         klaviyo: !!brand.klaviyoApiKey,
       };
 
+  const soonBadge = (
+    <span style={{
+      marginLeft: 'auto',
+      fontFamily: 'var(--f-mono)',
+      fontSize: '9px',
+      fontWeight: 500,
+      color: '#B45309',
+      background: 'rgba(180,83,9,0.08)',
+      padding: '2px 5px',
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase' as const,
+    }}>Soon</span>
+  );
+
   return (
     <div className="app-layout">
       <SidebarToggle />
 
-      {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <div className="logo-icon">HF</div>
+          <div className="logo-icon">BA</div>
           <div>
-            <h1>Hira Fragrances</h1>
-            <span>Analytics</span>
+            <h1>Brand Analytics</h1>
+            <span>E-Commerce Dashboard</span>
           </div>
+        </div>
+
+        {/* Brand Switcher */}
+        <div className="brand-switcher">
+          <div className="brand-switcher-label">Brand</div>
+          <select defaultValue={slug} id="brand-switcher-select">
+            {allBrands.map((b) => (
+              <option key={b.slug} value={b.slug}>{b.name}</option>
+            ))}
+          </select>
         </div>
 
         <nav className="sidebar-nav">
@@ -95,26 +126,27 @@ export default async function DashboardLayout({
             {(connections.metaAds || connections.googleAds) && <span className="nav-badge">Live</span>}
           </NavLink>
 
-          <span className="nav-link disabled" style={{ pointerEvents: 'none', cursor: 'not-allowed', userSelect: 'none' }}>
+          {/* Upcoming — non-navigable */}
+          <span className="nav-link" style={{ pointerEvents: 'none', cursor: 'default', opacity: 0.55 }}>
             TikTok Ads
-            <span style={{ marginLeft: 'auto', fontFamily: 'var(--f-mono)', fontSize: '9px', fontWeight: '500', color: '#B45309', background: 'rgba(180,83,9,0.08)', padding: '2px 5px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Soon</span>
+            {soonBadge}
           </span>
 
-          <span className="nav-link disabled" style={{ pointerEvents: 'none', cursor: 'not-allowed', userSelect: 'none' }}>
+          <span className="nav-link" style={{ pointerEvents: 'none', cursor: 'default', opacity: 0.55 }}>
             Email Marketing
-            <span style={{ marginLeft: 'auto', fontFamily: 'var(--f-mono)', fontSize: '9px', fontWeight: '500', color: '#B45309', background: 'rgba(180,83,9,0.08)', padding: '2px 5px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Soon</span>
+            {soonBadge}
           </span>
 
-          <span className="nav-link disabled" style={{ pointerEvents: 'none', cursor: 'not-allowed', userSelect: 'none' }}>
+          <span className="nav-link" style={{ pointerEvents: 'none', cursor: 'default', opacity: 0.55 }}>
             Social Comments
-            <span style={{ marginLeft: 'auto', fontFamily: 'var(--f-mono)', fontSize: '9px', fontWeight: '500', color: '#B45309', background: 'rgba(180,83,9,0.08)', padding: '2px 5px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Soon</span>
+            {soonBadge}
           </span>
 
           <div className="nav-section-label">Competitive Intel</div>
 
-          <span className="nav-link disabled" style={{ pointerEvents: 'none', cursor: 'not-allowed', userSelect: 'none' }}>
+          <span className="nav-link" style={{ pointerEvents: 'none', cursor: 'default', opacity: 0.55 }}>
             Competitor Ads
-            <span style={{ marginLeft: 'auto', fontFamily: 'var(--f-mono)', fontSize: '9px', fontWeight: '500', color: '#B45309', background: 'rgba(180,83,9,0.08)', padding: '2px 5px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Soon</span>
+            {soonBadge}
           </span>
 
           <div className="nav-section-label">Tools</div>
@@ -128,19 +160,22 @@ export default async function DashboardLayout({
           <NavLink href={`/dashboard/${slug}/settings`}>
             Connections
           </NavLink>
+
+          <NavLink href="/" exact>
+            All Brands
+          </NavLink>
         </nav>
 
-        {/* Sidebar Footer */}
         <div className="sidebar-footer">
           <div className="platform-dots">
             {[
-              { key: 'shopify',    label: 'Shopify',           on: connections.shopify },
-              { key: 'ga4',        label: 'Google Analytics',  on: connections.ga4 },
-              { key: 'metaAds',    label: 'Meta Ads',          on: connections.metaAds },
-              { key: 'googleAds',  label: 'Google Ads',        on: connections.googleAds },
-              { key: 'ai',         label: 'AI Assistant',      on: connections.ai },
-              { key: 'tiktok',     label: 'TikTok',            on: connections.tiktok },
-              { key: 'klaviyo',    label: 'Klaviyo',           on: connections.klaviyo },
+              { key: 'shopify',   label: 'Shopify',           on: connections.shopify },
+              { key: 'ga4',       label: 'Google Analytics',  on: connections.ga4 },
+              { key: 'metaAds',   label: 'Meta Ads',          on: connections.metaAds },
+              { key: 'googleAds', label: 'Google Ads',        on: connections.googleAds },
+              { key: 'ai',        label: 'AI',                on: connections.ai },
+              { key: 'tiktok',    label: 'TikTok',            on: connections.tiktok },
+              { key: 'klaviyo',   label: 'Klaviyo',           on: connections.klaviyo },
             ].map(({ key, label, on }) => (
               <span
                 key={key}
@@ -155,13 +190,21 @@ export default async function DashboardLayout({
         </div>
       </aside>
 
-      {/* Main Content */}
       <main className="main-content">
         {children}
       </main>
 
-      {/* AI Chat */}
       <ChatPanel slug={slug} brandName={brand.name} hasAI={connections.ai} />
+
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `
+            document.getElementById('brand-switcher-select')?.addEventListener('change', function(e) {
+              window.location.href = '/dashboard/' + e.target.value;
+            });
+          `,
+        }}
+      />
     </div>
   );
 }
