@@ -161,6 +161,10 @@ export default async function DashboardLayout({
             Connections
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/help`}>
+            Help & Guide
+          </NavLink>
+
           <NavLink href="/" exact>
             All Brands
           </NavLink>

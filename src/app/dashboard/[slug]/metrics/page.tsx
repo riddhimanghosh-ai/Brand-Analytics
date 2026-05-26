@@ -6,32 +6,32 @@ import { MetricChart } from '@/components/MetricChart';
 const PRESETS = [
   {
     name: '📈 Revenue by Day',
-    query: 'FROM sales SHOW total_sales TIMESERIES day SINCE startOfDay(-90d) UNTIL today ORDER BY day ASC LIMIT 1000',
+    query: 'FROM sales SHOW net_sales TIMESERIES day SINCE startOfDay(-90d) UNTIL today ORDER BY day ASC LIMIT 400',
     chartType: 'line' as const,
-  },
-  {
-    name: '📦 Orders by Source',
-    query: 'FROM orders SHOW orders_count GROUPED BY source_name SINCE startOfDay(-90d) UNTIL today ORDER BY orders_count DESC LIMIT 20',
-    chartType: 'bar' as const,
   },
   {
     name: '🏆 Top Products',
-    query: 'FROM products SHOW net_sales GROUPED BY product_title SINCE startOfDay(-90d) UNTIL today ORDER BY net_sales DESC LIMIT 20',
+    query: 'FROM sales SHOW net_sales, orders GROUP BY product_title ORDER BY net_sales DESC LIMIT 20 SINCE startOfDay(-30d) UNTIL today',
     chartType: 'bar' as const,
   },
   {
-    name: '🛒 Fulfillment Status',
-    query: 'FROM fulfillments SHOW orders_fulfilled, orders_shipped, orders_delivered TIMESERIES day WITH TOTALS, PERCENT_CHANGE SINCE startOfDay(-90d) UNTIL today COMPARE TO previous_period ORDER BY day ASC LIMIT 1000',
+    name: '📦 Orders by Country',
+    query: 'FROM sales SHOW orders, net_sales GROUP BY shipping_country ORDER BY orders DESC LIMIT 20 SINCE startOfDay(-90d) UNTIL today',
+    chartType: 'bar' as const,
+  },
+  {
+    name: '🔄 Sessions Funnel',
+    query: 'FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE startOfDay(-30d) UNTIL today',
+    chartType: 'bar' as const,
+  },
+  {
+    name: '💰 AOV Trend',
+    query: 'FROM sales SHOW average_order_value TIMESERIES day SINCE startOfDay(-30d) UNTIL today ORDER BY day ASC',
     chartType: 'line' as const,
   },
   {
-    name: '💳 Cart Abandonment by Device',
-    query: 'FROM checkouts SHOW abandoned_checkouts_count GROUPED BY device_type SINCE startOfDay(-30d) UNTIL today',
-    chartType: 'pie' as const,
-  },
-  {
-    name: '👥 Customers by Country',
-    query: 'FROM customers SHOW customer_count GROUPED BY billing_country SINCE startOfDay(-90d) UNTIL today ORDER BY customer_count DESC LIMIT 20',
+    name: '📊 Gross vs Net Sales',
+    query: 'FROM sales SHOW gross_sales, net_sales, returns TIMESERIES week SINCE startOfDay(-90d) UNTIL today ORDER BY week ASC',
     chartType: 'bar' as const,
   },
 ];
@@ -387,10 +387,10 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
           <div className="form-card-title">📖 ShopifyQL Quick Reference</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginTop: '12px' }}>
             {[
-              { title: 'Data Sources (FROM)', items: ['sales', 'orders', 'products', 'customers', 'checkouts', 'fulfillments', 'inventory'] },
+              { title: 'Data Sources (FROM)', items: ['sales', 'sessions'] },
               { title: 'Time Ranges (SINCE)', items: ['startOfDay(-30d)', 'startOfMonth(-3m)', 'startOfYear(-1y)', '"2024-01-01"'] },
-              { title: 'Grouping', items: ['GROUPED BY product_title', 'GROUPED BY source_name', 'GROUPED BY billing_country', 'GROUPED BY device_type'] },
-              { title: 'Modifiers', items: ['WITH TOTALS', 'PERCENT_CHANGE', 'COMPARE TO previous_period', 'TIMESERIES day/week/month'] },
+              { title: 'Grouping (GROUP BY)', items: ['GROUP BY product_title', 'GROUP BY shipping_country'] },
+              { title: 'Modifiers', items: ['TIMESERIES day', 'TIMESERIES week', 'TIMESERIES month', 'ORDER BY ... ASC/DESC'] },
             ].map(section => (
               <div key={section.title}>
                 <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>

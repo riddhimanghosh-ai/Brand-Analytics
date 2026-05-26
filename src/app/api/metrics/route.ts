@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getBrand } from '@/lib/mongodb-store';
 
-const API_VERSION = '2024-10';
+const API_VERSION = '2025-10';
 
 async function shopifyGQL(storeUrl: string, token: string, query: string, variables?: Record<string, unknown>) {
   const url = `https://${storeUrl}/admin/api/${API_VERSION}/graphql.json`;
@@ -65,7 +65,7 @@ async function fetchAllOrders(storeUrl: string, token: string, sinceISO: string)
           pageInfo { hasNextPage endCursor }
           nodes {
             name totalPrice createdAt sourceIdentifier
-            fulfillmentStatus
+            displayFulfillmentStatus
             lineItems(first: 10) {
               nodes { title quantity originalUnitPrice }
             }
@@ -84,7 +84,7 @@ async function fetchAllOrders(storeUrl: string, token: string, sinceISO: string)
         totalPrice: o.totalPrice,
         createdAt: o.createdAt,
         sourceName: o.sourceIdentifier || null,
-        fulfillmentStatus: o.fulfillmentStatus || null,
+        fulfillmentStatus: o.displayFulfillmentStatus || null,
         lineItems: (o.lineItems?.nodes || []).map((li: { title: string; quantity: number; originalUnitPrice: string }) => ({
           title: li.title,
           quantity: li.quantity,
