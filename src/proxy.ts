@@ -1,31 +1,24 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifySession, canAccessBrand, COOKIE_NAME } from '@/lib/auth';
+
+const HIRA_AUTH_COOKIE = 'hira-auth';
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow login page and auth API
-  if (pathname === '/login' || pathname.startsWith('/api/auth')) {
+  // Allow login page, auth API routes, and static assets
+  if (
+    pathname === '/login' ||
+    pathname.startsWith('/api/auth/')
+  ) {
     return NextResponse.next();
   }
 
-  // Resolve user from signed session cookie
-  const token = request.cookies.get(COOKIE_NAME)?.value;
-  const user = await verifySession(token);
-  if (!user) {
+  // Check for hira-auth session cookie
+  const authCookie = request.cookies.get(HIRA_AUTH_COOKIE)?.value;
+  if (authCookie !== '1') {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
-  }
-
-  // Enforce per-user brand scope on dashboard pages
-  const dashMatch = pathname.match(/^\/dashboard\/([^/]+)/);
-  if (dashMatch) {
-    const slug = decodeURIComponent(dashMatch[1]);
-    if (!canAccessBrand(user, slug)) {
-      // Redirect non-admins back to home (their brand list page)
-      return NextResponse.redirect(new URL('/', request.url));
-    }
   }
 
   return NextResponse.next();

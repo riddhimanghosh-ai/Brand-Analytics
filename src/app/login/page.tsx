@@ -59,17 +59,18 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const res = await fetch('/api/auth', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
+        redirect: 'manual',
       });
 
-      if (res.ok) {
+      if (res.ok || res.status === 307 || res.status === 308 || res.type === 'opaqueredirect') {
         router.push('/');
         router.refresh();
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         setError(data.error || 'Login failed');
       }
     } catch {
@@ -107,8 +108,8 @@ export default function LoginPage() {
             fontSize: '16px', fontWeight: '700',
             background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
             WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent',
-          }}>Brand Analytics</div>
-          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>by Devx Labs</div>
+          }}>Hira Fragrances</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Analytics Dashboard</div>
         </div>
       </div>
 

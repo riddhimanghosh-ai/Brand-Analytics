@@ -1,10 +1,8 @@
-import { getBrand, getBrands } from '@/lib/mongodb-store';
+import { getBrand } from '@/lib/mongodb-store';
 import { redirect } from 'next/navigation';
-import { cookies } from 'next/headers';
 import { ChatPanel } from '@/components/ChatPanel';
 import { NavLink } from '@/components/NavLink';
 import { SidebarToggle } from '@/components/SidebarToggle';
-import { verifySession, canAccessBrand, filterBrandsForUser, COOKIE_NAME } from '@/lib/auth';
 
 export default async function DashboardLayout({
   children,
@@ -15,23 +13,10 @@ export default async function DashboardLayout({
 }) {
   const { slug } = await params;
 
-  // Resolve current user & enforce brand-scope (middleware already does this,
-  // but a server-side check here defends against any edge case where middleware
-  // doesn't run e.g. internal routes).
-  const cookieStore = await cookies();
-  const user = await verifySession(cookieStore.get(COOKIE_NAME)?.value);
-  if (!canAccessBrand(user, slug)) {
-    redirect('/');
-  }
-
   const brand = await getBrand(slug);
   if (!brand) {
     redirect('/');
   }
-
-  const allBrandsData = await getBrands();
-  const visibleBrands = filterBrandsForUser(allBrandsData, user);
-  const allBrands = visibleBrands.map((b) => ({ name: b.name, slug: b.slug }));
 
   const isDemoMode = slug === 'demo';
   const connections = isDemoMode
@@ -46,9 +31,6 @@ export default async function DashboardLayout({
         klaviyo: !!brand.klaviyoApiKey,
       };
 
-  const connectedCount = Object.values(connections).filter(Boolean).length;
-  const totalPlatforms = Object.keys(connections).length;
-
   return (
     <div className="app-layout">
       {/* Hamburger Menu + Sidebar Toggle */}
@@ -57,31 +39,19 @@ export default async function DashboardLayout({
       {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-logo">
-          <div className="logo-icon">B</div>
+          <div className="logo-icon">H</div>
           <div>
-            <h1>Brand Analytics</h1>
-            <span>E-Commerce Dashboard</span>
+            <h1>Hira Fragrances</h1>
+            <span>Analytics Dashboard</span>
           </div>
         </div>
 
-        {/* Brand Switcher */}
+        {/* Brand Identity */}
         <div className="brand-switcher">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <div className="brand-switcher-label">Brand</div>
-            <a href="/brands/new" title="Add new brand" className="add-brand-btn">
-              ➕
-            </a>
+          <div className="brand-switcher-label">Brand</div>
+          <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)', padding: '6px 0' }}>
+            Hira Fragrances
           </div>
-          <select
-            defaultValue={slug}
-            id="brand-switcher-select"
-          >
-            {allBrands.map((b) => (
-              <option key={b.slug} value={b.slug}>
-                {b.name}
-              </option>
-            ))}
-          </select>
         </div>
 
         {/* Navigation */}
@@ -143,30 +113,31 @@ export default async function DashboardLayout({
             Ads Manager
           </NavLink>
 
-          <NavLink href={`/dashboard/${slug}/tiktok`} disabled={!connections.tiktok} disabledPlatform="TikTok">
+          <span className="nav-link disabled" style={{ pointerEvents: 'none', cursor: 'not-allowed', userSelect: 'none' }}>
             <span className="nav-icon">🎵</span>
             TikTok Ads
-            {connections.tiktok ? <span className="nav-badge">Live</span> : <span style={{ fontSize: '9px', fontWeight: '600', color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', padding: '1px 5px', marginLeft: 'auto', whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Coming soon</span>}
-          </NavLink>
+            <span style={{ fontSize: '9px', fontWeight: '600', color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', padding: '1px 5px', marginLeft: 'auto', whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Soon</span>
+          </span>
 
-          <NavLink href={`/dashboard/${slug}/klaviyo`} disabled={!connections.klaviyo} disabledPlatform="Klaviyo">
+          <span className="nav-link disabled" style={{ pointerEvents: 'none', cursor: 'not-allowed', userSelect: 'none' }}>
             <span className="nav-icon">📧</span>
             Email Marketing
-            {connections.klaviyo && <span className="nav-badge">Live</span>}
-          </NavLink>
+            <span style={{ fontSize: '9px', fontWeight: '600', color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', padding: '1px 5px', marginLeft: 'auto', whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Soon</span>
+          </span>
 
-          <NavLink href={`/dashboard/${slug}/social`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
+          <span className="nav-link disabled" style={{ pointerEvents: 'none', cursor: 'not-allowed', userSelect: 'none' }}>
             <span className="nav-icon">💬</span>
             Social Comments
-          </NavLink>
+            <span style={{ fontSize: '9px', fontWeight: '600', color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', padding: '1px 5px', marginLeft: 'auto', whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Soon</span>
+          </span>
 
           <div className="nav-section-label">Competitive Intel</div>
 
-          <NavLink href={`/dashboard/${slug}/competitors`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
+          <span className="nav-link disabled" style={{ pointerEvents: 'none', cursor: 'not-allowed', userSelect: 'none' }}>
             <span className="nav-icon">🔍</span>
             Competitor Ads
-            {connections.metaAds && <span className="nav-badge">Live</span>}
-          </NavLink>
+            <span style={{ fontSize: '9px', fontWeight: '600', color: '#f59e0b', background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', padding: '1px 5px', marginLeft: 'auto', whiteSpace: 'nowrap', letterSpacing: '0.03em' }}>Soon</span>
+          </span>
 
           <div className="nav-section-label">Tools</div>
 
@@ -182,10 +153,6 @@ export default async function DashboardLayout({
             Connections
           </NavLink>
 
-          <NavLink href="/" exact>
-            <span className="nav-icon">↩️</span>
-            All Brands
-          </NavLink>
         </nav>
 
         {/* Sidebar Footer */}
@@ -229,16 +196,6 @@ export default async function DashboardLayout({
       {/* AI Chat — always show the trigger, error message if no key */}
       <ChatPanel slug={slug} brandName={brand.name} hasAI={connections.gemini} />
 
-      {/* Brand Switcher Script */}
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            document.getElementById('brand-switcher-select')?.addEventListener('change', function(e) {
-              window.location.href = '/dashboard/' + e.target.value;
-            });
-          `,
-        }}
-      />
     </div>
   );
 }
