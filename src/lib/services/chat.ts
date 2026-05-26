@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import type { ChatMessage } from '@/types';
 
-const MODEL = 'claude-3-5-sonnet-20241022';
+const MODEL = 'claude-sonnet-4-5';
 
 export async function streamChat(
   apiKey: string,

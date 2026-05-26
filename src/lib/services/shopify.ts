@@ -1497,6 +1497,34 @@ async function buildAllAnalyticsFromShopifyQL(
     { stage: 'Total Orders', count: totalOrders, dropoffRate: 0 },
   ];
 
+  // ── Items per order via GraphQL (ShopifyQL has no quantity column) ────────
+  let averageItemsPerOrder = 0;
+  try {
+    const itemsQuery = `{
+      orders(first: 250, query: "created_at:>=${startDate} AND created_at:<=${endDate} AND financial_status:paid") {
+        edges { node { lineItems(first: 50) { edges { node { quantity } } } } }
+      }
+    }`;
+    const itemsRes = await fetch(
+      `https://${config.storeUrl}/admin/api/2025-10/graphql.json`,
+      { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken }, body: JSON.stringify({ query: itemsQuery }) }
+    );
+    if (itemsRes.ok) {
+      const itemsData = await itemsRes.json() as { data?: { orders?: { edges: Array<{ node: { lineItems: { edges: Array<{ node: { quantity: number } }> } } }> } } };
+      const orderEdges = itemsData.data?.orders?.edges ?? [];
+      if (orderEdges.length > 0) {
+        const totalItems = orderEdges.reduce((sum, e) =>
+          sum + e.node.lineItems.edges.reduce((s, li) => s + (li.node.quantity || 0), 0), 0);
+        averageItemsPerOrder = totalItems / orderEdges.length;
+      }
+    }
+  } catch { /* non-critical — leave as 0 */ }
+
+  // ── Revenue split by customer type ──────────────────────────────────────
+  const returningFrac = totalCustomers > 0 ? returningCustomers / totalCustomers : 0;
+  const returningCustomerRevenue = totalRevenue * returningFrac;
+  const newCustomerRevenue = totalRevenue * (1 - returningFrac);
+
   // ── Assemble KPIs ────────────────────────────────────────────────────────
   const kpis: ShopifyKPIs = {
     totalRevenue,
@@ -1507,9 +1535,9 @@ async function buildAllAnalyticsFromShopifyQL(
     conversionRate,
     cartAbandonmentRate,
     refundRate,
-    averageItemsPerOrder:     0,
-    returningCustomerRevenue: 0,
-    newCustomerRevenue:       0,
+    averageItemsPerOrder,
+    returningCustomerRevenue,
+    newCustomerRevenue,
     topSellingProduct:        products[0]?.title ?? '',
     averageFulfillmentDays:   0,
     prevTotalRevenue:         prevRevenue,
@@ -1530,8 +1558,8 @@ async function buildAllAnalyticsFromShopifyQL(
         { name: 'Returning Customers', value: returningCustomers },
       ],
       revenueBySegment: [
-        { name: 'New Customer Revenue',  value: 0 },
-        { name: 'Returning Revenue',     value: 0 },
+        { name: 'New Customer Revenue',  value: newCustomerRevenue },
+        { name: 'Returning Revenue',     value: returningCustomerRevenue },
       ],
       topCustomers: [],
     },
