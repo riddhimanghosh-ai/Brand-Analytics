@@ -127,10 +127,18 @@ export async function POST(request: Request) {
         ),
     };
 
+    const shopifyConfig = shouldFetch.shopify
+      ? { storeUrl: brand.shopifyStoreUrl!, accessToken: brand.shopifyAccessToken! }
+      : null;
+
+    // Detect if question is product-focused (fetch top products list too)
+    const lastUserMsg = messages.filter((m: { role: string }) => m.role === 'user').slice(-1)[0]?.content?.toLowerCase() ?? '';
+    const wantsProducts = /product|best.sell|top.sell|item|sku|variant|collection|inventory/.test(lastUserMsg);
+
     // Fetch only the platforms we need, in parallel
-    const [shopifyResult, ga4Result, metaResult, googleAdsResult] = await Promise.allSettled([
-      shouldFetch.shopify
-        ? shopify.getKPIs({ storeUrl: brand.shopifyStoreUrl!, accessToken: brand.shopifyAccessToken! }, '30d')
+    const [shopifyResult, ga4Result, metaResult, googleAdsResult, productsResult] = await Promise.allSettled([
+      shopifyConfig
+        ? shopify.getKPIs(shopifyConfig, '30d')
         : Promise.reject('not requested'),
 
       shouldFetch.ga4
@@ -153,6 +161,11 @@ export async function POST(request: Request) {
             '30d'
           )
         : Promise.reject('not requested'),
+
+      // Always fetch top products when Shopify is connected — lightweight ShopifyQL query
+      shopifyConfig
+        ? shopify.getTopProductsSummary(shopifyConfig, '30d', 15)
+        : Promise.reject('not requested'),
     ]);
 
     // Build compact brand context — only what's available and relevant
@@ -162,10 +175,19 @@ export async function POST(request: Request) {
       const k = shopifyResult.value;
       const revChg = (((k.totalRevenue - k.prevTotalRevenue) / (k.prevTotalRevenue || 1)) * 100).toFixed(1);
       sections.push(
-        `Shopify (last 30d): revenue ₹${k.totalRevenue.toLocaleString()} (${revChg}% vs prev), orders ${k.totalOrders}, AOV ₹${k.averageOrderValue.toFixed(0)}, customers ${k.totalCustomers}, repeat rate ${k.repeatCustomerRate.toFixed(1)}%, refund rate ${k.refundRate.toFixed(1)}%, avg items/order ${k.averageItemsPerOrder.toFixed(1)}, new customer rev ₹${k.newCustomerRevenue.toLocaleString()}, returning rev ₹${k.returningCustomerRevenue.toLocaleString()}, top product: ${k.topSellingProduct}`
+        `Shopify (last 30d): revenue ₹${k.totalRevenue.toLocaleString()} (${revChg}% vs prev), orders ${k.totalOrders}, AOV ₹${k.averageOrderValue.toFixed(0)}, customers ${k.totalCustomers}, repeat rate ${k.repeatCustomerRate.toFixed(1)}%, refund rate ${k.refundRate.toFixed(1)}%, avg items/order ${k.averageItemsPerOrder.toFixed(1)}, new customer rev ₹${(k.newCustomerRevenue ?? 0).toLocaleString()}, returning rev ₹${(k.returningCustomerRevenue ?? 0).toLocaleString()}, conversion rate ${(k.conversionRate ?? 0).toFixed(2)}%, cart abandonment ${(k.cartAbandonmentRate ?? 0).toFixed(1)}%`
       );
     } else if (shouldFetch.shopify === false && intent.has('shopify')) {
       sections.push('Shopify: not connected');
+    }
+
+    // Top products — always include if available (AI needs this for product questions)
+    if (productsResult.status === 'fulfilled' && productsResult.value.length > 0) {
+      const products = productsResult.value;
+      const productLines = products.map((p, i) =>
+        `  ${i + 1}. ${p.title}: ₹${p.revenue.toLocaleString()} revenue, ${p.orders} orders, AOV ₹${p.aov.toFixed(0)}`
+      ).join('\n');
+      sections.push(`Top ${products.length} products by revenue (last 30d):\n${productLines}`);
     }
 
     if (ga4Result.status === 'fulfilled') {

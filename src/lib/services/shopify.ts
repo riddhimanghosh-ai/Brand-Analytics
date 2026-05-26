@@ -1724,6 +1724,60 @@ export async function getAllAnalytics(
 // Conversion Funnel
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Public: getTopProductsSummary — fast ShopifyQL product breakdown for AI chat
+// Returns top N products with revenue, orders, and AOV via ShopifyQL (instant).
+// ---------------------------------------------------------------------------
+export async function getTopProductsSummary(
+  config: ShopifyConfig,
+  dateRange: string = '30d',
+  limit = 15
+): Promise<Array<{ title: string; revenue: number; orders: number; aov: number }>> {
+  const { startDate, endDate } = parseDateRange(dateRange);
+  try {
+    const rows = await runShopifyQL(
+      config,
+      `FROM sales SHOW gross_sales, net_sales, orders GROUP BY product_title ORDER BY net_sales DESC LIMIT ${limit} SINCE ${startDate} UNTIL ${endDate}`
+    );
+    return rows.map((row) => {
+      const orders = Number(row.orders ?? 0);
+      const revenue = Number(row.net_sales ?? 0);
+      return {
+        title: String(row.product_title ?? 'Unknown'),
+        revenue,
+        orders,
+        aov: orders > 0 ? revenue / orders : 0,
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public: getTopChannelsSummary — GA4-style channel breakdown via ShopifyQL
+// Returns traffic source breakdown (utm_source) with orders and revenue.
+// ---------------------------------------------------------------------------
+export async function getTopChannelsSummary(
+  config: ShopifyConfig,
+  dateRange: string = '30d'
+): Promise<Array<{ source: string; orders: number; revenue: number }>> {
+  const { startDate, endDate } = parseDateRange(dateRange);
+  try {
+    const rows = await runShopifyQL(
+      config,
+      `FROM sales SHOW orders, net_sales GROUP BY billing_city ORDER BY orders DESC LIMIT 10 SINCE ${startDate} UNTIL ${endDate}`
+    );
+    return rows.map((row) => ({
+      source: String(row.billing_city ?? 'Unknown'),
+      orders: Number(row.orders ?? 0),
+      revenue: Number(row.net_sales ?? 0),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getOrderConversionFunnel(
   config: ShopifyConfig,
   startDate: string,
