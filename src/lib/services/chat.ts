@@ -41,7 +41,7 @@ If you don't have the data: "No data for that. I have: [list what's available]."
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const anthropicStream = await client.messages.stream({
+        const anthropicStream = client.messages.stream({
           model: MODEL,
           max_tokens: 1024,
           system: systemPrompt,

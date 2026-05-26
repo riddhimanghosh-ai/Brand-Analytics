@@ -272,7 +272,7 @@ export default function ChatPage() {
           <div>
             <div style={{ fontWeight: '700', fontSize: '15px' }}>AI Consultant</div>
             <div style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-              Powered by Groq · Llama 3.3 70B
+              Powered by Anthropic · Claude 3.5 Sonnet
             </div>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '10px' }}>
