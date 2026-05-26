@@ -123,3 +123,22 @@ export interface DateRange {
   end: Date;
   label: string;
 }
+
+export interface BrandEvent {
+  id: string;
+  title: string;
+  type: 'bogo' | 'bundle' | 'discount_pct' | 'discount_fixed' | 'flash_sale' | 'free_shipping' | 'loyalty' | 'other';
+  description: string;
+  startDate: string;       // "YYYY-MM-DD"
+  endDate: string;         // "YYYY-MM-DD"
+  startTime?: string;      // "HH:MM"
+  endTime?: string;        // "HH:MM"
+  audience: 'all' | 'campaign' | 'specific';
+  audienceDetails?: string;
+  channels: string[];      // ['email', 'whatsapp', 'instagram', 'paid_ads', 'website', 'in_store']
+  tags?: string[];
+  discountValue?: number;
+  discountUnit?: 'pct' | 'fixed';
+  notes?: string;
+  revenueTarget?: number;
+}

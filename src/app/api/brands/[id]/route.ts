@@ -60,6 +60,7 @@ export async function PUT(
       'customDashboard', 'savedMetrics', 'competitors',
       'cogsPercent', 'avgShippingCost', 'avgReturnRate',
       'alertRules',
+      'events',
     ];
     const updates = Object.fromEntries(
       allowedFields

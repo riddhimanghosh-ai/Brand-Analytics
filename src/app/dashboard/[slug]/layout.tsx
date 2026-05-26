@@ -156,6 +156,10 @@ export default async function DashboardLayout({
             Custom Metrics
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/events`}>
+            Events &amp; Campaigns
+          </NavLink>
+
           <div className="nav-section-label">Settings</div>
 
           <NavLink href={`/dashboard/${slug}/settings`}>
