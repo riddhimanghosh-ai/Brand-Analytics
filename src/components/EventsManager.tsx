@@ -182,6 +182,37 @@ function TimelineStrip({ events }: { events: BrandEvent[] }) {
 
 // ── Form ─────────────────────────────────────────────────────────────────────
 
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: '24px' }}>
+      <div style={{
+        fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)',
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        paddingBottom: '8px', borderBottom: '1px solid var(--border-color)',
+        marginBottom: '14px',
+      }}>
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Field({ label, children, span2 }: { label: string; children: React.ReactNode; span2?: boolean }) {
+  return (
+    <div style={span2 ? { gridColumn: '1 / -1' } : {}}>
+      <label style={{
+        fontSize: '11px', fontWeight: '600', color: 'var(--text-secondary)',
+        textTransform: 'uppercase', letterSpacing: '0.06em',
+        display: 'block', marginBottom: '6px',
+      }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
 function EventForm({
   form, setForm, onSave, onCancel, saving, editId,
 }: {
@@ -193,15 +224,12 @@ function EventForm({
   editId: string | null;
 }) {
   const inp: React.CSSProperties = {
-    padding: '7px 10px', background: 'var(--bg-primary)',
-    border: '1px solid var(--border-color)', borderRadius: '6px',
+    padding: '9px 12px', background: 'var(--bg-primary)',
+    border: '1px solid var(--border-color)', borderRadius: '8px',
     color: 'var(--text-primary)', fontSize: '13px', width: '100%', boxSizing: 'border-box',
+    lineHeight: '1.4',
   };
   const sel: React.CSSProperties = { ...inp, cursor: 'pointer' };
-  const lbl: React.CSSProperties = { fontSize: '11px', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '4px' };
-  const field = (label: string, children: React.ReactNode) => (
-    <div><label style={lbl}>{label}</label>{children}</div>
-  );
 
   function toggleChannel(ch: string) {
     setForm(f => ({
@@ -212,124 +240,228 @@ function EventForm({
 
   return (
     <div style={{
-      background: 'var(--bg-elevated)', border: '1px solid var(--border-color)',
-      borderRadius: '12px', padding: '20px', marginBottom: '16px',
+      background: 'var(--bg-elevated)',
+      border: '1px solid var(--border-color)',
+      borderRadius: '14px',
+      padding: '24px',
+      marginBottom: '20px',
     }}>
-      <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '16px' }}>
-        {editId ? '✏️ Edit Event' : '➕ New Event'}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px', marginBottom: '12px' }}>
-        {field('Event Title *',
-          <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            placeholder="e.g. Buy 1 Get 1 Free – 20ml" style={inp} />
-        )}
-        {field('Event Type',
-          <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as BrandEvent['type'] }))} style={sel}>
-            {(Object.keys(TYPE_META) as BrandEvent['type'][]).map(t => (
-              <option key={t} value={t}>{TYPE_META[t].emoji} {TYPE_META[t].label}</option>
-            ))}
-          </select>
-        )}
-      </div>
-
-      {field('Description / Offer Details',
-        <textarea
-          value={form.description}
-          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-          placeholder="e.g. Buy 3 for ₹1999 on all 20ml products"
-          rows={2}
-          style={{ ...inp, resize: 'vertical', fontFamily: 'inherit' }}
-        />
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', margin: '12px 0' }}>
-        {field('Start Date *', <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} style={inp} />)}
-        {field('Start Time', <input type="time" value={form.startTime} onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))} style={inp} />)}
-        {field('End Date *', <input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} style={inp} />)}
-        {field('End Time', <input type="time" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} style={inp} />)}
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', marginBottom: '12px' }}>
-        {field('Discount Value',
-          <div style={{ display: 'flex', gap: '6px' }}>
-            <input type="number" value={form.discountValue} onChange={e => setForm(f => ({ ...f, discountValue: e.target.value }))}
-              placeholder="e.g. 20" style={{ ...inp, flex: 1 }} />
-            <select value={form.discountUnit} onChange={e => setForm(f => ({ ...f, discountUnit: e.target.value as 'pct' | 'fixed' }))} style={{ ...sel, width: '70px', flex: 'none' }}>
-              <option value="pct">%</option>
-              <option value="fixed">₹</option>
-            </select>
+      {/* Form header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: '10px',
+        paddingBottom: '16px', borderBottom: '1px solid var(--border-color)',
+        marginBottom: '24px',
+      }}>
+        <div style={{
+          width: '32px', height: '32px', borderRadius: '8px',
+          background: 'rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '16px',
+        }}>
+          {editId ? '✏️' : '➕'}
+        </div>
+        <div>
+          <div style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>
+            {editId ? 'Edit Event' : 'New Event'}
           </div>
-        )}
-        {field('Revenue Target (₹)',
-          <input type="number" value={form.revenueTarget} onChange={e => setForm(f => ({ ...f, revenueTarget: e.target.value }))}
-            placeholder="e.g. 500000" style={inp} />
-        )}
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Fill in the details below to {editId ? 'update' : 'log'} this campaign
+          </div>
+        </div>
       </div>
 
-      {/* Audience */}
-      <div style={{ marginBottom: '12px' }}>
-        <label style={lbl}>Target Audience</label>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {(['all', 'campaign', 'specific'] as const).map(a => (
-            <label key={a} style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', color: 'var(--text-secondary)' }}>
-              <input type="radio" name="audience" value={a} checked={form.audience === a}
-                onChange={() => setForm(f => ({ ...f, audience: a }))} />
-              {a === 'all' ? '👥 All Users' : a === 'campaign' ? '📣 Campaign Users' : '🎯 Specific Segment'}
-            </label>
-          ))}
+      {/* ── Section 1: Basic Info ── */}
+      <FormSection title="Basic Info">
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
+          <Field label="Event Title *">
+            <input
+              value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+              placeholder="e.g. Buy 1 Get 1 Free – 20ml range"
+              style={inp}
+            />
+          </Field>
+          <Field label="Event Type">
+            <select
+              value={form.type}
+              onChange={e => setForm(f => ({ ...f, type: e.target.value as BrandEvent['type'] }))}
+              style={sel}
+            >
+              {(Object.keys(TYPE_META) as BrandEvent['type'][]).map(t => (
+                <option key={t} value={t}>{TYPE_META[t].emoji} {TYPE_META[t].label}</option>
+              ))}
+            </select>
+          </Field>
         </div>
-        {form.audience !== 'all' && (
-          <input
-            value={form.audienceDetails}
-            onChange={e => setForm(f => ({ ...f, audienceDetails: e.target.value }))}
-            placeholder={form.audience === 'campaign' ? 'Campaign name (e.g. Diwali email list)' : 'Segment name (e.g. VIP customers)'}
-            style={{ ...inp, marginTop: '8px' }}
+        <Field label="Description / Offer Details">
+          <textarea
+            value={form.description}
+            onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            placeholder="e.g. Buy any 3 products for ₹1999. Applicable on all 20ml SKUs."
+            rows={2}
+            style={{ ...inp, resize: 'vertical', fontFamily: 'inherit' }}
           />
-        )}
-      </div>
+        </Field>
+      </FormSection>
 
-      {/* Channels */}
-      <div style={{ marginBottom: '12px' }}>
-        <label style={lbl}>Channels</label>
-        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {ALL_CHANNELS.map(ch => {
-            const m = CHANNEL_META[ch];
-            const checked = form.channels.includes(ch);
-            return (
-              <label key={ch} style={{
-                display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
-                padding: '5px 10px', borderRadius: '8px', fontSize: '12px', fontWeight: '500',
-                background: checked ? 'rgba(59,130,246,0.15)' : 'var(--bg-primary)',
-                border: `1px solid ${checked ? 'rgba(59,130,246,0.4)' : 'var(--border-color)'}`,
-                color: checked ? 'var(--accent-blue)' : 'var(--text-secondary)',
-                transition: 'all 0.15s',
-              }}>
-                <input type="checkbox" checked={checked} onChange={() => toggleChannel(ch)} style={{ display: 'none' }} />
-                {m.emoji} {m.label}
-              </label>
-            );
-          })}
+      {/* ── Section 2: Schedule ── */}
+      <FormSection title="Schedule">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          {/* Start */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>🟢 Start</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <Field label="Date *">
+                <input type="date" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} style={inp} />
+              </Field>
+              <Field label="Time">
+                <input type="time" value={form.startTime} onChange={e => setForm(f => ({ ...f, startTime: e.target.value }))} style={inp} />
+              </Field>
+            </div>
+          </div>
+          {/* End */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)' }}>🔴 End</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              <Field label="Date *">
+                <input type="date" value={form.endDate} onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))} style={inp} />
+              </Field>
+              <Field label="Time">
+                <input type="time" value={form.endTime} onChange={e => setForm(f => ({ ...f, endTime: e.target.value }))} style={inp} />
+              </Field>
+            </div>
+          </div>
         </div>
-      </div>
+      </FormSection>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-        {field('Tags (comma-separated)',
-          <input value={form.tags} onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
-            placeholder="e.g. Diwali, Summer, Product Launch" style={inp} />
-        )}
-        {field('Internal Notes',
-          <input value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-            placeholder="What worked, what didn't..." style={inp} />
-        )}
-      </div>
+      {/* ── Section 3: Offer Details ── */}
+      <FormSection title="Offer Details">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <Field label="Discount Value">
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <input
+                type="number"
+                value={form.discountValue}
+                onChange={e => setForm(f => ({ ...f, discountValue: e.target.value }))}
+                placeholder="e.g. 20"
+                style={{ ...inp, flex: 1 }}
+              />
+              <select
+                value={form.discountUnit}
+                onChange={e => setForm(f => ({ ...f, discountUnit: e.target.value as 'pct' | 'fixed' }))}
+                style={{ ...sel, width: '68px', flex: 'none' }}
+              >
+                <option value="pct">%</option>
+                <option value="fixed">₹</option>
+              </select>
+            </div>
+          </Field>
+          <Field label="Revenue Target (₹)">
+            <input
+              type="number"
+              value={form.revenueTarget}
+              onChange={e => setForm(f => ({ ...f, revenueTarget: e.target.value }))}
+              placeholder="e.g. 500000"
+              style={inp}
+            />
+          </Field>
+        </div>
+      </FormSection>
 
-      <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-        <button onClick={onSave} disabled={!form.title || !form.startDate || !form.endDate || saving}
-          className="btn btn-primary" style={{ fontSize: '13px' }}>
+      {/* ── Section 4: Targeting ── */}
+      <FormSection title="Targeting">
+        <Field label="Target Audience">
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: form.audience !== 'all' ? '10px' : '0' }}>
+            {(['all', 'campaign', 'specific'] as const).map(a => {
+              const active = form.audience === a;
+              return (
+                <label key={a} style={{
+                  display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer',
+                  padding: '7px 14px', borderRadius: '8px', fontSize: '13px', fontWeight: '500',
+                  background: active ? 'rgba(59,130,246,0.12)' : 'var(--bg-primary)',
+                  border: `1px solid ${active ? 'rgba(59,130,246,0.4)' : 'var(--border-color)'}`,
+                  color: active ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                  transition: 'all 0.15s',
+                }}>
+                  <input type="radio" name="audience" value={a} checked={active}
+                    onChange={() => setForm(f => ({ ...f, audience: a }))} style={{ display: 'none' }} />
+                  {a === 'all' ? '👥 All Users' : a === 'campaign' ? '📣 Campaign Users' : '🎯 Specific Segment'}
+                </label>
+              );
+            })}
+          </div>
+          {form.audience !== 'all' && (
+            <input
+              value={form.audienceDetails}
+              onChange={e => setForm(f => ({ ...f, audienceDetails: e.target.value }))}
+              placeholder={form.audience === 'campaign' ? 'Campaign name (e.g. Diwali email list)' : 'Segment description (e.g. VIP customers, 3+ orders)'}
+              style={inp}
+            />
+          )}
+        </Field>
+
+        <div style={{ marginTop: '14px' }}>
+          <Field label="Channels">
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '2px' }}>
+              {ALL_CHANNELS.map(ch => {
+                const m = CHANNEL_META[ch];
+                const checked = form.channels.includes(ch);
+                return (
+                  <label key={ch} style={{
+                    display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer',
+                    padding: '6px 12px', borderRadius: '8px', fontSize: '12px', fontWeight: '500',
+                    background: checked ? 'rgba(59,130,246,0.12)' : 'var(--bg-primary)',
+                    border: `1px solid ${checked ? 'rgba(59,130,246,0.4)' : 'var(--border-color)'}`,
+                    color: checked ? 'var(--accent-blue)' : 'var(--text-secondary)',
+                    transition: 'all 0.15s',
+                  }}>
+                    <input type="checkbox" checked={checked} onChange={() => toggleChannel(ch)} style={{ display: 'none' }} />
+                    {m.emoji} {m.label}
+                  </label>
+                );
+              })}
+            </div>
+          </Field>
+        </div>
+      </FormSection>
+
+      {/* ── Section 5: Notes & Tags ── */}
+      <FormSection title="Notes & Tags">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+          <Field label="Tags (comma-separated)">
+            <input
+              value={form.tags}
+              onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
+              placeholder="e.g. Diwali, Summer, Product Launch"
+              style={inp}
+            />
+          </Field>
+          <Field label="Internal Notes">
+            <input
+              value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+              placeholder="What worked, what didn't..."
+              style={inp}
+            />
+          </Field>
+        </div>
+      </FormSection>
+
+      {/* Actions */}
+      <div style={{
+        display: 'flex', gap: '10px', alignItems: 'center',
+        paddingTop: '16px', borderTop: '1px solid var(--border-color)',
+      }}>
+        <button
+          onClick={onSave}
+          disabled={!form.title || !form.startDate || !form.endDate || saving}
+          className="btn btn-primary"
+          style={{ fontSize: '13px', padding: '9px 20px' }}
+        >
           {saving ? '⏳ Saving...' : editId ? '💾 Save Changes' : '➕ Add Event'}
         </button>
-        <button onClick={onCancel} className="btn btn-secondary" style={{ fontSize: '13px' }}>Cancel</button>
+        <button onClick={onCancel} className="btn btn-secondary" style={{ fontSize: '13px', padding: '9px 16px' }}>
+          Cancel
+        </button>
       </div>
     </div>
   );
