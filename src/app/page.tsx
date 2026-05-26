@@ -88,31 +88,7 @@ export default async function HomePage() {
                 googleAdsCustomerId={brand.googleAdsCustomerId}
               />
             ))}
-            <Link
-              href="/brands/new"
-              style={{
-                border: '1px dashed var(--rule)',
-                background: 'var(--paper-2)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '32px',
-                color: 'var(--muted)',
-                textDecoration: 'none',
-                gap: '8px',
-                minHeight: '140px',
-                transition: 'border-color var(--transition-fast), background var(--transition-fast)',
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'var(--accent)';
-                (e.currentTarget as HTMLElement).style.background = 'var(--accent-soft)';
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.borderColor = 'var(--rule)';
-                (e.currentTarget as HTMLElement).style.background = 'var(--paper-2)';
-              }}
-            >
+            <Link href="/brands/new" className="add-brand-card">
               <span style={{ fontFamily: 'var(--f-display)', fontSize: '22px', fontWeight: 300, color: 'var(--muted-2)' }}>+</span>
               <span style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Add Brand</span>
             </Link>
