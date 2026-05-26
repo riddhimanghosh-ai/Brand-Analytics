@@ -27,7 +27,8 @@ interface Props {
     ga4: boolean;
     metaAds: boolean;
     googleAds: boolean;
-    gemini: boolean;
+    gemini?: boolean;
+    ai?: boolean;
   };
 }
 

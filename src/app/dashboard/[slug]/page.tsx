@@ -17,7 +17,7 @@ export default async function OverviewPage({
     ga4: !!brand.ga4PropertyId,
     metaAds: !!brand.metaAccessToken,
     googleAds: !!brand.googleAdsCustomerId,
-    gemini: !!(brand.geminiApiKey || process.env.GEMINI_API_KEY),
+    ai: !!(process.env.ANTHROPIC_API_KEY),
   };
 
   const connectedCount = Object.values(connections).filter(Boolean).length;
@@ -27,99 +27,121 @@ export default async function OverviewPage({
       <div className="page-header">
         <div className="page-header-row">
           <div>
-            <h2 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '-0.03em' }}>
-              {brand.name}
-            </h2>
-            <p>Overview · Last 30 days · {connectedCount} platform{connectedCount !== 1 ? 's' : ''} connected</p>
+            <h2>{brand.name}</h2>
+            <p>Overview — last 30 days — {connectedCount} platform{connectedCount !== 1 ? 's' : ''} connected</p>
           </div>
         </div>
       </div>
 
       <div className="page-body">
-        {/* Connection Status Chips */}
-        <div style={{ marginBottom: '24px' }}>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {Object.entries(connections).map(([key, connected]) => {
-              const labels: Record<string, string> = {
-                shopify: '🛒 Shopify',
-                ga4: '📈 Google Analytics',
-                metaAds: '📱 Meta Ads',
-                googleAds: '🎯 Google Ads',
-                gemini: '🤖 AI Assistant',
-              };
-              return (
-                <span key={key} className={`connection-chip ${connected ? 'connected' : ''}`}>
-                  <span className="chip-dot" />
-                  {labels[key]}
-                </span>
-              );
-            })}
-          </div>
+        {/* Connection Status */}
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '24px' }}>
+          {Object.entries(connections).map(([key, connected]) => {
+            const labels: Record<string, string> = {
+              shopify:    'Shopify',
+              ga4:        'Google Analytics',
+              metaAds:    'Meta Ads',
+              googleAds:  'Google Ads',
+              ai:         'AI',
+            };
+            return (
+              <span key={key} style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '5px',
+                padding: '3px 9px',
+                border: `1px solid ${connected ? 'var(--ok)' : 'var(--rule)'}`,
+                fontFamily: 'var(--f-mono)',
+                fontSize: '10px',
+                fontWeight: 500,
+                letterSpacing: '0.06em',
+                textTransform: 'uppercase',
+                color: connected ? 'var(--ok)' : 'var(--muted-2)',
+                background: connected ? 'rgba(10,124,83,0.06)' : 'var(--paper-3)',
+              }}>
+                <span style={{
+                  width: '5px',
+                  height: '5px',
+                  borderRadius: '50%',
+                  background: connected ? 'var(--ok)' : 'var(--muted-2)',
+                  flexShrink: 0,
+                }} />
+                {labels[key]}
+              </span>
+            );
+          })}
         </div>
 
         {/* Quick Setup — shown when fewer than 2 platforms are connected */}
         {connectedCount < 2 && (
-          <div className="chart-card" style={{ marginBottom: '24px', background: 'rgba(59,130,246,0.04)', borderColor: 'rgba(59,130,246,0.15)' }}>
+          <div className="chart-card" style={{ marginBottom: '24px', borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
             <div className="chart-card-header">
               <div>
-                <div className="chart-card-title">⚡ Quick Setup</div>
+                <div className="chart-card-title">Quick Setup</div>
                 <div className="chart-card-subtitle">Connect your platforms to unlock full analytics</div>
               </div>
               <Link href={`/dashboard/${slug}/settings`} className="btn btn-primary btn-sm">
-                Set up →
+                Set up
               </Link>
             </div>
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {[
-                { key: 'shopify', label: 'Shopify', icon: '🛒', on: connections.shopify },
-                { key: 'ga4', label: 'Google Analytics', icon: '📈', on: connections.ga4 },
-                { key: 'metaAds', label: 'Meta Ads', icon: '📱', on: connections.metaAds },
-                { key: 'googleAds', label: 'Google Ads', icon: '🎯', on: connections.googleAds },
-                { key: 'gemini', label: 'AI Assistant', icon: '🤖', on: connections.gemini },
-              ].map(({ key, label, icon, on }) => (
+                { key: 'shopify',   label: 'Shopify',            on: connections.shopify },
+                { key: 'ga4',       label: 'Google Analytics',   on: connections.ga4 },
+                { key: 'metaAds',   label: 'Meta Ads',           on: connections.metaAds },
+                { key: 'googleAds', label: 'Google Ads',         on: connections.googleAds },
+                { key: 'ai',        label: 'AI Assistant',       on: connections.ai },
+              ].map(({ key, label, on }) => (
                 <span key={key} style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  padding: '6px 12px', borderRadius: 'var(--radius-full)',
-                  background: on ? 'rgba(16,185,129,0.08)' : 'var(--bg-elevated)',
-                  border: `1px solid ${on ? 'rgba(16,185,129,0.2)' : 'var(--glass-border)'}`,
-                  fontSize: '12px', fontWeight: 500,
-                  color: on ? 'var(--accent-emerald)' : 'var(--text-muted)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '4px 10px',
+                  background: on ? 'rgba(10,124,83,0.08)' : 'var(--paper)',
+                  border: `1px solid ${on ? 'var(--ok)' : 'var(--rule)'}`,
+                  fontFamily: 'var(--f-mono)',
+                  fontSize: '10px',
+                  fontWeight: 500,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: on ? 'var(--ok)' : 'var(--muted)',
                 }}>
-                  {icon} {label}
-                  {on && <span style={{ fontSize: '10px' }}>✓</span>}
+                  {label}
+                  {on && <span style={{ color: 'var(--ok)' }}>✓</span>}
                 </span>
               ))}
             </div>
           </div>
         )}
 
-        {/* KPIs — client component, loads after hydration so page shows instantly */}
+        {/* KPIs */}
         <OverviewKPIs slug={slug} connections={connections} />
 
         {/* Deep-dive Links */}
-        <div className="section-title" style={{ marginTop: '24px' }}>
-          <span className="section-icon">🔗</span>
-          Deep Dive
-        </div>
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          {connections.shopify && (
-            <Link href={`/dashboard/${slug}/shopify`} className="btn btn-secondary">
-              🛒 Shopify Analytics →
+        <div style={{ marginTop: '28px', paddingTop: '20px', borderTop: '1px solid var(--rule)' }}>
+          <div style={{ fontFamily: 'var(--f-mono)', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--muted)', marginBottom: '12px' }}>
+            Deep Dive
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {connections.shopify && (
+              <Link href={`/dashboard/${slug}/shopify`} className="btn btn-secondary btn-sm">
+                Shopify Analytics
+              </Link>
+            )}
+            {connections.ga4 && (
+              <Link href={`/dashboard/${slug}/analytics`} className="btn btn-secondary btn-sm">
+                Traffic Analytics
+              </Link>
+            )}
+            {(connections.metaAds || connections.googleAds) && (
+              <Link href={`/dashboard/${slug}/ads`} className="btn btn-secondary btn-sm">
+                Ads Performance
+              </Link>
+            )}
+            <Link href={`/dashboard/${slug}/settings`} className="btn btn-secondary btn-sm">
+              Manage Connections
             </Link>
-          )}
-          {connections.ga4 && (
-            <Link href={`/dashboard/${slug}/analytics`} className="btn btn-secondary">
-              📈 Traffic Analytics →
-            </Link>
-          )}
-          {(connections.metaAds || connections.googleAds) && (
-            <Link href={`/dashboard/${slug}/ads`} className="btn btn-secondary">
-              🎯 Ads Performance →
-            </Link>
-          )}
-          <Link href={`/dashboard/${slug}/settings`} className="btn btn-secondary">
-            ⚙️ Manage Connections →
-          </Link>
+          </div>
         </div>
       </div>
     </>

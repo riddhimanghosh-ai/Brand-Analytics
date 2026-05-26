@@ -1,7 +1,7 @@
+import Anthropic from '@anthropic-ai/sdk';
 import type { ChatMessage } from '@/types';
 
-const GROQ_API = 'https://api.groq.com/openai/v1/chat/completions';
-const MODEL    = 'llama-3.3-70b-versatile';
+const MODEL = 'claude-3-5-sonnet-20241022';
 
 export async function streamChat(
   apiKey: string,
@@ -29,81 +29,45 @@ FORMAT:
 
 If you don't have the data: "No data for that. I have: [list what's available]."`;
 
-  const groqMessages = [
-    { role: 'system', content: systemPrompt },
-    ...messages.map((m) => ({
-      role: m.role === 'user' ? 'user' : 'assistant',
-      content: m.content,
-    })),
-  ];
+  const client = new Anthropic({ apiKey });
+
+  const anthropicMessages = messages.map((m) => ({
+    role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+    content: m.content,
+  }));
 
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const res = await fetch(GROQ_API, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: MODEL,
-            messages: groqMessages,
-            stream: true,
-            max_tokens: 1024,
-            temperature: 0.3,
-          }),
+        const anthropicStream = await client.messages.stream({
+          model: MODEL,
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: anthropicMessages,
         });
 
-        if (!res.ok) {
-          const err = await res.text();
-          let friendly = `AI error (${res.status})`;
-          if (res.status === 401) friendly = '❌ Invalid Groq API key. Please update it in Settings → AI Consultant.';
-          else if (res.status === 429) friendly = '⚠️ Groq rate limit reached. Please wait a moment and try again.';
-          else if (err) friendly = `AI error: ${err}`;
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: friendly })}\n\n`));
-          controller.close();
-          return;
-        }
-
-        // Parse OpenAI-compatible SSE stream from Groq
-        const reader = res.body!.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-            const data = trimmed.slice(6);
-            if (data === '[DONE]') continue;
-
-            try {
-              const parsed = JSON.parse(data);
-              const text = parsed.choices?.[0]?.delta?.content;
-              if (text) {
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ text })}\n\n`));
-              }
-            } catch {
-              // skip malformed chunks
-            }
+        for await (const chunk of anthropicStream) {
+          if (
+            chunk.type === 'content_block_delta' &&
+            chunk.delta.type === 'text_delta' &&
+            chunk.delta.text
+          ) {
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`)
+            );
           }
         }
 
         controller.enqueue(encoder.encode('data: [DONE]\n\n'));
         controller.close();
       } catch (error) {
-        const msg = (error as Error).message || 'Unknown error';
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: `AI error: ${msg}` })}\n\n`));
+        const err = error as { status?: number; message?: string };
+        let friendly = `AI error: ${err.message || 'Unknown error'}`;
+        if (err.status === 401) friendly = 'Invalid Claude API key. Please check your ANTHROPIC_API_KEY environment variable.';
+        else if (err.status === 429) friendly = 'Claude rate limit reached. Please wait a moment and try again.';
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: friendly })}\n\n`));
         controller.close();
       }
     },
