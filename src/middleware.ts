@@ -3,18 +3,20 @@ import type { NextRequest } from 'next/server';
 
 const HIRA_AUTH_COOKIE = 'hira-auth';
 
-export async function proxy(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow login page, auth API routes, and static assets
+  // Allow login page, auth API routes, and static assets through
   if (
     pathname === '/login' ||
-    pathname.startsWith('/api/auth/')
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/_next/') ||
+    pathname.startsWith('/favicon')
   ) {
     return NextResponse.next();
   }
 
-  // Check for hira-auth session cookie
+  // Check auth cookie
   const authCookie = request.cookies.get(HIRA_AUTH_COOKIE)?.value;
   if (authCookie !== '1') {
     const loginUrl = new URL('/login', request.url);
