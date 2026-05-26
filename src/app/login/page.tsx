@@ -345,7 +345,7 @@ export default function LoginPage() {
           <div className="stat-row">
             {[
               { val: '8', unit: '+', label: 'Platforms' },
-              { val: '30', unit: '+', label: 'Metrics' },
+              { val: '40', unit: '+', label: 'Metrics' },
               { val: 'AI', unit: '', label: 'Insights' },
               { val: 'Live', unit: '', label: 'Data' },
             ].map((s) => (
