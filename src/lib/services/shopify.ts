@@ -662,23 +662,31 @@ export async function getKPIs(
         const cd = await combinedRes.json() as { data?: { orders?: { edges: Array<{ node: CombinedOrder }> } } };
         const edges = cd.data?.orders?.edges ?? [];
         const emails = new Set<string>();
-        let retRevenue = 0;
-        let newRevenue = 0;
+        let sampleRetOrders = 0;
         let totalItems = 0;
         for (const e of edges) {
           const email = e.node.email || '';
-          const rev = parseFloat(e.node.totalPriceSet?.shopMoney?.amount || '0');
           if (email) emails.add(email);
           const numOrders = e.node.customer?.numberOfOrders ?? 1;
-          if (numOrders > 1) { retRevenue += rev; } else { newRevenue += rev; }
+          if (numOrders > 1) sampleRetOrders++;
           totalItems += e.node.lineItems.edges.reduce((s, li) => s + (li.node.quantity || 0), 0);
         }
-        totalCustomers = emails.size || edges.length;
-        const repeatCount = edges.filter(e => (e.node.customer?.numberOfOrders ?? 1) > 1).length;
-        repeatCustomerRate = edges.length > 0 ? (repeatCount / edges.length) * 100 : 0;
-        returningCustomerRevenue = retRevenue;
-        newCustomerRevenue = newRevenue;
-        averageItemsPerOrder = edges.length > 0 ? totalItems / edges.length : 0;
+
+        // Scale customer count from sample — 250 orders ÷ total orders × proportion
+        // This estimates how many unique customers placed all 3,500+ orders
+        const sampleSize = edges.length;
+        const scaleFactor = sampleSize > 0 && totalOrders > sampleSize ? totalOrders / sampleSize : 1;
+        totalCustomers = Math.round((emails.size || sampleSize) * scaleFactor);
+
+        // Use sample ORDER ratio to estimate repeat rate and revenue split on full dataset
+        // (sample is random-ish — first 250 by created_at — so ratios extrapolate reasonably)
+        const retFrac = sampleSize > 0 ? sampleRetOrders / sampleSize : 0;
+        repeatCustomerRate = retFrac * 100;
+        returningCustomerRevenue = totalRevenue * retFrac;
+        newCustomerRevenue = totalRevenue * (1 - retFrac);
+
+        // Avg items/order from sample (statistically stable — per-order avg doesn't need full set)
+        averageItemsPerOrder = sampleSize > 0 ? totalItems / sampleSize : 0;
       }
 
       if (prevRes.ok) {
@@ -1505,9 +1513,13 @@ async function buildAllAnalyticsFromShopifyQL(
       const cd = await custRes.json() as { data?: { orders?: { edges: Array<{ node: { email: string; customer: { numberOfOrders: number } | null } }> } } };
       const edges = cd.data?.orders?.edges ?? [];
       const emails = new Set(edges.map(e => e.node.email).filter(Boolean));
-      totalCustomers = emails.size || edges.length;
+      const sampleSize = edges.length;
+      // Scale unique customer count from sample to full order count
+      const scaleFactor = sampleSize > 0 && totalOrders > sampleSize ? totalOrders / sampleSize : 1;
+      totalCustomers = Math.round((emails.size || sampleSize) * scaleFactor);
+      // Use sample ORDER ratio for repeat rate (ratios are stable with 250-order sample)
       returningCustomers = edges.filter(e => (e.node.customer?.numberOfOrders ?? 1) > 1).length;
-      returningRate = edges.length > 0 ? (returningCustomers / edges.length) * 100 : 0;
+      returningRate = sampleSize > 0 ? (returningCustomers / sampleSize) * 100 : 0;
     }
     // Prev period customer count
     const prevCustRes = await fetch(
@@ -1592,7 +1604,9 @@ async function buildAllAnalyticsFromShopifyQL(
   } catch { /* non-critical — leave as 0 */ }
 
   // ── Revenue split by customer type ──────────────────────────────────────
-  const returningFrac = totalCustomers > 0 ? returningCustomers / totalCustomers : 0;
+  // Use the ORDER-based repeat rate (returningRate) from the 250-order sample to split
+  // full revenue — avoids the sample-size mismatch of returningCustomers/totalCustomers
+  const returningFrac = returningRate / 100;
   const returningCustomerRevenue = totalRevenue * returningFrac;
   const newCustomerRevenue = totalRevenue * (1 - returningFrac);
 
