@@ -42,7 +42,7 @@ export default async function HomePage() {
             BA
           </div>
           <span style={{ fontFamily: 'var(--f-mono)', fontSize: '11px', fontWeight: 500, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ink)' }}>
-            Brand Analytics
+            Brand Analytics AI
           </span>
         </div>
         {user && <LogoutButton variant="header" />}

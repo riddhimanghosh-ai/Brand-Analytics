@@ -62,7 +62,7 @@ export default async function DashboardLayout({
         <div className="sidebar-logo">
           <div className="logo-icon">BA</div>
           <div>
-            <h1>Brand Analytics</h1>
+            <h1>Brand Analytics <span style={{ color: 'var(--accent-blue)', fontWeight: 800 }}>AI</span></h1>
             <span>E-Commerce Dashboard</span>
           </div>
         </div>
