@@ -275,6 +275,38 @@ export default function CustomDashboardPage() {
         </div>
       </div>
 
+      {/* Intro banner */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'linear-gradient(135deg, rgba(59,130,246,0.08) 0%, rgba(168,85,247,0.06) 100%)',
+        border: '1px solid rgba(59,130,246,0.18)',
+        borderRadius: '12px', padding: '14px 20px', gap: '16px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+          <span style={{ fontSize: '26px', lineHeight: 1 }}>👋</span>
+          <div>
+            <div style={{ fontSize: '14px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '2px' }}>
+              Your command centre for brand performance
+            </div>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+              Pin the metrics that matter most — revenue, CVR, ROAS, repeat rate — all in one view, updated live.
+            </div>
+          </div>
+        </div>
+        <a
+          href={`/dashboard/${slug}/help`}
+          style={{
+            flexShrink: 0, fontSize: '12px', fontWeight: '600',
+            color: 'var(--accent-blue)', textDecoration: 'none',
+            border: '1px solid rgba(59,130,246,0.3)', borderRadius: '8px',
+            padding: '6px 14px', whiteSpace: 'nowrap',
+            background: 'rgba(59,130,246,0.07)',
+          }}
+        >
+          View Guide →
+        </a>
+      </div>
+
       {/* Empty state */}
       {widgets.length === 0 && (
         <div style={{
