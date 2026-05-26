@@ -572,11 +572,11 @@ export async function getKPIs(
     const [curRows, prevRows, sessionRows] = await Promise.all([
       runShopifyQL(
         config,
-        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value SINCE ${currentStart} UNTIL ${currentEnd}`,
+        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, customers, returning_customers, returning_customer_rate SINCE ${currentStart} UNTIL ${currentEnd}`,
       ),
       runShopifyQL(
         config,
-        `FROM sales SHOW orders, net_sales, average_order_value SINCE ${prevStart} UNTIL ${prevEnd}`,
+        `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`,
       ),
       runShopifyQL(
         config,
@@ -588,16 +588,26 @@ export async function getKPIs(
     const prev    = prevRows[0]    ?? {};
     const session = sessionRows[0] ?? {};
 
-    const totalRevenue = Number(cur.net_sales           ?? 0);
-    const totalOrders  = Number(cur.orders              ?? 0);
-    const grossSales   = Number(cur.gross_sales         ?? 0);
-    const totalReturns = Math.abs(Number(cur.returns    ?? 0));
-    const aov          = Number(cur.average_order_value ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
-    const refundRate   = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
+    const totalRevenue       = Number(cur.net_sales              ?? 0);
+    const totalOrders        = Number(cur.orders                 ?? 0);
+    const grossSales         = Number(cur.gross_sales            ?? 0);
+    const totalReturns       = Math.abs(Number(cur.returns       ?? 0));
+    const aov                = Number(cur.average_order_value    ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+    const refundRate         = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
+    const totalCustomers     = Number(cur.customers              ?? 0);
+    const returningCustomers = Number(cur.returning_customers    ?? 0);
+    // returning_customer_rate is a PERCENT column — already multiplied by 100
+    const repeatCustomerRate = Number(cur.returning_customer_rate ?? 0) ||
+      (totalCustomers > 0 ? (returningCustomers / totalCustomers) * 100 : 0);
+    // Estimate new/returning revenue by customer ratio (ShopifyQL has no revenue-by-type column)
+    const returningFrac         = totalCustomers > 0 ? returningCustomers / totalCustomers : 0;
+    const returningCustomerRevenue = totalRevenue * returningFrac;
+    const newCustomerRevenue       = totalRevenue * (1 - returningFrac);
 
-    const prevRevenue = Number(prev.net_sales           ?? 0);
-    const prevOrders  = Number(prev.orders              ?? 0);
-    const prevAOV     = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
+    const prevRevenue  = Number(prev.net_sales           ?? 0);
+    const prevOrders   = Number(prev.orders              ?? 0);
+    const prevAOV      = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
+    const prevCustomers = Number(prev.customers          ?? 0);
 
     // Sessions funnel — mirrors the Slack bot's get_funnel tool logic
     const totalSessions = Number(session.sessions        ?? 0);
@@ -643,20 +653,20 @@ export async function getKPIs(
       totalRevenue,
       totalOrders,
       averageOrderValue:        aov,
-      totalCustomers:           0,
-      repeatCustomerRate:       0,
+      totalCustomers,
+      repeatCustomerRate,
       conversionRate,
       cartAbandonmentRate,
       refundRate,
       averageItemsPerOrder,
-      returningCustomerRevenue: 0,
-      newCustomerRevenue:       0,
+      returningCustomerRevenue,
+      newCustomerRevenue,
       topSellingProduct:        topProduct,
       averageFulfillmentDays:   0,
       prevTotalRevenue:         prevRevenue,
       prevTotalOrders:          prevOrders,
       prevAverageOrderValue:    prevAOV,
-      prevTotalCustomers:       0,
+      prevTotalCustomers:       prevCustomers,
     };
   } catch (err) {
     console.warn('[ShopifyQL getKPIs] ShopifyQL failed, falling back to paginated fetch:', (err as Error).message);
