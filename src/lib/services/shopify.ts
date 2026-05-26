@@ -615,80 +615,78 @@ export async function getKPIs(
     const conversionRate      = totalSessions > 0 ? (totalOrders / totalSessions) * 100 : Number(session.conversion_rate ?? 0);
     const cartAbandonmentRate = atcRate > 0 ? Math.max(0, ((atcRate - conversionRate) / atcRate) * 100) : 0;
 
-    // ── Customer metrics via GraphQL (email-based — covers guest checkouts) ─
+    // ── Combined GraphQL: customers + items/order in ONE request (avoids rate limits) ─
+    // Also runs prev-period count + top-product ShopifyQL in parallel.
     let totalCustomers = 0;
     let repeatCustomerRate = 0;
     let returningCustomerRevenue = 0;
-    let newCustomerRevenue = totalRevenue; // default: all revenue is "new"
+    let newCustomerRevenue = totalRevenue;
     let prevCustomers = 0;
-    try {
-      const custQuery = `{
-        orders(first: 250, query: "created_at:>=${currentStart} AND created_at:<=${currentEnd}") {
-          edges { node { email totalPriceSet { shopMoney { amount } } customer { numberOfOrders } } }
+    let averageItemsPerOrder = 0;
+    let topProduct = '';
+
+    // Single combined query: email + revenue split + lineItem quantities
+    const combinedGql = `{
+      orders(first: 250, query: "created_at:>=${currentStart} AND created_at:<=${currentEnd}") {
+        edges {
+          node {
+            email
+            totalPriceSet { shopMoney { amount } }
+            customer { numberOfOrders }
+            lineItems(first: 20) { edges { node { quantity } } }
+          }
         }
-      }`;
-      const custRes = await fetch(
-        `https://${config.storeUrl}/admin/api/2025-10/graphql.json`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken }, body: JSON.stringify({ query: custQuery }) }
-      );
-      if (custRes.ok) {
-        const custData = await custRes.json() as { data?: { orders?: { edges: Array<{ node: { email: string; totalPriceSet: { shopMoney: { amount: string } }; customer: { numberOfOrders: number } | null } }> } } };
-        const edges = custData.data?.orders?.edges ?? [];
+      }
+    }`;
+    const prevGql = `{ orders(first: 250, query: "created_at:>=${prevStart} AND created_at:<=${prevEnd}") { edges { node { email } } } }`;
+
+    try {
+      const [combinedRes, prevRes, productRows] = await Promise.all([
+        fetch(`https://${config.storeUrl}/admin/api/2025-10/graphql.json`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken },
+          body: JSON.stringify({ query: combinedGql }),
+        }),
+        fetch(`https://${config.storeUrl}/admin/api/2025-10/graphql.json`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken },
+          body: JSON.stringify({ query: prevGql }),
+        }),
+        runShopifyQL(config, `FROM sales SHOW net_sales GROUP BY product_title ORDER BY net_sales DESC LIMIT 1 SINCE ${currentStart} UNTIL ${currentEnd}`).catch(() => []),
+      ]);
+
+      topProduct = String(productRows[0]?.product_title ?? '');
+
+      if (combinedRes.ok) {
+        type CombinedOrder = { email: string; totalPriceSet: { shopMoney: { amount: string } }; customer: { numberOfOrders: number } | null; lineItems: { edges: Array<{ node: { quantity: number } }> } };
+        const cd = await combinedRes.json() as { data?: { orders?: { edges: Array<{ node: CombinedOrder }> } } };
+        const edges = cd.data?.orders?.edges ?? [];
         const emails = new Set<string>();
         let retRevenue = 0;
         let newRevenue = 0;
+        let totalItems = 0;
         for (const e of edges) {
           const email = e.node.email || '';
           const rev = parseFloat(e.node.totalPriceSet?.shopMoney?.amount || '0');
           if (email) emails.add(email);
           const numOrders = e.node.customer?.numberOfOrders ?? 1;
           if (numOrders > 1) { retRevenue += rev; } else { newRevenue += rev; }
+          totalItems += e.node.lineItems.edges.reduce((s, li) => s + (li.node.quantity || 0), 0);
         }
-        totalCustomers = emails.size || edges.length; // fallback to order count if no emails
+        totalCustomers = emails.size || edges.length;
         const repeatCount = edges.filter(e => (e.node.customer?.numberOfOrders ?? 1) > 1).length;
         repeatCustomerRate = edges.length > 0 ? (repeatCount / edges.length) * 100 : 0;
         returningCustomerRevenue = retRevenue;
         newCustomerRevenue = newRevenue;
+        averageItemsPerOrder = edges.length > 0 ? totalItems / edges.length : 0;
       }
-    } catch { /* non-critical — keep defaults */ }
 
-    // Prev period customer count (lightweight)
-    try {
-      const prevCustRes = await fetch(
-        `https://${config.storeUrl}/admin/api/2025-10/graphql.json`,
-        { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken },
-          body: JSON.stringify({ query: `{ orders(first: 250, query: "created_at:>=${prevStart} AND created_at:<=${prevEnd}") { edges { node { email } } } }` }) }
-      );
-      if (prevCustRes.ok) {
-        const pd = await prevCustRes.json() as { data?: { orders?: { edges: Array<{ node: { email: string } }> } } };
+      if (prevRes.ok) {
+        const pd = await prevRes.json() as { data?: { orders?: { edges: Array<{ node: { email: string } }> } } };
         const prevEmails = new Set((pd.data?.orders?.edges ?? []).map(e => e.node.email).filter(Boolean));
         prevCustomers = prevEmails.size || (pd.data?.orders?.edges?.length ?? 0);
       }
-    } catch { /* non-critical */ }
-
-    // ── Top product + items/order (run in parallel) ──────────────────────────
-    let topProduct = '';
-    let averageItemsPerOrder = 0;
-    try {
-      const [productRows, itemsRes] = await Promise.all([
-        runShopifyQL(config, `FROM sales SHOW net_sales GROUP BY product_title ORDER BY net_sales DESC LIMIT 1 SINCE ${currentStart} UNTIL ${currentEnd}`).catch(() => []),
-        fetch(`https://${config.storeUrl}/admin/api/2025-10/graphql.json`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': config.accessToken },
-          body: JSON.stringify({ query: `{ orders(first: 250, query: "created_at:>=${currentStart} AND created_at:<=${currentEnd} AND financial_status:paid") { edges { node { lineItems(first: 50) { edges { node { quantity } } } } } }` }),
-        }).catch(() => null),
-      ]);
-      topProduct = String(productRows[0]?.product_title ?? '');
-      if (itemsRes?.ok) {
-        const itemsData = await itemsRes.json() as { data?: { orders?: { edges: Array<{ node: { lineItems: { edges: Array<{ node: { quantity: number } }> } } }> } } };
-        const orderEdges = itemsData.data?.orders?.edges ?? [];
-        if (orderEdges.length > 0) {
-          const totalItems = orderEdges.reduce((sum, e) =>
-            sum + e.node.lineItems.edges.reduce((s, li) => s + (li.node.quantity || 0), 0), 0);
-          averageItemsPerOrder = totalItems / orderEdges.length;
-        }
-      }
-    } catch { /* non-critical */ }
+    } catch { /* non-critical — customer/items metrics default to 0 */ }
 
     return {
       totalRevenue,
