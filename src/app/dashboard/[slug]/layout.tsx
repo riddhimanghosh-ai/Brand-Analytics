@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { ChatPanel } from '@/components/ChatPanel';
 import { NavLink } from '@/components/NavLink';
+import { LogoutButton } from '@/components/LogoutButton';
 import { SidebarToggle } from '@/components/SidebarToggle';
 import { verifySession, canAccessBrand, filterBrandsForUser, COOKIE_NAME } from '@/lib/auth';
 
@@ -168,6 +169,8 @@ export default async function DashboardLayout({
           <NavLink href="/" exact>
             All Brands
           </NavLink>
+
+          <LogoutButton />
         </nav>
 
         <div className="sidebar-footer">

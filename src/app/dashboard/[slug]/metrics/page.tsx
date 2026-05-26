@@ -36,14 +36,24 @@ const PRESETS = [
   },
 ];
 
-interface SavedMetric { name: string; query: string; chartType: string }
+interface SavedMetric { name: string; query: string; chartType: string; dateRange?: string }
 interface Column { name: string; dataType: string }
 type Row = string[];
+
+function applyDateRange(query: string, range: string): string {
+  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '1y': 365 };
+  const days = daysMap[range];
+  if (!days) return query;
+  return query
+    .replace(/SINCE\s+startOfDay\([^)]+\)/gi, `SINCE startOfDay(-${days}d)`)
+    .replace(/SINCE\s+"[^"]+"/gi, `SINCE startOfDay(-${days}d)`);
+}
 
 export default function MetricsPage({ params: paramsPromise }: { params: Promise<{ slug: string }> }) {
   const [slug, setSlug] = useState('');
   const [query, setQuery] = useState(PRESETS[0].query);
   const [chartType, setChartType] = useState<'line' | 'bar' | 'pie' | 'table'>('line');
+  const [dateRange, setDateRange] = useState('30d');
   const [running, setRunning] = useState(false);
   const [columns, setColumns] = useState<Column[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
@@ -53,11 +63,16 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
   const [saving, setSaving] = useState(false);
   const [dataSource, setDataSource] = useState<'shopifyql' | 'orders_api' | null>(null);
 
+  // Ask AI state
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiExplanation, setAiExplanation] = useState('');
+  const [aiError, setAiError] = useState('');
+
   useEffect(() => {
     paramsPromise.then(p => {
       const resolvedSlug = p.slug;
       setSlug(resolvedSlug);
-      // Load saved metrics on mount
       fetch(`/api/brands/${resolvedSlug}`)
         .then(r => r.json())
         .then(brand => {
@@ -75,10 +90,11 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
     setRows([]);
     setDataSource(null);
     try {
+      const effectiveQuery = applyDateRange(query, dateRange);
       const res = await fetch('/api/metrics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slug, query }),
+        body: JSON.stringify({ slug, query: effectiveQuery }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -95,25 +111,26 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
     }
   };
 
-  const applyPreset = (preset: { name: string; query: string; chartType: string }) => {
+  const applyPreset = (preset: { name: string; query: string; chartType: string; dateRange?: string }) => {
     setQuery(preset.query);
     setChartType(preset.chartType as 'line' | 'bar' | 'pie' | 'table');
+    if (preset.dateRange) setDateRange(preset.dateRange);
     setColumns([]);
     setRows([]);
     setError('');
+    setAiExplanation('');
+    setAiError('');
   };
 
   const saveMetric = async () => {
     if (!saveName.trim() || !slug) return;
     setSaving(true);
     try {
-      // Fetch current savedMetrics from the brand
       const res = await fetch(`/api/brands/${slug}`);
       const brand = await res.json();
       const existing: SavedMetric[] = brand.savedMetrics || [];
-      const updated = [...existing, { name: saveName.trim(), query, chartType }];
+      const updated = [...existing, { name: saveName.trim(), query, chartType, dateRange }];
 
-      // Only send savedMetrics — don't touch any other field
       await fetch(`/api/brands/${slug}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -136,6 +153,42 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
     setSavedMetrics(updated);
   };
 
+  const generateQuery = async () => {
+    if (!aiQuestion.trim() || !slug) return;
+    setAiGenerating(true);
+    setAiError('');
+    setAiExplanation('');
+    try {
+      const res = await fetch('/api/metrics/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: aiQuestion, slug }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setAiError(data.error);
+      } else {
+        setQuery(data.query);
+        setChartType(data.chartType as 'line' | 'bar' | 'pie' | 'table');
+        setAiExplanation(data.explanation || '');
+        setColumns([]);
+        setRows([]);
+        setError('');
+      }
+    } catch {
+      setAiError('Failed to generate query. Please try again.');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const DATE_RANGE_OPTIONS = [
+    { label: '7d', value: '7d' },
+    { label: '30d', value: '30d' },
+    { label: '90d', value: '90d' },
+    { label: '1y', value: '1y' },
+  ];
+
   return (
     <>
       <div className="page-header">
@@ -148,6 +201,49 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
       </div>
 
       <div className="page-body">
+        {/* Ask AI Section */}
+        <div className="form-card" style={{ marginBottom: '16px' }}>
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            ✨ Ask AI
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <input
+              value={aiQuestion}
+              onChange={e => setAiQuestion(e.target.value)}
+              placeholder="Ask a question in plain English, e.g. 'What were my top 5 products last month?'"
+              style={{
+                flex: 1,
+                minWidth: '200px',
+                padding: '9px 12px',
+                background: 'var(--bg-primary)',
+                border: '1px solid var(--border-color)',
+                borderRadius: '6px',
+                color: 'var(--text-primary)',
+                fontSize: '13px',
+              }}
+              onKeyDown={e => { if (e.key === 'Enter' && !aiGenerating) generateQuery(); }}
+            />
+            <button
+              onClick={generateQuery}
+              disabled={aiGenerating || !aiQuestion.trim()}
+              className="btn btn-secondary"
+              style={{ fontSize: '13px', padding: '9px 16px', flexShrink: 0, whiteSpace: 'nowrap' }}
+            >
+              {aiGenerating ? '⏳ Generating...' : '✨ Generate Query'}
+            </button>
+          </div>
+          {aiExplanation && (
+            <div style={{ marginTop: '8px', fontSize: '12px', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
+              {aiExplanation}
+            </div>
+          )}
+          {aiError && (
+            <div style={{ marginTop: '8px', fontSize: '12px', color: '#ef4444' }}>
+              {aiError}
+            </div>
+          )}
+        </div>
+
         {/* Preset Templates */}
         <div style={{ marginBottom: '16px' }}>
           <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -207,19 +303,33 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
                   <div style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', wordBreak: 'break-word' }}>
                     {metric.name}
                   </div>
-                  <div style={{
-                    fontSize: '10px',
-                    fontWeight: '600',
-                    color: '#8b5cf6',
-                    background: 'rgba(139,92,246,0.1)',
-                    borderRadius: '4px',
-                    padding: '2px 6px',
-                    display: 'inline-block',
-                    alignSelf: 'flex-start',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                  }}>
-                    {metric.chartType}
+                  <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                    <div style={{
+                      fontSize: '10px',
+                      fontWeight: '600',
+                      color: '#8b5cf6',
+                      background: 'rgba(139,92,246,0.1)',
+                      borderRadius: '4px',
+                      padding: '2px 6px',
+                      display: 'inline-block',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                    }}>
+                      {metric.chartType}
+                    </div>
+                    {metric.dateRange && (
+                      <div style={{
+                        fontSize: '10px',
+                        fontWeight: '600',
+                        color: 'var(--accent-blue)',
+                        background: 'rgba(59,130,246,0.1)',
+                        borderRadius: '4px',
+                        padding: '2px 6px',
+                        display: 'inline-block',
+                      }}>
+                        {metric.dateRange}
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: 'flex', gap: '6px', marginTop: 'auto' }}>
                     <button
@@ -261,8 +371,35 @@ export default function MetricsPage({ params: paramsPromise }: { params: Promise
 
         {/* Query Editor */}
         <div className="form-card" style={{ marginBottom: '16px' }}>
-          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            ShopifyQL Query
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              ShopifyQL Query
+            </div>
+            {/* Date Range Segmented Control */}
+            <div style={{ display: 'flex', gap: '2px', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: '6px', padding: '2px' }}>
+              {DATE_RANGE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    setDateRange(opt.value);
+                    setQuery(q => applyDateRange(q, opt.value));
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    borderRadius: '4px',
+                    border: 'none',
+                    background: dateRange === opt.value ? 'var(--accent-blue)' : 'transparent',
+                    color: dateRange === opt.value ? '#fff' : 'var(--text-secondary)',
+                    fontSize: '11px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
           <textarea
             value={query}
