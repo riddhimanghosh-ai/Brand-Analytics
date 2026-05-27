@@ -518,6 +518,7 @@ export async function getShopInfo(config: ShopifyConfig) {
 function computeMetrics(orders: Array<Record<string, unknown>>) {
   let totalRevenue = 0;
   let totalRefunded = 0;
+  let totalDiscountsGiven = 0;
   let totalItems = 0;
   const customerIds = new Set<string>();
   const repeatCustomers = new Set<string>();
@@ -537,6 +538,9 @@ function computeMetrics(orders: Array<Record<string, unknown>>) {
     const refundSet = order.totalRefundedSet as { shopMoney: { amount: string } };
     const refund = parseFloat(refundSet?.shopMoney?.amount || '0');
     totalRefunded += refund;
+
+    const discountSet = order.totalDiscountsSet as { shopMoney: { amount: string } } | null;
+    totalDiscountsGiven += parseFloat(discountSet?.shopMoney?.amount || '0');
 
     const customer = order.customer as { id: string; numberOfOrders: number } | null;
     // Use customer ID for logged-in customers, email for guest checkouts.
@@ -597,6 +601,7 @@ function computeMetrics(orders: Array<Record<string, unknown>>) {
       uniqueCustomers > 0 ? (repeatCustomers.size / uniqueCustomers) * 100 : 0,
     refundRate: totalRevenue > 0 ? (totalRefunded / totalRevenue) * 100 : 0,
     averageItemsPerOrder: totalOrders > 0 ? totalItems / totalOrders : 0,
+    totalDiscountsGiven,
     returningCustomerRevenue,
     newCustomerRevenue,
     topProduct,
@@ -625,7 +630,7 @@ export async function getKPIs(
     const [curRows, prevRows, sessionRows] = await Promise.all([
       runShopifyQL(
         config,
-        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value SINCE ${currentStart} UNTIL ${currentEnd}`,
+        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts SINCE ${currentStart} UNTIL ${currentEnd}`,
       ),
       runShopifyQL(
         config,
@@ -641,12 +646,13 @@ export async function getKPIs(
     const prev    = prevRows[0]    ?? {};
     const session = sessionRows[0] ?? {};
 
-    const totalRevenue = Number(cur.net_sales              ?? 0);
-    const totalOrders  = Number(cur.orders                 ?? 0);
-    const grossSales   = Number(cur.gross_sales            ?? 0);
-    const totalReturns = Math.abs(Number(cur.returns       ?? 0));
-    const aov          = Number(cur.average_order_value    ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
-    const refundRate   = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
+    const totalRevenue        = Number(cur.net_sales              ?? 0);
+    const totalOrders         = Number(cur.orders                 ?? 0);
+    const grossSales          = Number(cur.gross_sales            ?? 0);
+    const totalReturns        = Math.abs(Number(cur.returns       ?? 0));
+    const totalDiscountsGiven = Math.abs(Number(cur.discounts     ?? 0));
+    const aov                 = Number(cur.average_order_value    ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+    const refundRate          = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
 
     const prevRevenue = Number(prev.net_sales           ?? 0);
     const prevOrders  = Number(prev.orders              ?? 0);
@@ -714,6 +720,7 @@ export async function getKPIs(
       cartAbandonmentRate,
       refundRate,
       averageItemsPerOrder,
+      totalDiscountsGiven,
       returningCustomerRevenue,
       newCustomerRevenue,
       topSellingProduct:        topProduct,
@@ -749,6 +756,7 @@ export async function getKPIs(
     cartAbandonmentRate:    0,
     refundRate:             currentMetrics.refundRate,
     averageItemsPerOrder:   currentMetrics.averageItemsPerOrder,
+    totalDiscountsGiven:    currentMetrics.totalDiscountsGiven,
     returningCustomerRevenue: currentMetrics.returningCustomerRevenue,
     newCustomerRevenue:     currentMetrics.newCustomerRevenue,
     topSellingProduct:      currentMetrics.topProduct,
@@ -1486,7 +1494,7 @@ async function buildAllAnalyticsFromShopifyQL(
 }> {
   const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows] = await Promise.all([
     // Current period: sales totals (no customer columns — unreliable for guest checkouts; handled via GraphQL below)
-    runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value SINCE ${startDate} UNTIL ${endDate}`),
+    runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts SINCE ${startDate} UNTIL ${endDate}`),
     // Current period: daily timeseries
     runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
     // Top 15 products by gross sales
@@ -1503,12 +1511,13 @@ async function buildAllAnalyticsFromShopifyQL(
 
   // ── Parse current period KPIs ────────────────────────────────────────────
   const kpi = kpiRows[0] ?? {};
-  const totalOrders  = Number(kpi.orders              ?? 0);
-  const totalRevenue = Number(kpi.net_sales           ?? 0);
-  const grossSales   = Number(kpi.gross_sales         ?? 0);
-  const totalReturns = Number(kpi.returns             ?? 0);
-  const aov          = Number(kpi.average_order_value ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
-  const refundRate   = grossSales > 0 ? (Math.abs(totalReturns) / grossSales) * 100 : 0;
+  const totalOrders         = Number(kpi.orders              ?? 0);
+  const totalRevenue        = Number(kpi.net_sales           ?? 0);
+  const grossSales          = Number(kpi.gross_sales         ?? 0);
+  const totalReturns        = Number(kpi.returns             ?? 0);
+  const totalDiscountsGiven = Math.abs(Number(kpi.discounts  ?? 0));
+  const aov                 = Number(kpi.average_order_value ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+  const refundRate          = grossSales > 0 ? (Math.abs(totalReturns) / grossSales) * 100 : 0;
 
   // ── Parse sessions funnel (mirrors bot's get_funnel) ────────────────────
   const session       = sessionRows[0] ?? {};
@@ -1615,6 +1624,7 @@ async function buildAllAnalyticsFromShopifyQL(
     cartAbandonmentRate,
     refundRate,
     averageItemsPerOrder,
+    totalDiscountsGiven,
     returningCustomerRevenue,
     newCustomerRevenue,
     topSellingProduct:        products[0]?.title ?? '',
