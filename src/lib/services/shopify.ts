@@ -849,10 +849,33 @@ export async function getTopProducts(
 ): Promise<ShopifyProduct[]> {
   const { startDate, endDate } = parseDateRange(dateRange);
 
+  // ── ShopifyQL fast path (sub-second, no pagination) ──────────────────────
+  try {
+    const rows = await runShopifyQL(
+      config,
+      `FROM sales SHOW gross_sales, net_sales, orders GROUP BY product_title ORDER BY net_sales DESC LIMIT 20 SINCE ${startDate} UNTIL ${endDate}`,
+    );
+
+    if (rows.length > 0) {
+      const products: ShopifyProduct[] = rows.map((row, i) => ({
+        id:             `shopifyql-${i}`,
+        title:          String(row.product_title ?? 'Unknown'),
+        totalRevenue:   Number(row.net_sales   ?? 0),
+        totalUnitsSold: 0,       // Not available in ShopifyQL
+        totalOrders:    Number(row.orders      ?? 0),
+        averagePrice:   Number(row.orders ?? 0) > 0 ? Number(row.net_sales ?? 0) / Number(row.orders) : 0,
+        imageUrl:       null,    // Not available in ShopifyQL
+      }));
+
+      return products;
+    }
+  } catch {
+    // ShopifyQL unavailable — fall through to raw order fetch
+  }
+
+  // ── Fallback: raw order pagination (includes imageUrl & unitsSold) ────────
   const orders = await fetchAllOrders(config, startDate, endDate);
-
   const productMap: Record<string, ShopifyProduct> = {};
-
 
   for (const order of orders) {
     const lineItems = order.lineItems as {
