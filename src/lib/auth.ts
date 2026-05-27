@@ -19,7 +19,7 @@ export interface User {
 
 export const USERS: User[] = [
   { username: 'Riddhiman', password: 'BrandAnalytics1234', allowedBrands: null },
-  { username: 'hira', password: 'H!r@Sk1n#2026$', allowedBrands: ['hira'] },
+  { username: 'hira', password: 'hR@9$kZ#mQ2!xL7&', allowedBrands: ['hira'] },
 ];
 
 export function findUser(username: string, password: string): User | null {
