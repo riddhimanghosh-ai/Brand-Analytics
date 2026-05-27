@@ -440,12 +440,14 @@ a:hover { text-decoration: underline; }
 
 .kpi-card .kpi-value {
   font-family: var(--f-display);
-  font-size: 28px;
+  font-size: clamp(18px, 2.2vw, 28px);
   font-weight: 500;
   letter-spacing: -0.03em;
   line-height: 1.1;
   color: var(--ink);
   font-feature-settings: "tnum";
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .kpi-card .kpi-change {
@@ -1355,6 +1357,9 @@ textarea.form-input:focus {
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .kpi-card .kpi-value {
+    font-size: clamp(16px, 4vw, 24px);
+  }
   .charts-grid.cols-2,
   .charts-grid.cols-3 {
     grid-template-columns: 1fr;
@@ -1364,6 +1369,9 @@ textarea.form-input:focus {
 @media (max-width: 480px) {
   .kpi-grid {
     grid-template-columns: 1fr;
+  }
+  .kpi-card .kpi-value {
+    font-size: 22px;
   }
   .chat-panel {
     right: 0;

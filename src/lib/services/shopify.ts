@@ -364,7 +364,7 @@ async function fetchAllOrders(
   config: ShopifyConfig,
   startDate: string,
   endDate: string,
-  deadlineMs = Date.now() + 22_000, // default 22s — leave buffer before Lambda kills connection
+  deadlineMs = Date.now() + 90_000, // default 90s — API route allows 120s; gives plenty of room for large ranges
 ): Promise<Array<Record<string, unknown>>> {
   const chunks = chunkDateRange(startDate, endDate, 7);
   const raw: Array<Record<string, unknown>> = [];
