@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-
-const HIRA_AUTH_COOKIE = 'hira-auth';
+import { COOKIE_NAME } from '@/lib/auth';
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -16,9 +15,10 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check auth cookie
-  const authCookie = request.cookies.get(HIRA_AUTH_COOKIE)?.value;
-  if (authCookie !== '1') {
+  // Check session cookie (ba_session) — presence check only; full HMAC
+  // verification happens in API routes/server components where async is allowed.
+  const sessionCookie = request.cookies.get(COOKIE_NAME)?.value;
+  if (!sessionCookie) {
     const loginUrl = new URL('/login', request.url);
     return NextResponse.redirect(loginUrl);
   }
