@@ -1090,9 +1090,10 @@ export default function AdsPage({ params: paramsPromise }: { params: Promise<{ s
   useEffect(() => {
     paramsPromise.then((p) => {
       setSlug(p.slug);
+      const timeout = (ms: number) => new Promise<{error: string}>(r => setTimeout(() => r({ error: 'timeout' }), ms));
       Promise.all([
-        fetch(`/api/ads?slug=${p.slug}&platform=meta&action=kpis&range=7d`).then((r) => r.json()),
-        fetch(`/api/ads?slug=${p.slug}&platform=google&action=kpis&range=7d`).then((r) => r.json()),
+        Promise.race([fetch(`/api/ads?slug=${p.slug}&platform=meta&action=kpis&range=7d`).then((r) => r.json()), timeout(15000)]),
+        Promise.race([fetch(`/api/ads?slug=${p.slug}&platform=google&action=kpis&range=7d`).then((r) => r.json()), timeout(15000)]),
       ]).then(([m, g]) => {
         // "Not connected" = user needs to click Connect (OAuth missing).
         // Any other error (e.g. server env var missing, API error) means
@@ -1108,7 +1109,12 @@ export default function AdsPage({ params: paramsPromise }: { params: Promise<{ s
     });
   }, [paramsPromise]);
 
-  if (!slug || !connections.checked) return null;
+  if (!slug || !connections.checked) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', flexDirection: 'column', gap: 16 }}>
+      <div className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
+      <p style={{ fontFamily: 'var(--f-mono)', fontSize: 11, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted)' }}>Loading ads data...</p>
+    </div>
+  );
 
   const tabs = [
     { id: 'overview' as const, label: '📊 Overview', connected: connections.meta || connections.google },
