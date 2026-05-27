@@ -61,6 +61,8 @@ export async function PUT(
       'cogsPercent', 'avgShippingCost', 'avgReturnRate',
       'alertRules',
       'events',
+      'windsorApiKey',
+      'synterApiKey',
     ];
     const updates = Object.fromEntries(
       allowedFields

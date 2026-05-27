@@ -34,7 +34,7 @@ export default async function DashboardLayout({
         shopify: !!(brand.shopifyStoreUrl && brand.shopifyAccessToken),
         ga4: !!brand.ga4PropertyId,
         metaAds: !!brand.metaAccessToken,
-        googleAds: !!brand.googleAdsCustomerId,
+        googleAds: !!(brand.windsorApiKey || brand.googleAdsCustomerId),
         ai: !!(process.env.ANTHROPIC_API_KEY),
         tiktok: !!(brand.tiktokAccessToken && brand.tiktokAdvertiserId),
         klaviyo: !!brand.klaviyoApiKey,

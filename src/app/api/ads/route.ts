@@ -2,6 +2,8 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
+import * as windsor from '@/lib/services/windsor';
+import * as synter from '@/lib/services/synter';
 import { requireBrandAccess } from '@/lib/auth-server';
 import {
   demoMetaKPIs, demoMetaCampaigns, demoMetaSpend,
@@ -102,16 +104,44 @@ export async function GET(request: Request) {
 
     // ---- Google Ads ----
     if (platform === 'google') {
-      // devToken / clientId / clientSecret live in env vars (shared across all brands)
+      // Synter Media AI — uses real Google Ads API, no dev token approval needed
+      const synterKey = brand.synterApiKey || process.env.SYNTER_API_KEY;
+      if (synterKey) {
+        switch (action) {
+          case 'kpis':
+            return NextResponse.json(await synter.getKPIs(synterKey, dateRange));
+          case 'campaigns':
+            return NextResponse.json(await synter.getCampaigns(synterKey, dateRange));
+          case 'spend':
+            return NextResponse.json(await synter.getSpendOverTime(synterKey, dateRange));
+          default:
+            return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+        }
+      }
+
+      // Windsor.ai fallback
+      const windsorKey = brand.windsorApiKey || process.env.WINDSOR_API_KEY;
+      if (windsorKey) {
+        switch (action) {
+          case 'kpis':
+            return NextResponse.json(await windsor.getKPIs(windsorKey, dateRange));
+          case 'campaigns':
+            return NextResponse.json(await windsor.getCampaigns(windsorKey, dateRange));
+          case 'spend':
+            return NextResponse.json(await windsor.getSpendOverTime(windsorKey, dateRange));
+          default:
+            return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
+        }
+      }
+
+      // Fallback: direct Google Ads API (requires approved dev token)
       const devToken     = brand.googleAdsDevToken     || process.env.GOOGLE_ADS_DEV_TOKEN;
       const clientId     = brand.googleAdsClientId     || process.env.GOOGLE_CLIENT_ID;
       const clientSecret = brand.googleAdsClientSecret || process.env.GOOGLE_CLIENT_SECRET;
 
-      // OAuth state — what the user controls via the Connect button
       if (!brand.googleAdsRefreshToken || !brand.googleAdsCustomerId) {
         return NextResponse.json({ error: 'Google Ads not connected' }, { status: 400 });
       }
-      // Server config — what the deployer controls via env vars
       const missing: string[] = [];
       if (!devToken)     missing.push('GOOGLE_ADS_DEV_TOKEN');
       if (!clientId)     missing.push('GOOGLE_CLIENT_ID');
@@ -126,9 +156,6 @@ export async function GET(request: Request) {
         devToken,
         clientId,
         clientSecret,
-        // Manager Account ID — required when dev token belongs to an MCC
-        // and customerId is a client under it. Set GOOGLE_ADS_LOGIN_CUSTOMER_ID
-        // env var to your MCC ID (digits only, no hyphens).
         loginCustomerId: process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID || undefined,
         refreshToken: brand.googleAdsRefreshToken,
         customerId: brand.googleAdsCustomerId,
