@@ -6,7 +6,7 @@ import * as googleAds from '@/lib/services/google-ads';
 import * as shopifyService from '@/lib/services/shopify';
 import { cacheGet, cacheSet } from '@/lib/analytics-cache';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function GET(request: Request) {
   try {

@@ -364,20 +364,13 @@ async function fetchAllOrders(
   config: ShopifyConfig,
   startDate: string,
   endDate: string,
-  deadlineMs = Date.now() + 90_000, // default 90s — API route allows 120s; gives plenty of room for large ranges
 ): Promise<Array<Record<string, unknown>>> {
   const chunks = chunkDateRange(startDate, endDate, 7);
   const raw: Array<Record<string, unknown>> = [];
-  if (chunks.length === 1) {
-    raw.push(...await fetchOrdersWindow(config, startDate, endDate));
-  } else {
-    for (const [cs, ce] of chunks) {
-      if (Date.now() > deadlineMs) {
-        console.warn(`fetchAllOrders: deadline exceeded after ${raw.length} orders — returning partial data`);
-        break;
-      }
-      raw.push(...await fetchOrdersWindow(config, cs, ce));
-    }
+  // Always fetch every chunk — no artificial deadline. The API route's
+  // maxDuration (120s) is the only timeout boundary, guaranteeing complete data.
+  for (const [cs, ce] of chunks) {
+    raw.push(...await fetchOrdersWindow(config, cs, ce));
   }
   // NOTE: Do NOT filter cancelled orders here.
   // Shopify Analytics counts ALL orders (including cancelled ones) in the orders metric.
