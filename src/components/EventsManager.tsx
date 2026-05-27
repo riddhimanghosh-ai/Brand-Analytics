@@ -129,53 +129,86 @@ function TagPill({ tag, onClick, active }: { tag: string; onClick?: () => void; 
 
 function TimelineStrip({ events }: { events: BrandEvent[] }) {
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd   = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const totalDays  = monthEnd.getDate();
-  const monthLabel = now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+  if (events.length === 0) return (
+    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '14px 16px', marginBottom: '20px' }}>
+      <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Event Timeline</div>
+      <div style={{ fontSize: '12px', color: 'var(--text-dim)', fontStyle: 'italic' }}>No events yet</div>
+    </div>
+  );
+
+  // Calculate range: from earliest event start to latest event end (or today)
+  const allDates = events.flatMap(ev => [new Date(ev.startDate + 'T12:00'), new Date(ev.endDate + 'T12:00')]);
+  const rangeStart = new Date(Math.min(...allDates.map(d => d.getTime())));
+  const rangeEnd   = new Date(Math.max(...allDates.map(d => d.getTime()), now.getTime()));
+  // Pad slightly
+  rangeStart.setDate(rangeStart.getDate() - 1);
+  rangeEnd.setDate(rangeEnd.getDate() + 1);
+  const totalMs = rangeEnd.getTime() - rangeStart.getTime();
 
   const strips = events.map(ev => {
     const s = new Date(ev.startDate + 'T12:00');
     const e = new Date(ev.endDate   + 'T12:00');
-    const clampS = s < monthStart ? monthStart : s;
-    const clampE = e > monthEnd   ? monthEnd   : e;
-    if (clampE < monthStart || clampS > monthEnd) return null;
-    const leftPct  = ((clampS.getDate() - 1) / totalDays) * 100;
-    const widthPct = Math.max(((clampE.getDate() - clampS.getDate() + 1) / totalDays) * 100, 1.5);
+    const leftPct  = ((s.getTime() - rangeStart.getTime()) / totalMs) * 100;
+    const widthPct = Math.max(((e.getTime() - s.getTime()) / totalMs) * 100, 1.5);
     const tm = TYPE_META[ev.type];
     return { ev, leftPct, widthPct, color: tm.color };
-  }).filter(Boolean) as { ev: BrandEvent; leftPct: number; widthPct: number; color: string }[];
+  });
+
+  // Today marker
+  const todayPct = ((now.getTime() - rangeStart.getTime()) / totalMs) * 100;
+
+  const fmtDate = (d: Date) => d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
 
   return (
     <div style={{
       background: 'var(--bg-elevated)', border: '1px solid var(--border-color)',
       borderRadius: '10px', padding: '14px 16px', marginBottom: '20px',
     }}>
-      <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>
-        📅 {monthLabel} — Event Timeline
+      <div style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' }}>
+        Event Timeline — {fmtDate(rangeStart)} → {fmtDate(rangeEnd)}
       </div>
-      {/* Day markers */}
-      <div style={{ position: 'relative', height: '6px', background: 'var(--bg-primary)', borderRadius: '4px', marginBottom: '6px' }}>
-        {strips.map(({ ev, leftPct, widthPct, color }) => (
-          <div
-            key={ev.id}
-            title={ev.title}
-            style={{
-              position: 'absolute', top: 0, left: `${leftPct}%`, width: `${widthPct}%`,
-              height: '100%', borderRadius: '3px', background: color, opacity: 0.85,
-            }}
-          />
+
+      {/* Stacked event bars */}
+      <div style={{ position: 'relative', marginBottom: '8px' }}>
+        {strips.map(({ ev, leftPct, widthPct, color }, i) => (
+          <div key={ev.id} style={{ position: 'relative', height: '22px', marginBottom: '4px' }}>
+            <div
+              title={`${ev.title} (${ev.startDate} → ${ev.endDate})`}
+              style={{
+                position: 'absolute', top: 0, left: `${leftPct}%`, width: `${widthPct}%`,
+                height: '100%', borderRadius: '4px', background: color, opacity: 0.85,
+                display: 'flex', alignItems: 'center', paddingLeft: '6px',
+                overflow: 'hidden', cursor: 'default',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+              }}
+            >
+              <span style={{ fontSize: '10px', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {ev.title}
+              </span>
+            </div>
+          </div>
         ))}
+
+        {/* Today line */}
+        {todayPct >= 0 && todayPct <= 100 && (
+          <div style={{
+            position: 'absolute', top: 0, left: `${todayPct}%`,
+            width: '2px', height: `${strips.length * 26}px`,
+            background: 'var(--accent)', opacity: 0.7,
+            pointerEvents: 'none',
+          }}>
+            <span style={{ position: 'absolute', top: -16, left: -12, fontSize: '9px', fontWeight: 700, color: 'var(--accent)', whiteSpace: 'nowrap', fontFamily: 'var(--f-mono)' }}>TODAY</span>
+          </div>
+        )}
       </div>
-      {/* Day labels */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-dim)' }}>
-        {[1, Math.ceil(totalDays / 4), Math.ceil(totalDays / 2), Math.ceil(totalDays * 3 / 4), totalDays].map(d => (
-          <span key={d}>{d}</span>
-        ))}
+
+      {/* Date labels */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: 'var(--text-dim)', fontFamily: 'var(--f-mono)', marginTop: '4px' }}>
+        <span>{fmtDate(rangeStart)}</span>
+        <span>{fmtDate(new Date((rangeStart.getTime() + rangeEnd.getTime()) / 2))}</span>
+        <span>{fmtDate(rangeEnd)}</span>
       </div>
-      {strips.length === 0 && (
-        <div style={{ fontSize: '12px', color: 'var(--text-dim)', fontStyle: 'italic', marginTop: '4px' }}>No events this month</div>
-      )}
     </div>
   );
 }
