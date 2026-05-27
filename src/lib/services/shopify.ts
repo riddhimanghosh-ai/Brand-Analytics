@@ -624,13 +624,10 @@ export async function getKPIs(
 
   // ── Try ShopifyQL first (fast path — sub-second, no pagination) ───────────
   try {
-    // NOTE: 'customers', 'returning_customers', 'returning_customer_rate' are NOT used here
-    // because they only count logged-in customers (returns 0 for guest-checkout stores).
-    // Customer metrics are derived from the GraphQL email query below instead.
     const [curRows, prevRows, sessionRows] = await Promise.all([
       runShopifyQL(
         config,
-        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts SINCE ${currentStart} UNTIL ${currentEnd}`,
+        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate SINCE ${currentStart} UNTIL ${currentEnd}`,
       ),
       runShopifyQL(
         config,
@@ -646,13 +643,15 @@ export async function getKPIs(
     const prev    = prevRows[0]    ?? {};
     const session = sessionRows[0] ?? {};
 
-    const totalRevenue        = Number(cur.net_sales              ?? 0);
-    const totalOrders         = Number(cur.orders                 ?? 0);
-    const grossSales          = Number(cur.gross_sales            ?? 0);
-    const totalReturns        = Math.abs(Number(cur.returns       ?? 0));
-    const totalDiscountsGiven = Math.abs(Number(cur.discounts     ?? 0));
-    const aov                 = Number(cur.average_order_value    ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+    const totalRevenue        = Number(cur.net_sales                   ?? 0);
+    const totalOrders         = Number(cur.orders                      ?? 0);
+    const grossSales          = Number(cur.gross_sales                 ?? 0);
+    const totalReturns        = Math.abs(Number(cur.returns            ?? 0));
+    const totalDiscountsGiven = Math.abs(Number(cur.discounts          ?? 0));
+    const aov                 = Number(cur.average_order_value         ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
     const refundRate          = grossSales > 0 ? (totalReturns / grossSales) * 100 : 0;
+    // returning_customer_rate from ShopifyQL matches Shopify's native dashboard exactly (PERCENT col)
+    const shopifyReturningRate = Number(cur.returning_customer_rate ?? 0);
 
     const prevRevenue = Number(prev.net_sales           ?? 0);
     const prevOrders  = Number(prev.orders              ?? 0);
@@ -685,22 +684,38 @@ export async function getKPIs(
       topProduct = String(productRows[0]?.product_title ?? '');
 
       // Process current period
-      const emails = new Set<string>();
+      // Returning = customer had at least one order BEFORE this range (Shopify's definition)
+      // Proxy: lifetime numberOfOrders > count of orders in this range
+      const customerOrderCount: Record<string, number> = {};
+      const customerLifetimeOrders: Record<string, number> = {};
+      for (const o of allOrders) {
+        const key = o.email || '';
+        if (key) {
+          customerOrderCount[key] = (customerOrderCount[key] || 0) + 1;
+          customerLifetimeOrders[key] = o.customer?.numberOfOrders ?? 0;
+        }
+      }
+      const returningEmails = new Set(
+        Object.keys(customerOrderCount).filter(
+          email => (customerLifetimeOrders[email] ?? 0) > customerOrderCount[email]
+        )
+      );
+      const uniqueCustomerCount = Object.keys(customerOrderCount).length;
+
       let retRevenue = 0;
       let newRevenue = 0;
       let totalItems = 0;
-      let repeatOrderCount = 0;
       for (const o of allOrders) {
         const email = o.email || '';
         const rev = parseFloat(o.totalPriceSet?.shopMoney?.amount || '0');
-        if (email) emails.add(email);
-        const numOrders = o.customer?.numberOfOrders ?? 1;
-        if (numOrders > 1) { retRevenue += rev; repeatOrderCount++; }
+        if (email && returningEmails.has(email)) { retRevenue += rev; }
         else { newRevenue += rev; }
         totalItems += o.lineItems.edges.reduce((s, li) => s + (li.node.quantity || 0), 0);
       }
-      totalCustomers = emails.size || allOrders.length;
-      repeatCustomerRate = allOrders.length > 0 ? (repeatOrderCount / allOrders.length) * 100 : 0;
+      totalCustomers = uniqueCustomerCount || allOrders.length;
+      repeatCustomerRate = uniqueCustomerCount > 0 ? (returningEmails.size / uniqueCustomerCount) * 100 : 0;
+      // Prefer ShopifyQL rate — same engine as Shopify's native dashboard, avoids numberOfOrders staleness
+      if (shopifyReturningRate > 0) repeatCustomerRate = shopifyReturningRate;
       returningCustomerRevenue = retRevenue;
       newCustomerRevenue = newRevenue;
       averageItemsPerOrder = allOrders.length > 0 ? totalItems / allOrders.length : 0;
@@ -1493,8 +1508,7 @@ async function buildAllAnalyticsFromShopifyQL(
   conversionFunnel: ConversionFunnel[];
 }> {
   const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows] = await Promise.all([
-    // Current period: sales totals (no customer columns — unreliable for guest checkouts; handled via GraphQL below)
-    runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts SINCE ${startDate} UNTIL ${endDate}`),
+    runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate SINCE ${startDate} UNTIL ${endDate}`),
     // Current period: daily timeseries
     runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
     // Top 15 products by gross sales
@@ -1511,13 +1525,15 @@ async function buildAllAnalyticsFromShopifyQL(
 
   // ── Parse current period KPIs ────────────────────────────────────────────
   const kpi = kpiRows[0] ?? {};
-  const totalOrders         = Number(kpi.orders              ?? 0);
-  const totalRevenue        = Number(kpi.net_sales           ?? 0);
-  const grossSales          = Number(kpi.gross_sales         ?? 0);
-  const totalReturns        = Number(kpi.returns             ?? 0);
-  const totalDiscountsGiven = Math.abs(Number(kpi.discounts  ?? 0));
-  const aov                 = Number(kpi.average_order_value ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
-  const refundRate          = grossSales > 0 ? (Math.abs(totalReturns) / grossSales) * 100 : 0;
+  const totalOrders          = Number(kpi.orders                   ?? 0);
+  const totalRevenue         = Number(kpi.net_sales                ?? 0);
+  const grossSales           = Number(kpi.gross_sales              ?? 0);
+  const totalReturns         = Number(kpi.returns                  ?? 0);
+  const totalDiscountsGiven  = Math.abs(Number(kpi.discounts       ?? 0));
+  const aov                  = Number(kpi.average_order_value      ?? 0) || (totalOrders > 0 ? totalRevenue / totalOrders : 0);
+  const refundRate           = grossSales > 0 ? (Math.abs(totalReturns) / grossSales) * 100 : 0;
+  // returning_customer_rate from ShopifyQL matches Shopify's native dashboard (PERCENT col)
+  const shopifyReturningRate = Number(kpi.returning_customer_rate  ?? 0);
 
   // ── Parse sessions funnel (mirrors bot's get_funnel) ────────────────────
   const session       = sessionRows[0] ?? {};
@@ -1545,10 +1561,28 @@ async function buildAllAnalyticsFromShopifyQL(
       fetchAllOrdersLight(config, prevStart, prevEnd),
     ]);
     lightOrders = allOrders;
-    const emails = new Set(allOrders.map(o => o.email).filter(Boolean));
-    totalCustomers = emails.size || allOrders.length;
-    returningCustomers = allOrders.filter(o => (o.customer?.numberOfOrders ?? 1) > 1).length;
-    returningRate = allOrders.length > 0 ? (returningCustomers / allOrders.length) * 100 : 0;
+    // Returning = had at least one order BEFORE this range (Shopify's definition)
+    // Proxy: lifetime numberOfOrders > count of orders in this range
+    const customerOrderCount: Record<string, number> = {};
+    const customerLifetimeOrders: Record<string, number> = {};
+    for (const o of allOrders) {
+      const key = o.email || '';
+      if (key) {
+        customerOrderCount[key] = (customerOrderCount[key] || 0) + 1;
+        customerLifetimeOrders[key] = o.customer?.numberOfOrders ?? 0;
+      }
+    }
+    const uniqueCustomerCount = Object.keys(customerOrderCount).length;
+    returningCustomers = Object.keys(customerOrderCount).filter(
+      email => (customerLifetimeOrders[email] ?? 0) > customerOrderCount[email]
+    ).length;
+    totalCustomers = uniqueCustomerCount || allOrders.length;
+    returningRate = uniqueCustomerCount > 0 ? (returningCustomers / uniqueCustomerCount) * 100 : 0;
+    // Prefer ShopifyQL rate — same engine as Shopify's native dashboard, avoids numberOfOrders staleness
+    if (shopifyReturningRate > 0) {
+      returningRate = shopifyReturningRate;
+      returningCustomers = uniqueCustomerCount > 0 ? Math.round(uniqueCustomerCount * shopifyReturningRate / 100) : returningCustomers;
+    }
     const prevEmails = new Set(allPrevOrders.map(o => o.email).filter(Boolean));
     prevCustomers = prevEmails.size || allPrevOrders.length;
   } catch { /* non-critical — customer metrics default to 0 */ }
