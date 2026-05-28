@@ -145,11 +145,6 @@ export default async function DashboardLayout({
 
           <div className="nav-section-label">Competitive Intel</div>
 
-          <span className="nav-link" style={{ pointerEvents: 'none', cursor: 'default', opacity: 0.55 }}>
-            Competitor Ads
-            {soonBadge}
-          </span>
-
           <NavLink href={`/dashboard/${slug}/tech-spy`}>
             Tech Stack Detector
           </NavLink>
