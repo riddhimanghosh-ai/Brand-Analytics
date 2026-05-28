@@ -124,6 +124,22 @@ export interface DateRange {
   label: string;
 }
 
+export interface DetectedTech {
+  name: string;
+  category: 'platform' | 'analytics' | 'ads' | 'shopify_app' | 'chat' | 'payment' | 'other';
+  icon: string;
+  confidence: 'high' | 'medium';
+}
+
+export interface TrackedWebsite {
+  id: string;
+  url: string;
+  name?: string;
+  addedAt: string;
+  lastScanned?: string;
+  tech?: DetectedTech[];
+}
+
 export interface BrandEvent {
   id: string;
   title: string;

@@ -150,6 +150,10 @@ export default async function DashboardLayout({
             {soonBadge}
           </span>
 
+          <NavLink href={`/dashboard/${slug}/tech-spy`}>
+            Tech Stack Detector
+          </NavLink>
+
           <div className="nav-section-label">Tools</div>
 
           <NavLink href={`/dashboard/${slug}/metrics`} disabled={!connections.shopify} disabledPlatform="Shopify">

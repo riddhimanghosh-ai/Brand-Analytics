@@ -61,6 +61,7 @@ export async function PUT(
       'cogsPercent', 'avgShippingCost', 'avgReturnRate',
       'alertRules',
       'events',
+      'trackedWebsites',
       'windsorApiKey',
       'synterApiKey',
     ];
