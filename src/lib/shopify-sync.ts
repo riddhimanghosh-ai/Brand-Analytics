@@ -489,6 +489,7 @@ export function computeFromCache(
     cartAbandonmentRate: 0,
     refundRate: totalRevenue > 0 ? (totalRefunded / totalRevenue) * 100 : 0,
     averageItemsPerOrder: totalOrders > 0 ? totalItems / totalOrders : 0,
+    totalDiscountsGiven: 0,
     returningCustomerRevenue: returningCustRevenue,
     newCustomerRevenue: newCustRevenue,
     topSellingProduct: topProductName,

@@ -19,6 +19,7 @@ interface ShopifyKPIs {
   repeatCustomerRate: number;
   refundRate: number;
   averageItemsPerOrder: number;
+  totalDiscountsGiven: number;
   returningCustomerRevenue: number;
   newCustomerRevenue: number;
   topSellingProduct: string;
@@ -379,11 +380,11 @@ export default function ShopifyDashboard({
           <div className="kpi-card amber">
             <div className="kpi-icon">🏷</div>
             <div className="kpi-label">Total Discounts Given</div>
-            {advancedLoading ? (
+            {loading ? (
               <div className="skeleton skeleton-text" />
             ) : (
               <div className="kpi-value">
-                {advanced ? formatCurrency(advanced.discountAnalysis.totalDiscountGiven) : '—'}
+                {kpis ? formatCurrency(kpis.totalDiscountsGiven) : '—'}
               </div>
             )}
           </div>

@@ -31,6 +31,7 @@ export interface ShopifyKPIs {
   cartAbandonmentRate: number;
   refundRate: number;
   averageItemsPerOrder: number;
+  totalDiscountsGiven: number;
   // CRO metrics
   returningCustomerRevenue: number;
   newCustomerRevenue: number;
