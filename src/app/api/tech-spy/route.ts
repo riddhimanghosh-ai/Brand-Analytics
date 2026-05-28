@@ -83,7 +83,12 @@ const FINGERPRINTS: Fingerprint[] = [
   { pattern: /omnisend\.com/i,                            name: 'Omnisend',             category: 'shopify_app', icon: '📨', confidence: 'high' },
   { pattern: /privy\.com|PrivyApp/i,                      name: 'Privy',                category: 'shopify_app', icon: '📩', confidence: 'high' },
   { pattern: /mailmodo\.com/i,                            name: 'Mailmodo',             category: 'shopify_app', icon: '📧', confidence: 'high' },
-  { pattern: /bitespeed\.co/i,                            name: 'BiteSpeed',            category: 'shopify_app', icon: '💬', confidence: 'high' },
+  { pattern: /bitespeed\.co|cdn\.bitespeed|bitespeed-fb-messenger|bitespeed-whatsapp/i, name: 'BiteSpeed', category: 'shopify_app', icon: '💬', confidence: 'high' },
+  { pattern: /customfit\.ai|sdk\.customfit/i,             name: 'CustomFit.ai',         category: 'shopify_app', icon: '🧪', confidence: 'high' },
+  { pattern: /togethr\.io|togethr-widget/i,               name: 'Togethr',              category: 'shopify_app', icon: '🤝', confidence: 'high' },
+  { pattern: /growthsimple\.com|grow-seo|growseo/i,       name: 'Grow SEO',             category: 'shopify_app', icon: '📈', confidence: 'high' },
+  { pattern: /checkoutblocks\.com|checkout-blocks/i,      name: 'Checkout Blocks',      category: 'shopify_app', icon: '🧱', confidence: 'high' },
+  { pattern: /sa-variant|savariant|smart-variant/i,       name: 'SA Variants',          category: 'shopify_app', icon: '🎛️', confidence: 'high' },
   { pattern: /pushowl\.com/i,                             name: 'PushOwl',              category: 'shopify_app', icon: '🔔', confidence: 'high' },
   { pattern: /webpushr\.com/i,                            name: 'Webpushr',             category: 'shopify_app', icon: '🔔', confidence: 'high' },
   { pattern: /recart\.com/i,                              name: 'Recart',               category: 'shopify_app', icon: '📲', confidence: 'high' },
@@ -163,6 +168,8 @@ const FINGERPRINTS: Fingerprint[] = [
   { pattern: /wishlist-plus|wishlisthero/i,               name: 'Wishlist Plus',        category: 'shopify_app', icon: '❤️', confidence: 'medium' },
   { pattern: /wishlink\.app/i,                            name: 'Wishlink',             category: 'shopify_app', icon: '❤️', confidence: 'high' },
   { pattern: /bloop-loyalty|bloop\.app/i,                 name: 'Bloop',                category: 'shopify_app', icon: '🎮', confidence: 'high' },
+  { pattern: /cdn\.nector\.io|nector_auth|nector\.io/i,   name: 'Nector',               category: 'shopify_app', icon: '⭐', confidence: 'high' },
+  { pattern: /kwikpass|kwik\.id\/kwikpass/i,              name: 'KwikPass',             category: 'shopify_app', icon: '🔑', confidence: 'high' },
 
   // ── Shopify Apps — Shipping / Returns ─────────────────────────────────────
   { pattern: /aftership\.com/i,                           name: 'AfterShip',            category: 'shopify_app', icon: '📦', confidence: 'high' },
@@ -222,6 +229,11 @@ const FINGERPRINTS: Fingerprint[] = [
   { pattern: /\bbiteSpeed\b|\bbitespeed\b/i,              name: 'BiteSpeed',            category: 'shopify_app', icon: '💬', confidence: 'high' },
   { pattern: /\brecart\b/i,                               name: 'Recart',               category: 'shopify_app', icon: '📲', confidence: 'high' },
   { pattern: /\bpostscript\b/i,                           name: 'Postscript',           category: 'shopify_app', icon: '📲', confidence: 'high' },
+  { pattern: /\bnector\b/i,                               name: 'Nector',               category: 'shopify_app', icon: '⭐', confidence: 'high' },
+  { pattern: /\bkwikpass\b/i,                             name: 'KwikPass',             category: 'shopify_app', icon: '🔑', confidence: 'high' },
+  { pattern: /\bcustomfit\b/i,                            name: 'CustomFit.ai',         category: 'shopify_app', icon: '🧪', confidence: 'high' },
+  { pattern: /\btogethr\b/i,                              name: 'Togethr',              category: 'shopify_app', icon: '🤝', confidence: 'high' },
+  { pattern: /\bbitespeed\b/i,                            name: 'BiteSpeed',            category: 'shopify_app', icon: '💬', confidence: 'high' },
 
   // ── Shopify Apps — Misc ───────────────────────────────────────────────────
   { pattern: /trafficly|trafficly\.io/i,                  name: 'Trafficly',            category: 'shopify_app', icon: '👁️', confidence: 'high' },
