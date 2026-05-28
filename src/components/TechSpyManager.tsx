@@ -15,7 +15,7 @@ const CATEGORY_META: Record<DetectedTech['category'], { label: string; color: st
   shopify_app: { label: 'Shopify Apps',   color: '#22c55e' },
   chat:        { label: 'Chat / Support', color: '#06b6d4' },
   payment:     { label: 'Payment',        color: '#ec4899' },
-  other:       { label: 'Other',          color: '#6b7280' },
+  other:       { label: 'JS / UI / CDN',  color: '#6b7280' },
 };
 
 const CATEGORY_ORDER: DetectedTech['category'][] = [
