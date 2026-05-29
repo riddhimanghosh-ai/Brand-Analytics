@@ -1509,6 +1509,7 @@ async function buildAllAnalyticsFromShopifyQL(
   };
   orderStatus: { name: string; value: number }[];
   conversionFunnel: ConversionFunnel[];
+  clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
 }> {
   const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows] = await Promise.all([
     runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate, customers SINCE ${startDate} UNTIL ${endDate}`),
@@ -1561,6 +1562,7 @@ async function buildAllAnalyticsFromShopifyQL(
   let returningCustomers = 0;
   let returningRate = 0;
   let lightOrders: LightOrder[] = [];
+  let clvMetrics = { avgLTV: 0, avgOrdersPerCustomer: 0, buyOnce: 0, buyTwice: 0, buyThreePlus: 0, totalCustomers: 0 };
   try {
     const [allOrders, allPrevOrders] = await Promise.all([
       fetchAllOrdersLight(config, startDate, endDate),
@@ -1582,6 +1584,13 @@ async function buildAllAnalyticsFromShopifyQL(
     returningCustomers = Object.keys(customerOrderCount).filter(
       k => (customerLifetimeOrders[k] ?? 0) > customerOrderCount[k]
     ).length;
+    // CLV: frequency buckets from light-order sample (capped at 5k, approximate for large stores)
+    let clvBuyOnce = 0, clvBuyTwice = 0, clvBuyThreePlus = 0;
+    for (const cnt of Object.values(customerOrderCount)) {
+      if (cnt === 1) clvBuyOnce++;
+      else if (cnt === 2) clvBuyTwice++;
+      else clvBuyThreePlus++;
+    }
     // Prefer ShopifyQL customer count — not capped by pagination, matches Shopify's native dashboard
     totalCustomers = shopifyCustomers || uniqueCustomerCount || allOrders.length;
     returningRate = uniqueCustomerCount > 0 ? (returningCustomers / uniqueCustomerCount) * 100 : 0;
@@ -1592,6 +1601,16 @@ async function buildAllAnalyticsFromShopifyQL(
     }
     const prevCustomerKeys = new Set(allPrevOrders.map(o => o.customer?.id || o.email || '').filter(Boolean));
     if (!shopifyPrevCustomers) prevCustomers = prevCustomerKeys.size || allPrevOrders.length;
+    // avgLTV and avgOrdersPerCustomer use ShopifyQL totals (exact, not capped by pagination)
+    const clvDenom = shopifyCustomers || uniqueCustomerCount;
+    clvMetrics = {
+      avgLTV: clvDenom > 0 ? totalRevenue / clvDenom : 0,
+      avgOrdersPerCustomer: clvDenom > 0 ? totalOrders / clvDenom : 0,
+      buyOnce: clvBuyOnce,
+      buyTwice: clvBuyTwice,
+      buyThreePlus: clvBuyThreePlus,
+      totalCustomers: clvDenom,
+    };
   } catch { /* non-critical — customer metrics default to 0 */ }
 
   // ── Build revenue time series ────────────────────────────────────────────
@@ -1695,6 +1714,7 @@ async function buildAllAnalyticsFromShopifyQL(
     },
     orderStatus,
     conversionFunnel,
+    clvMetrics,
   };
 }
 
@@ -1724,6 +1744,7 @@ export async function getAllAnalytics(
   };
   orderStatus: { name: string; value: number }[];
   conversionFunnel: ConversionFunnel[];
+  clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
 }> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
   const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];

@@ -344,6 +344,7 @@ export type CachedAnalyticsResult = {
   };
   orderStatus: { name: string; value: number }[];
   conversionFunnel: { stage: string; count: number; dropoffRate: number }[];
+  clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
 };
 
 export function computeFromCache(
@@ -518,5 +519,13 @@ export function computeFromCache(
     },
     orderStatus,
     conversionFunnel,
+    clvMetrics: {
+      avgLTV: uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0,
+      avgOrdersPerCustomer: uniqueCustomers > 0 ? totalOrders / uniqueCustomers : 0,
+      buyOnce: 0,
+      buyTwice: 0,
+      buyThreePlus: 0,
+      totalCustomers: uniqueCustomers,
+    },
   };
 }
