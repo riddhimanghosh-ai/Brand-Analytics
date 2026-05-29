@@ -162,7 +162,12 @@ export default function ShopifyDashboard({
   // CLV metrics — populated from combined response (fast path)
   const [clvMetrics, setClvMetrics] = useState<AdvancedCROMetrics['clvMetrics'] | null>(null);
 
-  // Advanced (slower) — location, channels, discounts, time analysis, financial funnel
+  // Fast-path charts — populated from combined response via ShopifyQL (no order pagination)
+  const [salesChannels, setSalesChannels] = useState<{ channel: string; orders: number; revenue: number }[]>([]);
+  const [timeAnalysis, setTimeAnalysis] = useState<AdvancedCROMetrics['timeAnalysis'] | null>(null);
+  const [financialFunnel, setFinancialFunnel] = useState<{ name: string; value: number }[]>([]);
+
+  // Advanced (slower) — location, discounts, CLV details (still needs fetchAllOrders)
   const [advanced, setAdvanced] = useState<AdvancedCROMetrics | null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(true);
 
@@ -201,10 +206,12 @@ export default function ShopifyDashboard({
           if (Array.isArray(data?.products)) setProducts(data.products);
           if (data?.customers) setCustomers(data.customers);
           if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
-          // conversionFunnel is now included in the combined response — no separate call needed
           if (Array.isArray(data?.conversionFunnel)) setConversionFunnel(data.conversionFunnel);
-          // clvMetrics now comes from combined — no need to wait for advanced
           if (data?.clvMetrics) setClvMetrics(data.clvMetrics);
+          // Fast-path charts — ShopifyQL data, no order pagination needed
+          if (Array.isArray(data?.salesChannels)) setSalesChannels(data.salesChannels);
+          if (data?.timeAnalysis) setTimeAnalysis(data.timeAnalysis);
+          if (Array.isArray(data?.financialFunnel)) setFinancialFunnel(data.financialFunnel);
         }
       } else {
         // combinedRes.status === 'rejected' — fetch itself failed (network/timeout/non-JSON response)
@@ -215,21 +222,20 @@ export default function ShopifyDashboard({
       if (ordersRes.status === 'fulfilled') setOrders(Array.isArray(ordersRes.value) ? ordersRes.value : []);
       setLoading(false);
 
-      // Step 2: advanced + supplementary data — fire after combined to avoid API throttle
-      Promise.allSettled([
-        fetch(`/api/shopify?slug=${slugVal}&action=advanced&from=${from}&to=${to}`).then((r) => r.json()),
-        fetch(`/api/shopify?slug=${slugVal}&action=conversion-funnel&from=${from}&to=${to}`).then((r) => r.json()),
-      ]).then(([advRes, funnelRes]) => {
-        if (advRes.status === 'fulfilled' && !advRes.value?.error) {
-          setAdvanced(advRes.value);
-          if (advRes.value?.clvMetrics) setClvMetrics(advRes.value.clvMetrics);
-          // Customer segments and order status now come from the advanced response
-          if (advRes.value?.customerSegments) setCustomers(advRes.value.customerSegments);
-          if (Array.isArray(advRes.value?.orderStatus)) setOrderStatus(advRes.value.orderStatus);
-        }
-        if (funnelRes.status === 'fulfilled' && Array.isArray(funnelRes.value)) setConversionFunnel(funnelRes.value);
-        setAdvancedLoading(false);
-      }).catch(() => setAdvancedLoading(false));
+      // Step 2: advanced — fires after combined to avoid concurrent Shopify API hammering.
+      // conversion-funnel removed (financialFunnel now in combined via ShopifyQL).
+      fetch(`/api/shopify?slug=${slugVal}&action=advanced&from=${from}&to=${to}`)
+        .then((r) => r.json())
+        .then((adv) => {
+          if (!adv?.error) {
+            setAdvanced(adv);
+            if (adv?.clvMetrics) setClvMetrics(adv.clvMetrics);
+            if (adv?.customerSegments) setCustomers(adv.customerSegments);
+            if (Array.isArray(adv?.orderStatus)) setOrderStatus(adv.orderStatus);
+          }
+          setAdvancedLoading(false);
+        })
+        .catch(() => setAdvancedLoading(false));
     });
   };
 
@@ -270,12 +276,12 @@ export default function ShopifyDashboard({
   // ─── OVERVIEW TAB ───────────────────────────────────────────────────────────
 
   function OverviewTab() {
-    const peakHour = advanced?.timeAnalysis.byHour.reduce(
-      (best, h) => (h.orders > best.orders ? h : best),
-      { hour: 0, label: '12am', orders: 0, revenue: 0 }
-    );
+    const byHour = timeAnalysis?.byHour ?? [];
+    const peakHour = byHour.length > 0
+      ? byHour.reduce((best, h) => (h.orders > best.orders ? h : best))
+      : null;
 
-    const funnelData = advanced?.financialFunnel ?? [];
+    const funnelData = financialFunnel;
 
     return (
       <>
@@ -524,12 +530,12 @@ export default function ShopifyDashboard({
             <div className="chart-card-header">
               <div className="chart-card-title">Orders by Day of Week</div>
             </div>
-            {advancedLoading ? (
+            {loading ? (
               <div className="skeleton skeleton-chart" />
             ) : (
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart
-                  data={advanced?.timeAnalysis.byDayOfWeek ?? []}
+                  data={timeAnalysis?.byDayOfWeek ?? []}
                   margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -551,7 +557,7 @@ export default function ShopifyDashboard({
               <div className="chart-card-subtitle">Financial flow breakdown</div>
             </div>
           </div>
-          {advancedLoading ? (
+          {loading ? (
             <div className="skeleton skeleton-chart" />
           ) : funnelData.length === 0 ? (
             <p className="text-muted" style={{ padding: '1rem' }}>No funnel data available.</p>
@@ -580,7 +586,7 @@ export default function ShopifyDashboard({
             </ResponsiveContainer>
           )}
           {/* Drop-off annotations */}
-          {!advancedLoading && funnelData.length > 1 && (
+          {!loading && funnelData.length > 1 && (
             <div style={{ padding: '0 1rem 1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {funnelData.slice(1).map((stage, i) => {
                 const prev = funnelData[i].value;
@@ -601,13 +607,13 @@ export default function ShopifyDashboard({
             <div className="chart-card-header">
               <div className="chart-card-title">Sales Channels</div>
             </div>
-            {advancedLoading ? (
+            {loading ? (
               <div className="skeleton skeleton-chart" />
             ) : (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
                   <Pie
-                    data={advanced?.salesChannels ?? []}
+                    data={salesChannels}
                     dataKey="orders"
                     nameKey="channel"
                     cx="50%"
@@ -617,7 +623,7 @@ export default function ShopifyDashboard({
                       `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`
                     }
                   >
-                    {(advanced?.salesChannels ?? []).map((_, i) => (
+                    {salesChannels.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
@@ -631,17 +637,17 @@ export default function ShopifyDashboard({
             <div className="chart-card-header">
               <div>
                 <div className="chart-card-title">Peak Shopping Hours</div>
-                {peakHour && !advancedLoading && (
+                {peakHour && !loading && (
                   <div className="chart-card-subtitle">Peak: {peakHour.label}</div>
                 )}
               </div>
             </div>
-            {advancedLoading ? (
+            {loading ? (
               <div className="skeleton skeleton-chart" />
             ) : (
               <ResponsiveContainer width="100%" height={240}>
                 <BarChart
-                  data={advanced?.timeAnalysis.byHour ?? []}
+                  data={byHour}
                   margin={{ top: 5, right: 10, left: -10, bottom: 0 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
@@ -649,7 +655,7 @@ export default function ShopifyDashboard({
                   <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
                   <Tooltip />
                   <Bar dataKey="orders" radius={[3, 3, 0, 0]}>
-                    {(advanced?.timeAnalysis.byHour ?? []).map((h, i) => (
+                    {byHour.map((h, i) => (
                       <Cell
                         key={i}
                         fill={h.orders === (peakHour?.orders ?? 0) ? '#f59e0b' : '#3b82f6'}

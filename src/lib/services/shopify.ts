@@ -1574,8 +1574,14 @@ async function buildAllAnalyticsFromShopifyQL(
   orderStatus: { name: string; value: number }[];
   conversionFunnel: ConversionFunnel[];
   clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
+  salesChannels: { channel: string; orders: number; revenue: number }[];
+  timeAnalysis: {
+    byHour: { hour: number; label: string; orders: number; revenue: number }[];
+    byDayOfWeek: { day: string; dayNum: number; orders: number; revenue: number }[];
+  };
+  financialFunnel: { name: string; value: number }[];
 }> {
-  const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows, customerSegmentRows] = await Promise.all([
+  const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows, customerSegmentRows, salesChannelRows, hourRows] = await Promise.all([
     runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate, customers SINCE ${startDate} UNTIL ${endDate}`),
     // Current period: daily timeseries
     runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
@@ -1591,6 +1597,12 @@ async function buildAllAnalyticsFromShopifyQL(
       .catch(() => [] as Array<Record<string, number | string>>),
     // New vs returning revenue split — matches Shopify's native definition exactly
     runShopifyQL(config, `FROM sales SHOW net_sales, orders GROUP BY new_or_returning_customer SINCE ${startDate} UNTIL ${endDate}`)
+      .catch(() => [] as Array<Record<string, number | string>>),
+    // Sales channel breakdown
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales GROUP BY sales_channel ORDER BY orders DESC SINCE ${startDate} UNTIL ${endDate}`)
+      .catch(() => [] as Array<Record<string, number | string>>),
+    // Hourly timeseries — aggregate per hour-of-day across the range
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES hour SINCE ${startDate} UNTIL ${endDate}`)
       .catch(() => [] as Array<Record<string, number | string>>),
   ]);
 
@@ -1771,6 +1783,50 @@ async function buildAllAnalyticsFromShopifyQL(
     prevTotalCustomers:       prevCustomers,
   };
 
+  // ── Sales channels ───────────────────────────────────────────────────────
+  const salesChannels = salesChannelRows.map((row) => ({
+    channel: String(row.sales_channel ?? 'Unknown'),
+    orders:  Number(row.orders   ?? 0),
+    revenue: Number(row.net_sales ?? 0),
+  }));
+
+  // ── Hourly breakdown (sum per hour-of-day across the date range) ─────────
+  const byHour: { hour: number; label: string; orders: number; revenue: number }[] =
+    Array.from({ length: 24 }, (_, h) => ({ hour: h, label: hourLabel(h), orders: 0, revenue: 0 }));
+  for (const row of hourRows) {
+    // ShopifyQL TIMESERIES hour returns a datetime string, e.g. "2024-05-01T14:00:00"
+    const ts = String(row.hour ?? '');
+    const match = ts.match(/T(\d{2}):/);
+    const h = match ? parseInt(match[1], 10) : -1;
+    if (h >= 0 && h < 24) {
+      byHour[h].orders  += Number(row.orders   ?? 0);
+      byHour[h].revenue += Number(row.net_sales ?? 0);
+    }
+  }
+
+  // ── Day-of-week breakdown (derived from daily TIMESERIES already fetched) ─
+  const DOW_LABELS_QL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dowAcc = Array.from({ length: 7 }, () => ({ orders: 0, revenue: 0 }));
+  for (const row of revenueRows) {
+    const date = String(row.day ?? '').split('T')[0];
+    if (date) {
+      const jsDay   = new Date(date + 'T12:00:00Z').getUTCDay(); // 0=Sun … 6=Sat
+      const monFirst = (jsDay + 6) % 7;                          // Mon=0 … Sun=6
+      dowAcc[monFirst].orders  += Number(row.orders   ?? 0);
+      dowAcc[monFirst].revenue += Number(row.net_sales ?? 0);
+    }
+  }
+  const byDayOfWeek = DOW_LABELS_QL.map((day, dayNum) => ({
+    day, dayNum, orders: dowAcc[dayNum].orders, revenue: dowAcc[dayNum].revenue,
+  }));
+
+  // ── Financial funnel (revenue waterfall from ShopifyQL totals) ───────────
+  const financialFunnel: { name: string; value: number }[] = [
+    { name: 'Gross Sales',       value: grossSales },
+    { name: 'After Discounts',   value: grossSales - totalDiscountsGiven },
+    { name: 'Net Sales',         value: totalRevenue },
+  ];
+
   console.log(`[ShopifyQL getAllAnalytics] ${totalOrders} orders, ₹${totalRevenue.toFixed(0)} net sales`);
 
   return {
@@ -1791,6 +1847,9 @@ async function buildAllAnalyticsFromShopifyQL(
     orderStatus,
     conversionFunnel,
     clvMetrics,
+    salesChannels,
+    timeAnalysis: { byHour, byDayOfWeek },
+    financialFunnel,
   };
 }
 
@@ -1821,6 +1880,12 @@ export async function getAllAnalytics(
   orderStatus: { name: string; value: number }[];
   conversionFunnel: ConversionFunnel[];
   clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
+  salesChannels: { channel: string; orders: number; revenue: number }[];
+  timeAnalysis: {
+    byHour: { hour: number; label: string; orders: number; revenue: number }[];
+    byDayOfWeek: { day: string; dayNum: number; orders: number; revenue: number }[];
+  };
+  financialFunnel: { name: string; value: number }[];
 }> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
   const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
@@ -1944,7 +2009,12 @@ export async function getAllAnalytics(
     console.warn('[getAllAnalytics] fetchPreviousPeriodSummary failed (prev period may be out of scope):', (err as Error).message);
   }
 
-  return result;
+  return {
+    ...result,
+    salesChannels:  [],
+    timeAnalysis:   { byHour: [], byDayOfWeek: [] },
+    financialFunnel: [],
+  };
 }
 
 // ---------------------------------------------------------------------------
