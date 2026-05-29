@@ -159,7 +159,10 @@ export default function ShopifyDashboard({
   const [orderStatus, setOrderStatus] = useState<OrderStatusPoint[]>([]);
   const [conversionFunnel, setConversionFunnel] = useState<Array<{stage: string; count: number; dropoffRate: number}>>([]);
 
-  // Advanced (slower)
+  // CLV metrics — populated from combined response (fast path)
+  const [clvMetrics, setClvMetrics] = useState<AdvancedCROMetrics['clvMetrics'] | null>(null);
+
+  // Advanced (slower) — location, channels, discounts, time analysis, financial funnel
   const [advanced, setAdvanced] = useState<AdvancedCROMetrics | null>(null);
   const [advancedLoading, setAdvancedLoading] = useState(true);
 
@@ -180,6 +183,7 @@ export default function ShopifyDashboard({
     setAdvancedLoading(true);
     setError(null);
     setAdvanced(null);
+    setClvMetrics(null);
 
     // Step 1: combined (kpis+revenue+products+customers+funnel) + orders (light) in parallel
     Promise.allSettled([
@@ -199,6 +203,8 @@ export default function ShopifyDashboard({
           if (Array.isArray(data?.orderStatus)) setOrderStatus(data.orderStatus);
           // conversionFunnel is now included in the combined response — no separate call needed
           if (Array.isArray(data?.conversionFunnel)) setConversionFunnel(data.conversionFunnel);
+          // clvMetrics now comes from combined — no need to wait for advanced
+          if (data?.clvMetrics) setClvMetrics(data.clvMetrics);
         }
       } else {
         // combinedRes.status === 'rejected' — fetch itself failed (network/timeout/non-JSON response)
@@ -216,7 +222,11 @@ export default function ShopifyDashboard({
         fetch(`/api/shopify?slug=${slugVal}&action=order-status&from=${from}&to=${to}`).then((r) => r.json()),
         fetch(`/api/shopify?slug=${slugVal}&action=conversion-funnel&from=${from}&to=${to}`).then((r) => r.json()),
       ]).then(([advRes, custRes, statusRes, funnelRes]) => {
-        if (advRes.status === 'fulfilled' && !advRes.value?.error) setAdvanced(advRes.value);
+        if (advRes.status === 'fulfilled' && !advRes.value?.error) {
+          setAdvanced(advRes.value);
+          // Override clvMetrics with the more precise full-order-scan result from advanced
+          if (advRes.value?.clvMetrics) setClvMetrics(advRes.value.clvMetrics);
+        }
         // Override combined's zeroed-out customer revenue with real paginated data
         if (custRes.status === 'fulfilled' && !custRes.value?.error) setCustomers(custRes.value);
         // Override combined's shipping-country proxy with real fulfillment counts
@@ -407,12 +417,12 @@ export default function ShopifyDashboard({
           <div className="kpi-card violet">
             <div className="kpi-icon">📦</div>
             <div className="kpi-label">Purchase Frequency</div>
-            {advancedLoading ? (
+            {loading ? (
               <div className="skeleton skeleton-text" />
             ) : (
               <>
                 <div className="kpi-value">
-                  {advanced ? advanced.clvMetrics.avgOrdersPerCustomer.toFixed(2) : '—'}
+                  {clvMetrics ? clvMetrics.avgOrdersPerCustomer.toFixed(2) : '—'}
                 </div>
                 <div className="kpi-subtext">orders/customer</div>
               </>
@@ -793,7 +803,7 @@ export default function ShopifyDashboard({
   // ─── CUSTOMERS TAB ──────────────────────────────────────────────────────────
 
   function CustomersTab() {
-    const clv = advanced?.clvMetrics;
+    const clv = clvMetrics ?? advanced?.clvMetrics;
     const totalBuyers = clv ? clv.buyOnce + clv.buyTwice + clv.buyThreePlus : 0;
     const oneTimePct = totalBuyers > 0 && clv ? (clv.buyOnce / totalBuyers) * 100 : 0;
 

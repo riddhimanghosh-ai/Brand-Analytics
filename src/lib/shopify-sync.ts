@@ -243,24 +243,26 @@ function buildDayEntry(
       createdAt?: string; tags?: string[];
     } | null;
 
-    if (customer?.id) {
-      const isReturning = (customer.numberOfOrders || 0) > 1;
+    const orderEmail = (order.email as string) || '';
+    const customerKey = customer?.id || orderEmail;
+    if (customerKey) {
+      const isReturning = customer ? (customer.numberOfOrders || 0) > 1 : false;
       if (isReturning) returningCustomerRevenue += price;
       else newCustomerRevenue += price;
 
-      if (!customerSpend.has(customer.id)) {
-        customerSpend.set(customer.id, {
-          id: customer.id,
-          email: customer.email || '',
-          firstName: customer.firstName || '',
-          lastName: customer.lastName || '',
+      if (!customerSpend.has(customerKey)) {
+        customerSpend.set(customerKey, {
+          id: customerKey,
+          email: customer?.email || orderEmail,
+          firstName: customer?.firstName || '',
+          lastName: customer?.lastName || '',
           totalSpent: 0, orderCount: 0,
-          lifetimeOrders: customer.numberOfOrders || 0,
-          createdAt: customer.createdAt || '',
-          tags: customer.tags || [],
+          lifetimeOrders: customer?.numberOfOrders || 0,
+          createdAt: customer?.createdAt || '',
+          tags: customer?.tags || [],
         });
       }
-      const c = customerSpend.get(customer.id)!;
+      const c = customerSpend.get(customerKey)!;
       c.totalSpent += price;
       c.orderCount += 1;
     }
@@ -342,6 +344,7 @@ export type CachedAnalyticsResult = {
   };
   orderStatus: { name: string; value: number }[];
   conversionFunnel: { stage: string; count: number; dropoffRate: number }[];
+  clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
 };
 
 export function computeFromCache(
@@ -516,5 +519,13 @@ export function computeFromCache(
     },
     orderStatus,
     conversionFunnel,
+    clvMetrics: {
+      avgLTV: uniqueCustomers > 0 ? totalRevenue / uniqueCustomers : 0,
+      avgOrdersPerCustomer: uniqueCustomers > 0 ? totalOrders / uniqueCustomers : 0,
+      buyOnce: 0,
+      buyTwice: 0,
+      buyThreePlus: 0,
+      totalCustomers: uniqueCustomers,
+    },
   };
 }

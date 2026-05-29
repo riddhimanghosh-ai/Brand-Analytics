@@ -215,7 +215,7 @@ async function runShopifyQL(
 type LightOrder = {
   email: string;
   totalPriceSet: { shopMoney: { amount: string } };
-  customer: { numberOfOrders: number } | null;
+  customer: { id: string; numberOfOrders: number } | null;
   lineItems: { edges: Array<{ node: { quantity: number } }> };
 };
 
@@ -237,7 +237,7 @@ async function fetchAllOrdersLight(
           node {
             email
             totalPriceSet { shopMoney { amount } }
-            customer { numberOfOrders }
+            customer { id numberOfOrders }
             lineItems(first: 10) { edges { node { quantity } } }
           }
         }
@@ -627,11 +627,11 @@ export async function getKPIs(
     const [curRows, prevRows, sessionRows] = await Promise.all([
       runShopifyQL(
         config,
-        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate SINCE ${currentStart} UNTIL ${currentEnd}`,
+        `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate, customers SINCE ${currentStart} UNTIL ${currentEnd}`,
       ),
       runShopifyQL(
         config,
-        `FROM sales SHOW orders, net_sales, average_order_value SINCE ${prevStart} UNTIL ${prevEnd}`,
+        `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`,
       ),
       runShopifyQL(
         config,
@@ -653,9 +653,11 @@ export async function getKPIs(
     // returning_customer_rate from ShopifyQL matches Shopify's native dashboard exactly (PERCENT col)
     const shopifyReturningRate = Number(cur.returning_customer_rate ?? 0);
 
-    const prevRevenue = Number(prev.net_sales           ?? 0);
-    const prevOrders  = Number(prev.orders              ?? 0);
-    const prevAOV     = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
+    const prevRevenue         = Number(prev.net_sales           ?? 0);
+    const prevOrders          = Number(prev.orders              ?? 0);
+    const prevAOV             = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
+    const shopifyCustomers    = Number(cur.customers            ?? 0);
+    const shopifyPrevCustomers = Number(prev.customers          ?? 0);
 
     // Sessions funnel — mirrors the Slack bot's get_funnel tool logic
     const totalSessions       = Number(session.sessions            ?? 0);
@@ -689,15 +691,15 @@ export async function getKPIs(
       const customerOrderCount: Record<string, number> = {};
       const customerLifetimeOrders: Record<string, number> = {};
       for (const o of allOrders) {
-        const key = o.email || '';
+        const key = o.customer?.id || o.email || '';
         if (key) {
           customerOrderCount[key] = (customerOrderCount[key] || 0) + 1;
           customerLifetimeOrders[key] = o.customer?.numberOfOrders ?? 0;
         }
       }
-      const returningEmails = new Set(
+      const returningKeys = new Set(
         Object.keys(customerOrderCount).filter(
-          email => (customerLifetimeOrders[email] ?? 0) > customerOrderCount[email]
+          k => (customerLifetimeOrders[k] ?? 0) > customerOrderCount[k]
         )
       );
       const uniqueCustomerCount = Object.keys(customerOrderCount).length;
@@ -706,23 +708,24 @@ export async function getKPIs(
       let newRevenue = 0;
       let totalItems = 0;
       for (const o of allOrders) {
-        const email = o.email || '';
+        const key = o.customer?.id || o.email || '';
         const rev = parseFloat(o.totalPriceSet?.shopMoney?.amount || '0');
-        if (email && returningEmails.has(email)) { retRevenue += rev; }
+        if (key && returningKeys.has(key)) { retRevenue += rev; }
         else { newRevenue += rev; }
         totalItems += o.lineItems.edges.reduce((s, li) => s + (li.node.quantity || 0), 0);
       }
-      totalCustomers = uniqueCustomerCount || allOrders.length;
-      repeatCustomerRate = uniqueCustomerCount > 0 ? (returningEmails.size / uniqueCustomerCount) * 100 : 0;
+      // Prefer ShopifyQL customer count — not capped by pagination, matches Shopify's native dashboard
+      totalCustomers = shopifyCustomers || uniqueCustomerCount || allOrders.length;
+      repeatCustomerRate = uniqueCustomerCount > 0 ? (returningKeys.size / uniqueCustomerCount) * 100 : 0;
       // Prefer ShopifyQL rate — same engine as Shopify's native dashboard, avoids numberOfOrders staleness
       if (shopifyReturningRate > 0) repeatCustomerRate = shopifyReturningRate;
       returningCustomerRevenue = retRevenue;
       newCustomerRevenue = newRevenue;
       averageItemsPerOrder = allOrders.length > 0 ? totalItems / allOrders.length : 0;
 
-      // Prev period customer count
-      const prevEmails = new Set(prevOrders.map(o => o.email).filter(Boolean));
-      prevCustomers = prevEmails.size || prevOrders.length;
+      // Prev period customer count — prefer ShopifyQL, fall back to pagination
+      const prevCustomerKeys = new Set(prevOrders.map(o => o.customer?.id || o.email || '').filter(Boolean));
+      prevCustomers = shopifyPrevCustomers || prevCustomerKeys.size || prevOrders.length;
     } catch { /* non-critical — customer/items metrics default to 0 */ }
 
     return {
@@ -1506,9 +1509,10 @@ async function buildAllAnalyticsFromShopifyQL(
   };
   orderStatus: { name: string; value: number }[];
   conversionFunnel: ConversionFunnel[];
+  clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
 }> {
   const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows] = await Promise.all([
-    runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate SINCE ${startDate} UNTIL ${endDate}`),
+    runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate, customers SINCE ${startDate} UNTIL ${endDate}`),
     // Current period: daily timeseries
     runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
     // Top 15 products by gross sales
@@ -1517,7 +1521,7 @@ async function buildAllAnalyticsFromShopifyQL(
     runShopifyQL(config, `FROM sales SHOW orders, net_sales GROUP BY shipping_country ORDER BY orders DESC LIMIT 20 SINCE ${startDate} UNTIL ${endDate}`)
       .catch(() => [] as Array<Record<string, number | string>>),
     // Previous period: totals for comparison
-    runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value SINCE ${prevStart} UNTIL ${prevEnd}`),
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`),
     // Sessions funnel — same queries the Slack bot's get_funnel tool uses
     runShopifyQL(config, `FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE ${startDate} UNTIL ${endDate}`)
       .catch(() => [] as Array<Record<string, number | string>>),
@@ -1534,6 +1538,8 @@ async function buildAllAnalyticsFromShopifyQL(
   const refundRate           = grossSales > 0 ? (Math.abs(totalReturns) / grossSales) * 100 : 0;
   // returning_customer_rate from ShopifyQL matches Shopify's native dashboard (PERCENT col)
   const shopifyReturningRate = Number(kpi.returning_customer_rate  ?? 0);
+  // customers from ShopifyQL — not capped by pagination, matches Shopify's native dashboard exactly
+  const shopifyCustomers     = Number(kpi.customers                ?? 0);
 
   // ── Parse sessions funnel (mirrors bot's get_funnel) ────────────────────
   const session       = sessionRows[0] ?? {};
@@ -1545,16 +1551,18 @@ async function buildAllAnalyticsFromShopifyQL(
 
   // ── Parse previous period ────────────────────────────────────────────────
   const prev = prevRows[0] ?? {};
-  const prevOrders  = Number(prev.orders              ?? 0);
-  const prevRevenue = Number(prev.net_sales           ?? 0);
-  const prevAOV     = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
-  let prevCustomers = 0;
+  const prevOrders           = Number(prev.orders              ?? 0);
+  const prevRevenue          = Number(prev.net_sales           ?? 0);
+  const prevAOV              = Number(prev.average_order_value ?? 0) || (prevOrders > 0 ? prevRevenue / prevOrders : 0);
+  const shopifyPrevCustomers = Number(prev.customers           ?? 0);
+  let prevCustomers          = shopifyPrevCustomers;
 
   // ── Customer + items metrics via full order pagination (real data) ────────
   let totalCustomers = 0;
   let returningCustomers = 0;
   let returningRate = 0;
   let lightOrders: LightOrder[] = [];
+  let clvMetrics = { avgLTV: 0, avgOrdersPerCustomer: 0, buyOnce: 0, buyTwice: 0, buyThreePlus: 0, totalCustomers: 0 };
   try {
     const [allOrders, allPrevOrders] = await Promise.all([
       fetchAllOrdersLight(config, startDate, endDate),
@@ -1566,7 +1574,7 @@ async function buildAllAnalyticsFromShopifyQL(
     const customerOrderCount: Record<string, number> = {};
     const customerLifetimeOrders: Record<string, number> = {};
     for (const o of allOrders) {
-      const key = o.email || '';
+      const key = o.customer?.id || o.email || '';
       if (key) {
         customerOrderCount[key] = (customerOrderCount[key] || 0) + 1;
         customerLifetimeOrders[key] = o.customer?.numberOfOrders ?? 0;
@@ -1574,17 +1582,35 @@ async function buildAllAnalyticsFromShopifyQL(
     }
     const uniqueCustomerCount = Object.keys(customerOrderCount).length;
     returningCustomers = Object.keys(customerOrderCount).filter(
-      email => (customerLifetimeOrders[email] ?? 0) > customerOrderCount[email]
+      k => (customerLifetimeOrders[k] ?? 0) > customerOrderCount[k]
     ).length;
-    totalCustomers = uniqueCustomerCount || allOrders.length;
+    // CLV: frequency buckets from light-order sample (capped at 5k, approximate for large stores)
+    let clvBuyOnce = 0, clvBuyTwice = 0, clvBuyThreePlus = 0;
+    for (const cnt of Object.values(customerOrderCount)) {
+      if (cnt === 1) clvBuyOnce++;
+      else if (cnt === 2) clvBuyTwice++;
+      else clvBuyThreePlus++;
+    }
+    // Prefer ShopifyQL customer count — not capped by pagination, matches Shopify's native dashboard
+    totalCustomers = shopifyCustomers || uniqueCustomerCount || allOrders.length;
     returningRate = uniqueCustomerCount > 0 ? (returningCustomers / uniqueCustomerCount) * 100 : 0;
     // Prefer ShopifyQL rate — same engine as Shopify's native dashboard, avoids numberOfOrders staleness
     if (shopifyReturningRate > 0) {
       returningRate = shopifyReturningRate;
       returningCustomers = uniqueCustomerCount > 0 ? Math.round(uniqueCustomerCount * shopifyReturningRate / 100) : returningCustomers;
     }
-    const prevEmails = new Set(allPrevOrders.map(o => o.email).filter(Boolean));
-    prevCustomers = prevEmails.size || allPrevOrders.length;
+    const prevCustomerKeys = new Set(allPrevOrders.map(o => o.customer?.id || o.email || '').filter(Boolean));
+    if (!shopifyPrevCustomers) prevCustomers = prevCustomerKeys.size || allPrevOrders.length;
+    // avgLTV and avgOrdersPerCustomer use ShopifyQL totals (exact, not capped by pagination)
+    const clvDenom = shopifyCustomers || uniqueCustomerCount;
+    clvMetrics = {
+      avgLTV: clvDenom > 0 ? totalRevenue / clvDenom : 0,
+      avgOrdersPerCustomer: clvDenom > 0 ? totalOrders / clvDenom : 0,
+      buyOnce: clvBuyOnce,
+      buyTwice: clvBuyTwice,
+      buyThreePlus: clvBuyThreePlus,
+      totalCustomers: clvDenom,
+    };
   } catch { /* non-critical — customer metrics default to 0 */ }
 
   // ── Build revenue time series ────────────────────────────────────────────
@@ -1688,6 +1714,7 @@ async function buildAllAnalyticsFromShopifyQL(
     },
     orderStatus,
     conversionFunnel,
+    clvMetrics,
   };
 }
 
@@ -1717,6 +1744,7 @@ export async function getAllAnalytics(
   };
   orderStatus: { name: string; value: number }[];
   conversionFunnel: ConversionFunnel[];
+  clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
 }> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
   const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
