@@ -1140,7 +1140,10 @@ export async function getOrderStatusBreakdown(
 // Internal helpers for getAdvancedCROMetrics
 // ---------------------------------------------------------------------------
 
-/** Convert a 0-based UTC hour to a human-readable label like "12am", "1pm" */
+// IST is UTC+5:30 (330 minutes ahead of UTC)
+const IST_OFFSET_MIN = 330;
+
+/** Convert a 0-based hour (in IST) to a human-readable label like "12am", "1pm" */
 function hourLabel(hour: number): string {
   if (hour === 0) return '12am';
   if (hour === 12) return '12pm';
@@ -1341,8 +1344,9 @@ export async function getAdvancedCROMetrics(
       totalDiscountGiven += orderDiscount;
     }
 
-    // ── Time analysis ──
-    const hour = orderDate.getUTCHours(); // 0-23
+    // ── Time analysis ── (convert UTC to IST before bucketing)
+    const utcMin = orderDate.getUTCHours() * 60 + orderDate.getUTCMinutes();
+    const hour = Math.floor((utcMin + IST_OFFSET_MIN) / 60) % 24;
     hourData[hour].orders++;
     hourData[hour].revenue += price;
 
@@ -1602,7 +1606,7 @@ async function buildAllAnalyticsFromShopifyQL(
     runShopifyQL(config, `FROM sales SHOW orders, net_sales GROUP BY sales_channel ORDER BY orders DESC SINCE ${startDate} UNTIL ${endDate}`)
       .catch(() => [] as Array<Record<string, number | string>>),
     // Hourly timeseries — aggregate per hour-of-day across the range
-    runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES hour SINCE ${startDate} UNTIL ${endDate}`)
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES hour SINCE ${startDate} UNTIL ${endDate} LIMIT 2200`)
       .catch(() => [] as Array<Record<string, number | string>>),
   ]);
 
@@ -1794,13 +1798,15 @@ async function buildAllAnalyticsFromShopifyQL(
   const byHour: { hour: number; label: string; orders: number; revenue: number }[] =
     Array.from({ length: 24 }, (_, h) => ({ hour: h, label: hourLabel(h), orders: 0, revenue: 0 }));
   for (const row of hourRows) {
-    // ShopifyQL TIMESERIES hour returns a datetime string, e.g. "2024-05-01T14:00:00"
+    // ShopifyQL TIMESERIES hour returns UTC datetime strings, e.g. "2024-05-01T05:00:00"
     const ts = String(row.hour ?? '');
     const match = ts.match(/T(\d{2}):/);
-    const h = match ? parseInt(match[1], 10) : -1;
-    if (h >= 0 && h < 24) {
-      byHour[h].orders  += Number(row.orders   ?? 0);
-      byHour[h].revenue += Number(row.net_sales ?? 0);
+    const hUtc = match ? parseInt(match[1], 10) : -1;
+    if (hUtc >= 0 && hUtc < 24) {
+      // Round to nearest IST hour — round(10.5)=11 correctly maps UTC 5 → IST 11
+      const hIst = Math.round((hUtc * 60 + IST_OFFSET_MIN) / 60) % 24;
+      byHour[hIst].orders  += Number(row.orders   ?? 0);
+      byHour[hIst].revenue += Number(row.net_sales ?? 0);
     }
   }
 
