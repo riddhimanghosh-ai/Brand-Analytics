@@ -399,15 +399,16 @@ export default function ShopifyDashboard({
             )}
           </div>
 
-          {/* Avg Customer LTV */}
+          {/* New Customer Revenue */}
           <div className="kpi-card emerald">
-            <div className="kpi-icon">💎</div>
-            <div className="kpi-label">Avg Customer LTV</div>
-            {loading ? (
-              <div className="skeleton skeleton-text" />
-            ) : (
-              <div className="kpi-value">
-                {clvMetrics ? formatCurrency(clvMetrics.avgLTV) : '—'}
+            <div className="kpi-icon">🆕</div>
+            <div className="kpi-label">New Customer Revenue</div>
+            <div className="kpi-value">
+              {kpis ? formatCurrency(kpis.newCustomerRevenue) : '—'}
+            </div>
+            {kpis && kpis.totalRevenue > 0 && (
+              <div className="kpi-subtext">
+                {((kpis.newCustomerRevenue / kpis.totalRevenue) * 100).toFixed(1)}% of total
               </div>
             )}
           </div>
