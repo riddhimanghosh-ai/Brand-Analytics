@@ -218,20 +218,15 @@ export default function ShopifyDashboard({
       // Step 2: advanced + supplementary data — fire after combined to avoid API throttle
       Promise.allSettled([
         fetch(`/api/shopify?slug=${slugVal}&action=advanced&from=${from}&to=${to}`).then((r) => r.json()),
-        fetch(`/api/shopify?slug=${slugVal}&action=customers&from=${from}&to=${to}`).then((r) => r.json()),
-        fetch(`/api/shopify?slug=${slugVal}&action=order-status&from=${from}&to=${to}`).then((r) => r.json()),
         fetch(`/api/shopify?slug=${slugVal}&action=conversion-funnel&from=${from}&to=${to}`).then((r) => r.json()),
-      ]).then(([advRes, custRes, statusRes, funnelRes]) => {
+      ]).then(([advRes, funnelRes]) => {
         if (advRes.status === 'fulfilled' && !advRes.value?.error) {
           setAdvanced(advRes.value);
-          // Override clvMetrics with the more precise full-order-scan result from advanced
           if (advRes.value?.clvMetrics) setClvMetrics(advRes.value.clvMetrics);
+          // Customer segments and order status now come from the advanced response
+          if (advRes.value?.customerSegments) setCustomers(advRes.value.customerSegments);
+          if (Array.isArray(advRes.value?.orderStatus)) setOrderStatus(advRes.value.orderStatus);
         }
-        // Override combined's zeroed-out customer revenue with real paginated data
-        if (custRes.status === 'fulfilled' && !custRes.value?.error) setCustomers(custRes.value);
-        // Override combined's shipping-country proxy with real fulfillment counts
-        if (statusRes.status === 'fulfilled' && Array.isArray(statusRes.value)) setOrderStatus(statusRes.value);
-        // Override combined's single-stage funnel with full paid/fulfilled/refunded breakdown
         if (funnelRes.status === 'fulfilled' && Array.isArray(funnelRes.value)) setConversionFunnel(funnelRes.value);
         setAdvancedLoading(false);
       }).catch(() => setAdvancedLoading(false));
@@ -403,13 +398,19 @@ export default function ShopifyDashboard({
           <div className="kpi-card emerald">
             <div className="kpi-icon">🆕</div>
             <div className="kpi-label">New Customer Revenue</div>
-            <div className="kpi-value">
-              {kpis ? formatCurrency(kpis.newCustomerRevenue) : '—'}
-            </div>
-            {kpis && kpis.totalRevenue > 0 && (
-              <div className="kpi-subtext">
-                {((kpis.newCustomerRevenue / kpis.totalRevenue) * 100).toFixed(1)}% of total
-              </div>
+            {loading ? (
+              <div className="skeleton skeleton-text" />
+            ) : (
+              <>
+                <div className="kpi-value">
+                  {kpis ? formatCurrency(kpis.newCustomerRevenue) : '—'}
+                </div>
+                {kpis && kpis.totalRevenue > 0 && (
+                  <div className="kpi-subtext">
+                    {((kpis.newCustomerRevenue / kpis.totalRevenue) * 100).toFixed(1)}% of total
+                  </div>
+                )}
+              </>
             )}
           </div>
 

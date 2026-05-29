@@ -45,6 +45,12 @@ export interface AdvancedCROMetrics {
   };
   aovByDate: { date: string; orders: number; revenue: number; aov: number }[];
   financialFunnel: { name: string; value: number }[];
+  customerSegments: {
+    newVsReturning: { name: string; value: number }[];
+    revenueBySegment: { name: string; value: number }[];
+    topCustomers: ShopifyCustomer[];
+  };
+  orderStatus: { name: string; value: number }[];
 }
 
 export interface ConversionFunnel {
@@ -288,7 +294,7 @@ function buildOrderQuery(startDate: string, endDate: string, afterClause: string
               }
             }
             email
-            customer { id numberOfOrders }
+            customer { id numberOfOrders firstName lastName email createdAt tags }
             shippingAddress { city province country countryCode }
             discountCodes
             totalDiscountsSet { shopMoney { amount } }
@@ -1222,6 +1228,13 @@ export async function getAdvancedCROMetrics(
   let fulfilledOrders = 0;
   let refundedOrders = 0;
 
+  // Customer segments
+  const customerSegmentMap: Record<string, { customer: Record<string, unknown>; totalSpent: number; orderCount: number }> = {};
+  let segNewCount = 0, segReturningCount = 0, segNewRevenue = 0, segReturningRevenue = 0;
+
+  // Order status
+  const statusCounts: Record<string, number> = {};
+
   // ── Process orders ─────────────────────────────────────────────────────────
 
   for (const order of orders) {
@@ -1338,15 +1351,29 @@ export async function getAdvancedCROMetrics(
     dowData[monFirst].orders++;
     dowData[monFirst].revenue += price;
 
-    // ── CLV ──
-    const customer = order.customer as { id: string } | null;
+    // ── CLV + customer segments ──
+    const customer = order.customer as {
+      id: string; numberOfOrders: number;
+      firstName: string; lastName: string; email: string; createdAt: string; tags: string[];
+    } | null;
     if (customer?.id) {
       if (!customerOrderMap[customer.id]) {
         customerOrderMap[customer.id] = { orders: 0, revenue: 0 };
       }
       customerOrderMap[customer.id].orders++;
       customerOrderMap[customer.id].revenue += price;
+
+      if (customer.numberOfOrders > 1) { segReturningCount++; segReturningRevenue += price; }
+      else { segNewCount++; segNewRevenue += price; }
+      if (!customerSegmentMap[customer.id]) {
+        customerSegmentMap[customer.id] = { customer: customer as unknown as Record<string, unknown>, totalSpent: 0, orderCount: 0 };
+      }
+      customerSegmentMap[customer.id].totalSpent += price;
+      customerSegmentMap[customer.id].orderCount += 1;
     }
+
+    // ── Order status ──
+    statusCounts[fulfillmentStatus || 'UNFULFILLED'] = (statusCounts[fulfillmentStatus || 'UNFULFILLED'] || 0) + 1;
 
     // ── AOV by date ──
     const dateKey = createdAt.split('T')[0];
@@ -1446,6 +1473,41 @@ export async function getAdvancedCROMetrics(
     financialFunnel.push({ name: 'Refunded', value: refundedOrders });
   }
 
+  // Customer segments
+  const topCustomers: ShopifyCustomer[] = Object.values(customerSegmentMap)
+    .sort((a, b) => b.totalSpent - a.totalSpent)
+    .slice(0, 10)
+    .map((c) => {
+      const cust = c.customer as {
+        id: string; firstName: string; lastName: string;
+        email: string; createdAt: string; tags: string[];
+      };
+      return {
+        id: cust.id,
+        email: cust.email || '',
+        firstName: cust.firstName || '',
+        lastName: cust.lastName || '',
+        ordersCount: c.orderCount,
+        totalSpent: c.totalSpent,
+        createdAt: cust.createdAt || '',
+        tags: cust.tags || [],
+      };
+    });
+
+  const customerSegments = {
+    newVsReturning: [
+      { name: 'New Customers', value: segNewCount },
+      { name: 'Returning Customers', value: segReturningCount },
+    ],
+    revenueBySegment: [
+      { name: 'New Customer Revenue', value: segNewRevenue },
+      { name: 'Returning Revenue', value: segReturningRevenue },
+    ],
+    topCustomers,
+  };
+
+  const orderStatus = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+
   return {
     locationBreakdown: { byCountry, byCity },
     salesChannels,
@@ -1459,6 +1521,8 @@ export async function getAdvancedCROMetrics(
     clvMetrics,
     aovByDate,
     financialFunnel,
+    customerSegments,
+    orderStatus,
   };
 }
 
@@ -1511,7 +1575,7 @@ async function buildAllAnalyticsFromShopifyQL(
   conversionFunnel: ConversionFunnel[];
   clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
 }> {
-  const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows] = await Promise.all([
+  const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows, customerSegmentRows] = await Promise.all([
     runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate, customers SINCE ${startDate} UNTIL ${endDate}`),
     // Current period: daily timeseries
     runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
@@ -1524,6 +1588,9 @@ async function buildAllAnalyticsFromShopifyQL(
     runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`),
     // Sessions funnel — same queries the Slack bot's get_funnel tool uses
     runShopifyQL(config, `FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE ${startDate} UNTIL ${endDate}`)
+      .catch(() => [] as Array<Record<string, number | string>>),
+    // New vs returning revenue split — matches Shopify's native definition exactly
+    runShopifyQL(config, `FROM sales SHOW net_sales, orders GROUP BY new_or_returning_customer SINCE ${startDate} UNTIL ${endDate}`)
       .catch(() => [] as Array<Record<string, number | string>>),
   ]);
 
@@ -1666,12 +1733,21 @@ async function buildAllAnalyticsFromShopifyQL(
       ) / lightOrders.length
     : 0;
 
-  // ── Revenue split by customer type (real data from full order set) ───────
-  const retOrderRevenue = lightOrders
-    .filter(o => (o.customer?.numberOfOrders ?? 1) > 1)
-    .reduce((s, o) => s + parseFloat(o.totalPriceSet?.shopMoney?.amount || '0'), 0);
-  const returningCustomerRevenue = retOrderRevenue;
-  const newCustomerRevenue = totalRevenue - returningCustomerRevenue;
+  // ── Revenue split by customer type — ShopifyQL native classification ────
+  // Uses Shopify's own new_or_returning_customer flag (1st-ever order = New),
+  // net_sales (gross - discounts - returns), and covers all orders without pagination cap.
+  let newCustomerRevenue = 0;
+  let returningCustomerRevenue = 0;
+  for (const row of customerSegmentRows) {
+    const segment = String(row.new_or_returning_customer ?? '').toLowerCase();
+    const rev = Number(row.net_sales ?? 0);
+    if (segment === 'new') newCustomerRevenue = rev;
+    else if (segment === 'returning') returningCustomerRevenue = rev;
+  }
+  // Fallback if ShopifyQL segment data unavailable
+  if (newCustomerRevenue === 0 && returningCustomerRevenue === 0) {
+    newCustomerRevenue = totalRevenue;
+  }
 
   // ── Assemble KPIs ────────────────────────────────────────────────────────
   const kpis: ShopifyKPIs = {
