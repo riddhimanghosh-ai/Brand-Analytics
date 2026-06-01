@@ -166,6 +166,8 @@ export default function ShopifyDashboard({
   const [salesChannels, setSalesChannels] = useState<{ channel: string; orders: number; revenue: number }[]>([]);
   const [timeAnalysis, setTimeAnalysis] = useState<AdvancedCROMetrics['timeAnalysis'] | null>(null);
   const [financialFunnel, setFinancialFunnel] = useState<{ name: string; value: number }[]>([]);
+  const [sessionFunnel, setSessionFunnel] = useState<{ sessions: number; addToCart: number; reachedCheckout: number } | null>(null);
+  const [hoveredFunnelIdx, setHoveredFunnelIdx] = useState<number | null>(null);
 
   // Advanced (slower) — location, discounts, CLV details (still needs fetchAllOrders)
   const [advanced, setAdvanced] = useState<AdvancedCROMetrics | null>(null);
@@ -212,6 +214,7 @@ export default function ShopifyDashboard({
           if (Array.isArray(data?.salesChannels)) setSalesChannels(data.salesChannels);
           if (data?.timeAnalysis) setTimeAnalysis(data.timeAnalysis);
           if (Array.isArray(data?.financialFunnel)) setFinancialFunnel(data.financialFunnel);
+          if (data?.sessionFunnel) setSessionFunnel(data.sessionFunnel);
         }
       } else {
         // combinedRes.status === 'rejected' — fetch itself failed (network/timeout/non-JSON response)
@@ -280,8 +283,6 @@ export default function ShopifyDashboard({
     const peakHour = byHour.length > 0
       ? byHour.reduce((best, h) => (h.orders > best.orders ? h : best))
       : null;
-
-    const funnelData = financialFunnel;
 
     return (
       <>
@@ -549,56 +550,83 @@ export default function ShopifyDashboard({
           </div>
         </div>
 
-        {/* Order Conversion Funnel */}
+        {/* Conversion Funnel */}
         <div className="chart-card" style={{ marginTop: '1.5rem' }}>
           <div className="chart-card-header">
             <div>
-              <div className="chart-card-title">Order Conversion Funnel</div>
-              <div className="chart-card-subtitle">Financial flow breakdown</div>
+              <div className="chart-card-title">Conversion Funnel</div>
+              <div className="chart-card-subtitle">Session flow for the selected period</div>
             </div>
           </div>
           {loading ? (
             <div className="skeleton skeleton-chart" />
-          ) : funnelData.length === 0 ? (
-            <p className="text-muted" style={{ padding: '1rem' }}>No funnel data available.</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={funnelData.length * 52 + 40}>
-              <BarChart
-                layout="vertical"
-                data={funnelData}
-                margin={{ top: 5, right: 120, left: 10, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
-                <XAxis
-                  type="number"
-                  tickFormatter={(v) => `₹${(Number(v) / 1000).toFixed(0)}K`}
-                  tick={{ fontSize: 11 }}
-                  tickLine={false}
-                />
-                <YAxis type="category" dataKey="name" width={130} tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
-                <Tooltip formatter={(v) => formatCurrency(Number(v))} />
-                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                  {funnelData.map((entry, index) => (
-                    <Cell key={entry.name} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-          {/* Drop-off annotations */}
-          {!loading && funnelData.length > 1 && (
-            <div style={{ padding: '0 1rem 1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-              {funnelData.slice(1).map((stage, i) => {
-                const prev = funnelData[i].value;
-                const dropoff = prev > 0 ? ((prev - stage.value) / prev) * 100 : 0;
-                return (
-                  <span key={stage.name} className="badge amber">
-                    {funnelData[i].name} → {stage.name}: -{dropoff.toFixed(1)}%
-                  </span>
-                );
-              })}
-            </div>
-          )}
+          ) : !sessionFunnel || sessionFunnel.sessions === 0 ? (
+            <p className="text-muted" style={{ padding: '1rem' }}>No session data available.</p>
+          ) : (() => {
+            const { sessions, addToCart, reachedCheckout } = sessionFunnel;
+            const convRate = sessions > 0 && kpis ? (kpis.totalOrders / sessions) * 100 : 0;
+            const stages = [
+              { label: 'Sessions',         rawValue: sessions,        pct: 100,                                                    color: '#3b82f6' },
+              { label: 'Add to Cart',      rawValue: addToCart,       pct: sessions > 0 ? (addToCart / sessions) * 100 : 0,       color: '#8b5cf6' },
+              { label: 'Reached Checkout', rawValue: reachedCheckout, pct: sessions > 0 ? (reachedCheckout / sessions) * 100 : 0, color: '#06b6d4' },
+              { label: 'Conversion Rate',  rawValue: null,            pct: convRate,                                               color: '#10b981' },
+            ];
+            return (
+              <div style={{ padding: '0.25rem 0.5rem 0.75rem' }}>
+                {stages.map((stage, i) => {
+                  const prev = stages[i - 1];
+                  const dropoff = prev && prev.pct > 0 ? ((prev.pct - stage.pct) / prev.pct) * 100 : null;
+                  const isHovered = hoveredFunnelIdx === i;
+                  return (
+                    <div key={stage.label}>
+                      {dropoff !== null && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0.1rem 0 0.1rem 9px' }}>
+                          <div style={{ width: '1px', height: '14px', background: 'var(--rule)' }} />
+                          <span style={{ fontSize: '11px', color: 'var(--muted-2)' }}>↓ {dropoff.toFixed(1)}% drop-off</span>
+                        </div>
+                      )}
+                      <div
+                        onMouseEnter={() => setHoveredFunnelIdx(i)}
+                        onMouseLeave={() => setHoveredFunnelIdx(null)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '1rem',
+                          padding: '6px 8px',
+                          borderRadius: '6px',
+                          background: isHovered ? 'var(--paper-3)' : 'transparent',
+                          cursor: 'default',
+                          transition: 'background 150ms ease',
+                        }}
+                      >
+                        <div style={{ width: '148px', fontSize: '13px', color: isHovered ? 'var(--ink)' : 'var(--muted)', fontWeight: isHovered ? 500 : 400, flexShrink: 0, transition: 'color 150ms ease, font-weight 150ms ease' }}>{stage.label}</div>
+                        <div style={{ flex: 1, background: 'var(--paper-3)', borderRadius: '4px', height: '28px', overflow: 'hidden' }}>
+                          <div style={{
+                            width: `${Math.max(stage.pct, 0.3)}%`,
+                            height: '100%',
+                            background: stage.color,
+                            borderRadius: '4px',
+                            opacity: isHovered ? 1 : 0.75,
+                            transition: 'opacity 150ms ease',
+                          }} />
+                        </div>
+                        <div style={{ width: '130px', textAlign: 'right', fontSize: '13px', flexShrink: 0 }}>
+                          {stage.rawValue !== null ? (
+                            <>
+                              <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{formatNum(stage.rawValue)}</span>
+                              <span style={{ color: 'var(--muted)', marginLeft: '0.4rem', fontSize: '12px' }}>{stage.pct.toFixed(1)}%</span>
+                            </>
+                          ) : (
+                            <span style={{ fontWeight: 600, color: stage.color, fontSize: '14px' }}>{stage.pct.toFixed(2)}%</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Sales Channels + Peak Shopping Hours */}
@@ -610,24 +638,32 @@ export default function ShopifyDashboard({
             {loading ? (
               <div className="skeleton skeleton-chart" />
             ) : (
-              <ResponsiveContainer width="100%" height={240}>
+              <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
                   <Pie
-                    data={salesChannels}
+                    data={(() => {
+                      const total = salesChannels.reduce((s, c) => s + c.orders, 0);
+                      return salesChannels.filter(c => total > 0 && (c.orders / total) * 100 >= 0.5);
+                    })()}
                     dataKey="orders"
                     nameKey="channel"
                     cx="50%"
-                    cy="50%"
+                    cy="45%"
                     outerRadius={85}
-                    label={({ name, percent }: { name?: string; percent?: number }) =>
-                      `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`
-                    }
                   >
                     {salesChannels.map((_, i) => (
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(v) => [formatNum(Number(v)), 'Orders']} />
+                  <Legend
+                    formatter={(value, entry) => {
+                      const orders = (entry.payload as { orders?: number }).orders ?? 0;
+                      const total = salesChannels.reduce((s, c) => s + c.orders, 0);
+                      const pct = total > 0 ? (orders / total) * 100 : 0;
+                      return `${value} ${pct.toFixed(0)}%`;
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             )}

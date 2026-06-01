@@ -1584,6 +1584,7 @@ async function buildAllAnalyticsFromShopifyQL(
     byDayOfWeek: { day: string; dayNum: number; orders: number; revenue: number }[];
   };
   financialFunnel: { name: string; value: number }[];
+  sessionFunnel: { sessions: number; addToCart: number; reachedCheckout: number };
 }> {
   const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows, customerSegmentRows, salesChannelRows, hourRows] = await Promise.all([
     runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate, customers SINCE ${startDate} UNTIL ${endDate}`),
@@ -1596,8 +1597,8 @@ async function buildAllAnalyticsFromShopifyQL(
       .catch(() => [] as Array<Record<string, number | string>>),
     // Previous period: totals for comparison
     runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`),
-    // Sessions funnel — same queries the Slack bot's get_funnel tool uses
-    runShopifyQL(config, `FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE ${startDate} UNTIL ${endDate}`)
+    // Sessions funnel — raw counts for conversion funnel display
+    runShopifyQL(config, `FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout WHERE human_or_bot_session IN ('human', 'bot') SINCE ${startDate} UNTIL ${endDate}`)
       .catch(() => [] as Array<Record<string, number | string>>),
     // New vs returning revenue split — matches Shopify's native definition exactly
     runShopifyQL(config, `FROM sales SHOW net_sales, orders GROUP BY new_or_returning_customer SINCE ${startDate} UNTIL ${endDate}`)
@@ -1624,13 +1625,14 @@ async function buildAllAnalyticsFromShopifyQL(
   // customers from ShopifyQL — not capped by pagination, matches Shopify's native dashboard exactly
   const shopifyCustomers     = Number(kpi.customers                ?? 0);
 
-  // ── Parse sessions funnel (mirrors bot's get_funnel) ────────────────────
-  const session       = sessionRows[0] ?? {};
-  const totalSessions = Number(session.sessions           ?? 0);
-  const atcRate       = Number(session.added_to_cart_rate ?? 0); // PERCENT col — already *100
-  // Use orders/sessions ratio for accuracy (bot's approach, works for custom checkout too)
-  const conversionRate      = totalSessions > 0 ? (totalOrders / totalSessions) * 100 : Number(session.conversion_rate ?? 0);
-  const cartAbandonmentRate = atcRate > 0 ? Math.max(0, ((atcRate - conversionRate) / atcRate) * 100) : 0;
+  // ── Parse sessions funnel ────────────────────────────────────────────────
+  const session              = sessionRows[0] ?? {};
+  const totalSessions        = Number(session.sessions                        ?? 0);
+  const addToCartCount       = Number(session.sessions_with_cart_additions    ?? 0);
+  const reachedCheckoutCount = Number(session.sessions_that_reached_checkout  ?? 0);
+  const atcRate              = totalSessions > 0 ? (addToCartCount / totalSessions) * 100 : 0;
+  const conversionRate       = totalSessions > 0 ? (totalOrders / totalSessions) * 100 : 0;
+  const cartAbandonmentRate  = atcRate > 0 ? Math.max(0, ((atcRate - conversionRate) / atcRate) * 100) : 0;
 
   // ── Parse previous period ────────────────────────────────────────────────
   const prev = prevRows[0] ?? {};
@@ -1856,6 +1858,7 @@ async function buildAllAnalyticsFromShopifyQL(
     salesChannels,
     timeAnalysis: { byHour, byDayOfWeek },
     financialFunnel,
+    sessionFunnel: { sessions: totalSessions, addToCart: addToCartCount, reachedCheckout: reachedCheckoutCount },
   };
 }
 
@@ -1892,6 +1895,7 @@ export async function getAllAnalytics(
     byDayOfWeek: { day: string; dayNum: number; orders: number; revenue: number }[];
   };
   financialFunnel: { name: string; value: number }[];
+  sessionFunnel: { sessions: number; addToCart: number; reachedCheckout: number };
 }> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
   const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
@@ -2017,9 +2021,10 @@ export async function getAllAnalytics(
 
   return {
     ...result,
-    salesChannels:  [],
-    timeAnalysis:   { byHour: [], byDayOfWeek: [] },
+    salesChannels:   [],
+    timeAnalysis:    { byHour: [], byDayOfWeek: [] },
     financialFunnel: [],
+    sessionFunnel:   { sessions: 0, addToCart: 0, reachedCheckout: 0 },
   };
 }
 
