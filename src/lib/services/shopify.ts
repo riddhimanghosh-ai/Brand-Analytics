@@ -45,6 +45,12 @@ export interface AdvancedCROMetrics {
   };
   aovByDate: { date: string; orders: number; revenue: number; aov: number }[];
   financialFunnel: { name: string; value: number }[];
+  customerSegments: {
+    newVsReturning: { name: string; value: number }[];
+    revenueBySegment: { name: string; value: number }[];
+    topCustomers: ShopifyCustomer[];
+  };
+  orderStatus: { name: string; value: number }[];
 }
 
 export interface ConversionFunnel {
@@ -288,7 +294,7 @@ function buildOrderQuery(startDate: string, endDate: string, afterClause: string
               }
             }
             email
-            customer { id numberOfOrders }
+            customer { id numberOfOrders firstName lastName email createdAt tags }
             shippingAddress { city province country countryCode }
             discountCodes
             totalDiscountsSet { shopMoney { amount } }
@@ -1134,7 +1140,10 @@ export async function getOrderStatusBreakdown(
 // Internal helpers for getAdvancedCROMetrics
 // ---------------------------------------------------------------------------
 
-/** Convert a 0-based UTC hour to a human-readable label like "12am", "1pm" */
+// IST is UTC+5:30 (330 minutes ahead of UTC)
+const IST_OFFSET_MIN = 330;
+
+/** Convert a 0-based hour (in IST) to a human-readable label like "12am", "1pm" */
 function hourLabel(hour: number): string {
   if (hour === 0) return '12am';
   if (hour === 12) return '12pm';
@@ -1221,6 +1230,13 @@ export async function getAdvancedCROMetrics(
   let paidOrders = 0;
   let fulfilledOrders = 0;
   let refundedOrders = 0;
+
+  // Customer segments
+  const customerSegmentMap: Record<string, { customer: Record<string, unknown>; totalSpent: number; orderCount: number }> = {};
+  let segNewCount = 0, segReturningCount = 0, segNewRevenue = 0, segReturningRevenue = 0;
+
+  // Order status
+  const statusCounts: Record<string, number> = {};
 
   // ── Process orders ─────────────────────────────────────────────────────────
 
@@ -1328,8 +1344,9 @@ export async function getAdvancedCROMetrics(
       totalDiscountGiven += orderDiscount;
     }
 
-    // ── Time analysis ──
-    const hour = orderDate.getUTCHours(); // 0-23
+    // ── Time analysis ── (convert UTC to IST before bucketing)
+    const utcMin = orderDate.getUTCHours() * 60 + orderDate.getUTCMinutes();
+    const hour = Math.floor((utcMin + IST_OFFSET_MIN) / 60) % 24;
     hourData[hour].orders++;
     hourData[hour].revenue += price;
 
@@ -1338,15 +1355,29 @@ export async function getAdvancedCROMetrics(
     dowData[monFirst].orders++;
     dowData[monFirst].revenue += price;
 
-    // ── CLV ──
-    const customer = order.customer as { id: string } | null;
+    // ── CLV + customer segments ──
+    const customer = order.customer as {
+      id: string; numberOfOrders: number;
+      firstName: string; lastName: string; email: string; createdAt: string; tags: string[];
+    } | null;
     if (customer?.id) {
       if (!customerOrderMap[customer.id]) {
         customerOrderMap[customer.id] = { orders: 0, revenue: 0 };
       }
       customerOrderMap[customer.id].orders++;
       customerOrderMap[customer.id].revenue += price;
+
+      if (customer.numberOfOrders > 1) { segReturningCount++; segReturningRevenue += price; }
+      else { segNewCount++; segNewRevenue += price; }
+      if (!customerSegmentMap[customer.id]) {
+        customerSegmentMap[customer.id] = { customer: customer as unknown as Record<string, unknown>, totalSpent: 0, orderCount: 0 };
+      }
+      customerSegmentMap[customer.id].totalSpent += price;
+      customerSegmentMap[customer.id].orderCount += 1;
     }
+
+    // ── Order status ──
+    statusCounts[fulfillmentStatus || 'UNFULFILLED'] = (statusCounts[fulfillmentStatus || 'UNFULFILLED'] || 0) + 1;
 
     // ── AOV by date ──
     const dateKey = createdAt.split('T')[0];
@@ -1446,6 +1477,41 @@ export async function getAdvancedCROMetrics(
     financialFunnel.push({ name: 'Refunded', value: refundedOrders });
   }
 
+  // Customer segments
+  const topCustomers: ShopifyCustomer[] = Object.values(customerSegmentMap)
+    .sort((a, b) => b.totalSpent - a.totalSpent)
+    .slice(0, 10)
+    .map((c) => {
+      const cust = c.customer as {
+        id: string; firstName: string; lastName: string;
+        email: string; createdAt: string; tags: string[];
+      };
+      return {
+        id: cust.id,
+        email: cust.email || '',
+        firstName: cust.firstName || '',
+        lastName: cust.lastName || '',
+        ordersCount: c.orderCount,
+        totalSpent: c.totalSpent,
+        createdAt: cust.createdAt || '',
+        tags: cust.tags || [],
+      };
+    });
+
+  const customerSegments = {
+    newVsReturning: [
+      { name: 'New Customers', value: segNewCount },
+      { name: 'Returning Customers', value: segReturningCount },
+    ],
+    revenueBySegment: [
+      { name: 'New Customer Revenue', value: segNewRevenue },
+      { name: 'Returning Revenue', value: segReturningRevenue },
+    ],
+    topCustomers,
+  };
+
+  const orderStatus = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
+
   return {
     locationBreakdown: { byCountry, byCity },
     salesChannels,
@@ -1459,6 +1525,8 @@ export async function getAdvancedCROMetrics(
     clvMetrics,
     aovByDate,
     financialFunnel,
+    customerSegments,
+    orderStatus,
   };
 }
 
@@ -1510,8 +1578,15 @@ async function buildAllAnalyticsFromShopifyQL(
   orderStatus: { name: string; value: number }[];
   conversionFunnel: ConversionFunnel[];
   clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
+  salesChannels: { channel: string; orders: number; revenue: number }[];
+  timeAnalysis: {
+    byHour: { hour: number; label: string; orders: number; revenue: number }[];
+    byDayOfWeek: { day: string; dayNum: number; orders: number; revenue: number }[];
+  };
+  financialFunnel: { name: string; value: number }[];
+  sessionFunnel: { sessions: number; addToCart: number; reachedCheckout: number };
 }> {
-  const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows] = await Promise.all([
+  const [kpiRows, revenueRows, productRows, orderStatusRows, prevRows, sessionRows, customerSegmentRows, salesChannelRows, hourRows] = await Promise.all([
     runShopifyQL(config, `FROM sales SHOW orders, gross_sales, net_sales, returns, average_order_value, discounts, returning_customer_rate, customers SINCE ${startDate} UNTIL ${endDate}`),
     // Current period: daily timeseries
     runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES day SINCE ${startDate} UNTIL ${endDate} ORDER BY day ASC LIMIT 400`),
@@ -1522,8 +1597,17 @@ async function buildAllAnalyticsFromShopifyQL(
       .catch(() => [] as Array<Record<string, number | string>>),
     // Previous period: totals for comparison
     runShopifyQL(config, `FROM sales SHOW orders, net_sales, average_order_value, customers SINCE ${prevStart} UNTIL ${prevEnd}`),
-    // Sessions funnel — same queries the Slack bot's get_funnel tool uses
-    runShopifyQL(config, `FROM sessions SHOW sessions, conversion_rate, added_to_cart_rate SINCE ${startDate} UNTIL ${endDate}`)
+    // Sessions funnel — raw counts for conversion funnel display
+    runShopifyQL(config, `FROM sessions SHOW sessions, sessions_with_cart_additions, sessions_that_reached_checkout WHERE human_or_bot_session IN ('human', 'bot') SINCE ${startDate} UNTIL ${endDate}`)
+      .catch(() => [] as Array<Record<string, number | string>>),
+    // New vs returning revenue split — matches Shopify's native definition exactly
+    runShopifyQL(config, `FROM sales SHOW net_sales, orders GROUP BY new_or_returning_customer SINCE ${startDate} UNTIL ${endDate}`)
+      .catch(() => [] as Array<Record<string, number | string>>),
+    // Sales channel breakdown
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales GROUP BY sales_channel ORDER BY orders DESC SINCE ${startDate} UNTIL ${endDate}`)
+      .catch(() => [] as Array<Record<string, number | string>>),
+    // Hourly timeseries — aggregate per hour-of-day across the range
+    runShopifyQL(config, `FROM sales SHOW orders, net_sales TIMESERIES hour SINCE ${startDate} UNTIL ${endDate} LIMIT 2200`)
       .catch(() => [] as Array<Record<string, number | string>>),
   ]);
 
@@ -1541,13 +1625,14 @@ async function buildAllAnalyticsFromShopifyQL(
   // customers from ShopifyQL — not capped by pagination, matches Shopify's native dashboard exactly
   const shopifyCustomers     = Number(kpi.customers                ?? 0);
 
-  // ── Parse sessions funnel (mirrors bot's get_funnel) ────────────────────
-  const session       = sessionRows[0] ?? {};
-  const totalSessions = Number(session.sessions           ?? 0);
-  const atcRate       = Number(session.added_to_cart_rate ?? 0); // PERCENT col — already *100
-  // Use orders/sessions ratio for accuracy (bot's approach, works for custom checkout too)
-  const conversionRate      = totalSessions > 0 ? (totalOrders / totalSessions) * 100 : Number(session.conversion_rate ?? 0);
-  const cartAbandonmentRate = atcRate > 0 ? Math.max(0, ((atcRate - conversionRate) / atcRate) * 100) : 0;
+  // ── Parse sessions funnel ────────────────────────────────────────────────
+  const session              = sessionRows[0] ?? {};
+  const totalSessions        = Number(session.sessions                        ?? 0);
+  const addToCartCount       = Number(session.sessions_with_cart_additions    ?? 0);
+  const reachedCheckoutCount = Number(session.sessions_that_reached_checkout  ?? 0);
+  const atcRate              = totalSessions > 0 ? (addToCartCount / totalSessions) * 100 : 0;
+  const conversionRate       = totalSessions > 0 ? (totalOrders / totalSessions) * 100 : 0;
+  const cartAbandonmentRate  = atcRate > 0 ? Math.max(0, ((atcRate - conversionRate) / atcRate) * 100) : 0;
 
   // ── Parse previous period ────────────────────────────────────────────────
   const prev = prevRows[0] ?? {};
@@ -1666,12 +1751,21 @@ async function buildAllAnalyticsFromShopifyQL(
       ) / lightOrders.length
     : 0;
 
-  // ── Revenue split by customer type (real data from full order set) ───────
-  const retOrderRevenue = lightOrders
-    .filter(o => (o.customer?.numberOfOrders ?? 1) > 1)
-    .reduce((s, o) => s + parseFloat(o.totalPriceSet?.shopMoney?.amount || '0'), 0);
-  const returningCustomerRevenue = retOrderRevenue;
-  const newCustomerRevenue = totalRevenue - returningCustomerRevenue;
+  // ── Revenue split by customer type — ShopifyQL native classification ────
+  // Uses Shopify's own new_or_returning_customer flag (1st-ever order = New),
+  // net_sales (gross - discounts - returns), and covers all orders without pagination cap.
+  let newCustomerRevenue = 0;
+  let returningCustomerRevenue = 0;
+  for (const row of customerSegmentRows) {
+    const segment = String(row.new_or_returning_customer ?? '').toLowerCase();
+    const rev = Number(row.net_sales ?? 0);
+    if (segment === 'new') newCustomerRevenue = rev;
+    else if (segment === 'returning') returningCustomerRevenue = rev;
+  }
+  // Fallback if ShopifyQL segment data unavailable
+  if (newCustomerRevenue === 0 && returningCustomerRevenue === 0) {
+    newCustomerRevenue = totalRevenue;
+  }
 
   // ── Assemble KPIs ────────────────────────────────────────────────────────
   const kpis: ShopifyKPIs = {
@@ -1695,6 +1789,52 @@ async function buildAllAnalyticsFromShopifyQL(
     prevTotalCustomers:       prevCustomers,
   };
 
+  // ── Sales channels ───────────────────────────────────────────────────────
+  const salesChannels = salesChannelRows.map((row) => ({
+    channel: String(row.sales_channel ?? 'Unknown'),
+    orders:  Number(row.orders   ?? 0),
+    revenue: Number(row.net_sales ?? 0),
+  }));
+
+  // ── Hourly breakdown (sum per hour-of-day across the date range) ─────────
+  const byHour: { hour: number; label: string; orders: number; revenue: number }[] =
+    Array.from({ length: 24 }, (_, h) => ({ hour: h, label: hourLabel(h), orders: 0, revenue: 0 }));
+  for (const row of hourRows) {
+    // ShopifyQL TIMESERIES hour returns UTC datetime strings, e.g. "2024-05-01T05:00:00"
+    const ts = String(row.hour ?? '');
+    const match = ts.match(/T(\d{2}):/);
+    const hUtc = match ? parseInt(match[1], 10) : -1;
+    if (hUtc >= 0 && hUtc < 24) {
+      // Round to nearest IST hour — round(10.5)=11 correctly maps UTC 5 → IST 11
+      const hIst = Math.round((hUtc * 60 + IST_OFFSET_MIN) / 60) % 24;
+      byHour[hIst].orders  += Number(row.orders   ?? 0);
+      byHour[hIst].revenue += Number(row.net_sales ?? 0);
+    }
+  }
+
+  // ── Day-of-week breakdown (derived from daily TIMESERIES already fetched) ─
+  const DOW_LABELS_QL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dowAcc = Array.from({ length: 7 }, () => ({ orders: 0, revenue: 0 }));
+  for (const row of revenueRows) {
+    const date = String(row.day ?? '').split('T')[0];
+    if (date) {
+      const jsDay   = new Date(date + 'T12:00:00Z').getUTCDay(); // 0=Sun … 6=Sat
+      const monFirst = (jsDay + 6) % 7;                          // Mon=0 … Sun=6
+      dowAcc[monFirst].orders  += Number(row.orders   ?? 0);
+      dowAcc[monFirst].revenue += Number(row.net_sales ?? 0);
+    }
+  }
+  const byDayOfWeek = DOW_LABELS_QL.map((day, dayNum) => ({
+    day, dayNum, orders: dowAcc[dayNum].orders, revenue: dowAcc[dayNum].revenue,
+  }));
+
+  // ── Financial funnel (revenue waterfall from ShopifyQL totals) ───────────
+  const financialFunnel: { name: string; value: number }[] = [
+    { name: 'Gross Sales',       value: grossSales },
+    { name: 'After Discounts',   value: grossSales - totalDiscountsGiven },
+    { name: 'Net Sales',         value: totalRevenue },
+  ];
+
   console.log(`[ShopifyQL getAllAnalytics] ${totalOrders} orders, ₹${totalRevenue.toFixed(0)} net sales`);
 
   return {
@@ -1715,6 +1855,10 @@ async function buildAllAnalyticsFromShopifyQL(
     orderStatus,
     conversionFunnel,
     clvMetrics,
+    salesChannels,
+    timeAnalysis: { byHour, byDayOfWeek },
+    financialFunnel,
+    sessionFunnel: { sessions: totalSessions, addToCart: addToCartCount, reachedCheckout: reachedCheckoutCount },
   };
 }
 
@@ -1745,6 +1889,13 @@ export async function getAllAnalytics(
   orderStatus: { name: string; value: number }[];
   conversionFunnel: ConversionFunnel[];
   clvMetrics: { avgLTV: number; avgOrdersPerCustomer: number; buyOnce: number; buyTwice: number; buyThreePlus: number; totalCustomers: number };
+  salesChannels: { channel: string; orders: number; revenue: number }[];
+  timeAnalysis: {
+    byHour: { hour: number; label: string; orders: number; revenue: number }[];
+    byDayOfWeek: { day: string; dayNum: number; orders: number; revenue: number }[];
+  };
+  financialFunnel: { name: string; value: number }[];
+  sessionFunnel: { sessions: number; addToCart: number; reachedCheckout: number };
 }> {
   const { startDate: currentStart, endDate: currentEnd, days } = parseDateRange(dateRange);
   const prevEnd   = new Date(new Date(currentStart).getTime() - 86_400_000).toISOString().split('T')[0];
@@ -1868,7 +2019,13 @@ export async function getAllAnalytics(
     console.warn('[getAllAnalytics] fetchPreviousPeriodSummary failed (prev period may be out of scope):', (err as Error).message);
   }
 
-  return result;
+  return {
+    ...result,
+    salesChannels:   [],
+    timeAnalysis:    { byHour: [], byDayOfWeek: [] },
+    financialFunnel: [],
+    sessionFunnel:   { sessions: 0, addToCart: 0, reachedCheckout: 0 },
+  };
 }
 
 // ---------------------------------------------------------------------------
