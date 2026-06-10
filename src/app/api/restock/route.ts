@@ -38,14 +38,14 @@ export async function GET(request: Request) {
     const from = new Date(Date.now() - 90 * 86_400_000).toISOString().split('T')[0];
     const insightsRange = `${from}:${to}`;
 
-    let insights = await cacheGet(slug!, 'customer-insights', insightsRange) as Awaited<ReturnType<typeof getCustomerInsights>> | null;
+    let insights = await cacheGet(slug!, 'customer-insights-v2', insightsRange) as Awaited<ReturnType<typeof getCustomerInsights>> | null;
     const [inventory, freshInsights] = await Promise.all([
       getInventoryStatus(config),
       insights ? Promise.resolve(null) : getCustomerInsights(config, insightsRange),
     ]);
     if (!insights && freshInsights) {
       insights = freshInsights;
-      await cacheSet(slug!, 'customer-insights', insightsRange, freshInsights);
+      await cacheSet(slug!, 'customer-insights-v2', insightsRange, freshInsights);
     }
 
     // Blend last-7 and prior-28 daily rates (weighted toward recent)

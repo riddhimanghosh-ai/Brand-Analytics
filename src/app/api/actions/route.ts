@@ -53,12 +53,12 @@ export async function GET(request: Request) {
     };
     const loadInsights = async () => {
       for (const days of [180, 365, 90]) {
-        const hit = await cacheGet(slug!, 'customer-insights', insightsRangeFor(days));
+        const hit = await cacheGet(slug!, 'customer-insights-v2', insightsRangeFor(days));
         if (hit) return hit as Awaited<ReturnType<typeof shopify.getCustomerInsights>>;
       }
       const range = insightsRangeFor(90);
       const fresh = await shopify.getCustomerInsights(shopifyConfig, range);
-      await cacheSet(slug!, 'customer-insights', range, fresh);
+      await cacheSet(slug!, 'customer-insights-v2', range, fresh);
       return fresh;
     };
 

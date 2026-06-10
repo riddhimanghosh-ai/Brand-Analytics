@@ -146,6 +146,10 @@ export default async function DashboardLayout({
             Retention Cohorts
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/payback`} disabled={!connections.shopify || !connections.metaAds} disabledPlatform="Shopify + Meta Ads">
+            CAC Payback
+          </NavLink>
+
           <NavLink href={`/dashboard/${slug}/velocity`} disabled={!connections.shopify} disabledPlatform="Shopify">
             Product Velocity
           </NavLink>
@@ -167,6 +171,10 @@ export default async function DashboardLayout({
 
           <NavLink href={`/dashboard/${slug}/fatigue`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
             Creative Fatigue
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/creative-themes`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
+            Creative Themes
           </NavLink>
 
           {/* Upcoming — non-navigable */}
@@ -209,6 +217,10 @@ export default async function DashboardLayout({
 
           <NavLink href={`/dashboard/${slug}/events`}>
             Events &amp; Campaigns
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/event-roi`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Event ROI
           </NavLink>
 
           <div className="nav-section-label">Settings</div>

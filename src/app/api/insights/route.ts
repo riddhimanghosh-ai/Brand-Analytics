@@ -29,12 +29,12 @@ export async function GET(request: Request) {
     const from = new Date(Date.now() - rangeDays * 86_400_000).toISOString().split('T')[0];
     const dateRange = `${from}:${to}`;
 
-    const cached = await cacheGet(slug!, 'customer-insights', dateRange);
+    const cached = await cacheGet(slug!, 'customer-insights-v2', dateRange);
     if (cached) return NextResponse.json(cached);
 
     const config = { storeUrl: brand.shopifyStoreUrl, accessToken: brand.shopifyAccessToken, slug: slug! };
     const data = await getCustomerInsights(config, dateRange);
-    await cacheSet(slug!, 'customer-insights', dateRange, data);
+    await cacheSet(slug!, 'customer-insights-v2', dateRange, data);
 
     return NextResponse.json(data);
   } catch (error) {

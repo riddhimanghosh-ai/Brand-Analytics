@@ -2289,9 +2289,16 @@ export interface ProductVelocityRow {
   lastSoldDate: string | null;
 }
 
+export interface CohortLtvRow {
+  cohort: string;             // "YYYY-MM"
+  customers: number;
+  cumRevenuePerCustomer: number[];  // cumulative revenue/customer at M0, M+1, M+2…
+}
+
 export interface CustomerInsights {
   segments: CustomerSegment[];
   cohorts: CohortRow[];
+  cohortLtv: CohortLtvRow[];
   velocity: ProductVelocityRow[];
   totalCustomers: number;
   rangeDays: number;
@@ -2307,7 +2314,7 @@ export async function getCustomerInsights(
   const orders = await fetchAllOrders(config, startDate, endDate);
 
   // ── Group orders by customer ───────────────────────────────────────────────
-  type CustAgg = { orders: number; totalSpent: number; first: string; last: string; orderMonths: Set<string> };
+  type CustAgg = { orders: number; totalSpent: number; first: string; last: string; orderMonths: Set<string>; revenueByMonth: Map<string, number> };
   const byCustomer = new Map<string, CustAgg>();
 
   // Product velocity bookkeeping
@@ -2329,13 +2336,15 @@ export async function getCustomerInsights(
 
     if (key) {
       const agg = byCustomer.get(key) ?? {
-        orders: 0, totalSpent: 0, first: createdAt, last: createdAt, orderMonths: new Set<string>(),
+        orders: 0, totalSpent: 0, first: createdAt, last: createdAt, orderMonths: new Set<string>(), revenueByMonth: new Map<string, number>(),
       };
       agg.orders++;
       agg.totalSpent += price;
       if (createdAt < agg.first) agg.first = createdAt;
       if (createdAt > agg.last) agg.last = createdAt;
-      agg.orderMonths.add(createdAt.slice(0, 7));
+      const orderMonth = createdAt.slice(0, 7);
+      agg.orderMonths.add(orderMonth);
+      agg.revenueByMonth.set(orderMonth, (agg.revenueByMonth.get(orderMonth) ?? 0) + price);
       byCustomer.set(key, agg);
     }
 
@@ -2436,6 +2445,33 @@ export async function getCustomerInsights(
     return { cohort: k, customers: e.customers, retention };
   });
 
+  // ── Cohort LTV: cumulative revenue per customer by month offset ────────────
+  const cohortRev = new Map<string, Map<number, number>>();  // cohort → offset → revenue
+  for (const [, c] of byCustomer) {
+    const cohort = c.first.slice(0, 7);
+    const [cy, cm] = cohort.split('-').map(Number);
+    let rev = cohortRev.get(cohort);
+    if (!rev) { rev = new Map(); cohortRev.set(cohort, rev); }
+    for (const [m, amount] of c.revenueByMonth) {
+      const [y, mo] = m.split('-').map(Number);
+      const offset = (y - cy) * 12 + (mo - cm);
+      if (offset >= 0 && offset <= 11) {
+        rev.set(offset, (rev.get(offset) ?? 0) + amount);
+      }
+    }
+  }
+  const cohortLtv: CohortLtvRow[] = cohortKeys.map(k => {
+    const e = cohortMap.get(k)!;
+    const rev = cohortRev.get(k) ?? new Map<number, number>();
+    const cum: number[] = [];
+    let running = 0;
+    for (let off = 0; off <= maxOffset; off++) {
+      running += rev.get(off) ?? 0;
+      cum.push(e.customers > 0 ? +(running / e.customers).toFixed(0) : 0);
+    }
+    return { cohort: k, customers: e.customers, cumRevenuePerCustomer: cum };
+  });
+
   // ── Product velocity ───────────────────────────────────────────────────────
   const velocity: ProductVelocityRow[] = [...byProduct.entries()]
     .map(([title, p]) => {
@@ -2464,6 +2500,7 @@ export async function getCustomerInsights(
   return {
     segments,
     cohorts,
+    cohortLtv,
     velocity,
     totalCustomers: byCustomer.size,
     rangeDays: days,
