@@ -89,6 +89,20 @@ export default async function DashboardLayout({
             {connections.ai && <span className="nav-badge">Claude</span>}
           </NavLink>
 
+          <div className="nav-section-label">Decide</div>
+
+          <NavLink href={`/dashboard/${slug}/actions`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Action Center
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/restock`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Restock Advisor
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/budget`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
+            Budget Moves
+          </NavLink>
+
           <div className="nav-section-label">Analytics</div>
 
           <NavLink href={`/dashboard/${slug}`} exact>

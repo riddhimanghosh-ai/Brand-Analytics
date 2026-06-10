@@ -2469,3 +2469,53 @@ export async function getCustomerInsights(
     rangeDays: days,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Inventory status — product-level stock for the Restock Advisor.
+// ---------------------------------------------------------------------------
+
+export interface InventoryProduct {
+  title: string;
+  totalInventory: number;
+  tracksInventory: boolean;
+  status: string;          // ACTIVE / DRAFT / ARCHIVED
+}
+
+export async function getInventoryStatus(config: ShopifyConfig): Promise<InventoryProduct[]> {
+  const products: InventoryProduct[] = [];
+  let cursor: string | null = null;
+
+  for (let page = 0; page < 10; page++) {  // up to 2,500 products
+    const afterClause: string = cursor ? `, after: ${JSON.stringify(cursor)}` : '';
+    const gql = `{
+      products(first: 250${afterClause}, query: "status:active") {
+        pageInfo { hasNextPage endCursor }
+        edges {
+          node {
+            title
+            totalInventory
+            tracksInventory
+            status
+          }
+        }
+      }
+    }`;
+    const data = await shopifyGraphQL(config, gql) as {
+      products?: {
+        pageInfo: { hasNextPage: boolean; endCursor: string };
+        edges: Array<{ node: { title: string; totalInventory: number; tracksInventory: boolean; status: string } }>;
+      };
+    };
+    for (const e of data.products?.edges ?? []) {
+      products.push({
+        title: e.node.title,
+        totalInventory: Number(e.node.totalInventory ?? 0),
+        tracksInventory: Boolean(e.node.tracksInventory),
+        status: e.node.status,
+      });
+    }
+    if (!data.products?.pageInfo.hasNextPage) break;
+    cursor = data.products.pageInfo.endCursor;
+  }
+  return products;
+}
