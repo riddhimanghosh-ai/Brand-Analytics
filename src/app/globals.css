@@ -1376,3 +1376,67 @@ textarea.form-input:focus {
     left: 0;
   }
 }
+
+/* ---- Overview insight cards (CRO Insights section) ---- */
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+@media (max-width: 900px) {
+  .overview-grid { grid-template-columns: 1fr; }
+}
+
+.insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.insight-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.05);
+  border: 1px solid var(--rule);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary, var(--ink));
+}
+
+.insight-item strong {
+  color: var(--ink);
+}
+
+.insight-icon {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  border-radius: 8px;
+  background: rgba(127, 127, 127, 0.08);
+}
+
+.insight-link {
+  text-decoration: none;
+  color: inherit;
+  align-items: center;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.insight-link:hover {
+  border-color: var(--accent, #3b82f6);
+  background: rgba(59, 130, 246, 0.05);
+}
+.insight-arrow {
+  flex-shrink: 0;
+  color: var(--text-dim, #888);
+  font-size: 14px;
+  font-weight: 700;
+}

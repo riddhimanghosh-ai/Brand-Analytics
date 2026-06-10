@@ -280,35 +280,61 @@ export function OverviewKPIs({ slug, connections }: Props) {
               <div className="chart-card-subtitle">New vs Returning customers</div>
             </div>
           </div>
-          <div className="insights-list">
-            <div className="insight-item">
-              <span className="insight-icon">🆕</span>
-              <div>
-                <strong>New Customer Revenue:</strong> {formatCurrency(kpis.newCustomerRevenue)}
-                <span className="text-muted text-sm"> ({kpis.totalRevenue > 0 ? ((kpis.newCustomerRevenue / kpis.totalRevenue) * 100).toFixed(0) : 0}%)</span>
-              </div>
-            </div>
-            <div className="insight-item">
-              <span className="insight-icon">🔄</span>
-              <div>
-                <strong>Returning Revenue:</strong> {formatCurrency(kpis.returningCustomerRevenue)}
-                <span className="text-muted text-sm"> ({kpis.totalRevenue > 0 ? ((kpis.returningCustomerRevenue / kpis.totalRevenue) * 100).toFixed(0) : 0}%)</span>
-              </div>
-            </div>
-            <div className="insight-item">
-              <span className="insight-icon">🏆</span>
-              <div><strong>Top Product:</strong> {kpis.topSellingProduct}</div>
-            </div>
-            {kpis.refundRate > 0 && (
-              <div className="insight-item">
-                <span className="insight-icon">⚠️</span>
-                <div>
-                  <strong>Refund Rate:</strong> {kpis.refundRate.toFixed(1)}%
-                  {kpis.refundRate > 5 && <span style={{ color: 'var(--accent-rose)' }}> — High! Investigate product quality</span>}
+          {(() => {
+            const newPct = kpis.totalRevenue > 0 ? (kpis.newCustomerRevenue / kpis.totalRevenue) * 100 : 0;
+            const retPct = kpis.totalRevenue > 0 ? (kpis.returningCustomerRevenue / kpis.totalRevenue) * 100 : 0;
+            return (
+              <div style={{ marginTop: '4px' }}>
+                {/* Stacked split bar */}
+                <div style={{ display: 'flex', height: '26px', borderRadius: '8px', overflow: 'hidden', marginBottom: '12px' }}>
+                  <div style={{
+                    width: `${Math.max(2, newPct)}%`, background: 'linear-gradient(90deg, #3b82f6, #6366f1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '11px', fontWeight: 700, color: '#fff', minWidth: '40px',
+                  }}>
+                    {newPct.toFixed(0)}%
+                  </div>
+                  <div style={{
+                    width: `${Math.max(2, retPct)}%`, background: 'linear-gradient(90deg, #16a34a, #22c55e)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '11px', fontWeight: 700, color: '#fff', minWidth: '40px',
+                  }}>
+                    {retPct.toFixed(0)}%
+                  </div>
+                </div>
+
+                {/* Legend rows */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {[
+                    { dot: '#3b82f6', label: 'New customers', value: formatCurrency(kpis.newCustomerRevenue), sub: `${newPct.toFixed(0)}% of revenue` },
+                    { dot: '#22c55e', label: 'Returning customers', value: formatCurrency(kpis.returningCustomerRevenue), sub: `${retPct.toFixed(0)}% of revenue` },
+                  ].map(r => (
+                    <div key={r.label} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '13px' }}>
+                      <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: r.dot, flexShrink: 0 }} />
+                      <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{r.label}</span>
+                      <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono, monospace)' }}>{r.value}</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-dim)', width: '92px', textAlign: 'right' }}>{r.sub}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Divider stats */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '14px', paddingTop: '14px', borderTop: '1px solid var(--rule)' }}>
+                  <div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: '3px' }}>🏆 Top Product</div>
+                    <div style={{ fontSize: '13px', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{kpis.topSellingProduct}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '10px', color: 'var(--text-dim)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: '3px' }}>↩️ Refund Rate</div>
+                    <div style={{ fontSize: '13px', fontWeight: 700, color: kpis.refundRate > 5 ? '#f43f5e' : '#22c55e' }}>
+                      {kpis.refundRate.toFixed(1)}%
+                      <span style={{ fontWeight: 400, fontSize: '11px', color: 'var(--text-dim)' }}> {kpis.refundRate > 5 ? '— investigate' : '— healthy'}</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            )}
-          </div>
+            );
+          })()}
         </div>
 
         <div className="chart-card">
@@ -320,33 +346,48 @@ export function OverviewKPIs({ slug, connections }: Props) {
           </div>
           <div className="insights-list">
             {kpis.repeatCustomerRate < 20 && (
-              <div className="insight-item">
-                <span className="insight-icon">📧</span>
-                <div>Low repeat rate ({kpis.repeatCustomerRate.toFixed(0)}%). Set up email flows for post-purchase &amp; win-back campaigns.</div>
-              </div>
+              <Link href={`/dashboard/${slug}/replenishment`} className="insight-item insight-link">
+                <span className="insight-icon" style={{ background: 'rgba(244,63,94,0.12)' }}>📧</span>
+                <div style={{ flex: 1 }}>
+                  <strong>Low repeat rate ({kpis.repeatCustomerRate.toFixed(0)}%). </strong>Set up post-purchase &amp; winback flows — the Replenishment Clock has the exact send timing.
+                </div>
+                <span className="insight-arrow">→</span>
+              </Link>
             )}
             {kpis.averageItemsPerOrder < 2 && (
-              <div className="insight-item">
-                <span className="insight-icon">📦</span>
-                <div>Low items per order ({kpis.averageItemsPerOrder.toFixed(1)}). Add product bundles, cross-sells, and volume discounts.</div>
-              </div>
+              <Link href={`/dashboard/${slug}/bundles`} className="insight-item insight-link">
+                <span className="insight-icon" style={{ background: 'rgba(245,158,11,0.12)' }}>📦</span>
+                <div style={{ flex: 1 }}>
+                  <strong>Low items per order ({kpis.averageItemsPerOrder.toFixed(1)}).</strong> The Bundle Builder shows which products customers already pair.
+                </div>
+                <span className="insight-arrow">→</span>
+              </Link>
             )}
             {kpis.averageOrderValue < 500 && (
-              <div className="insight-item">
-                <span className="insight-icon">💸</span>
-                <div>AOV at {formatCurrency(kpis.averageOrderValue)}. Add free shipping threshold, upsells, and minimum cart incentives.</div>
-              </div>
+              <Link href={`/dashboard/${slug}/discounts`} className="insight-item insight-link">
+                <span className="insight-icon" style={{ background: 'rgba(245,158,11,0.12)' }}>💸</span>
+                <div style={{ flex: 1 }}>
+                  <strong>AOV at {formatCurrency(kpis.averageOrderValue)}.</strong> Add a free-shipping threshold and minimum-cart incentives.
+                </div>
+                <span className="insight-arrow">→</span>
+              </Link>
             )}
             {kpis.newCustomerRevenue > kpis.returningCustomerRevenue * 3 && (
-              <div className="insight-item">
-                <span className="insight-icon">🎯</span>
-                <div>Over-reliant on new customers. Focus on retention: loyalty programs, subscriptions, and personalized emails.</div>
-              </div>
+              <Link href={`/dashboard/${slug}/segments`} className="insight-item insight-link">
+                <span className="insight-icon" style={{ background: 'rgba(99,102,241,0.12)' }}>🎯</span>
+                <div style={{ flex: 1 }}>
+                  <strong>Over-reliant on new customers.</strong> Export winback segments and start retention flows before they churn.
+                </div>
+                <span className="insight-arrow">→</span>
+              </Link>
             )}
-            <div className="insight-item">
-              <span className="insight-icon">✨</span>
-              <div>Use the <strong>AI Consultant</strong> for more personalized CRO strategies.</div>
-            </div>
+            <Link href={`/dashboard/${slug}/actions`} className="insight-item insight-link">
+              <span className="insight-icon" style={{ background: 'rgba(34,197,94,0.12)' }}>⚡</span>
+              <div style={{ flex: 1 }}>
+                <strong>Action Center</strong> ranks everything that needs a decision today across ads, inventory, and customers.
+              </div>
+              <span className="insight-arrow">→</span>
+            </Link>
           </div>
         </div>
       </div>
