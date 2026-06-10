@@ -124,6 +124,18 @@ export default async function DashboardLayout({
             Revenue Goal
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/segments`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Customer Segments
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/cohorts`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Retention Cohorts
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/velocity`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Product Velocity
+          </NavLink>
+
           <div className="nav-section-label">Ads & Channels</div>
 
           <NavLink

@@ -2248,3 +2248,224 @@ export async function getDiscountCodePerformance(
     },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Customer Insights — RFM segments, retention cohorts, product velocity.
+// All three are computed from a single order-history fetch.
+// ---------------------------------------------------------------------------
+
+export interface SegmentCustomer {
+  email: string;
+  orders: number;
+  totalSpent: number;
+  firstOrderDate: string;
+  lastOrderDate: string;
+}
+
+export interface CustomerSegment {
+  key: 'champions' | 'loyal' | 'new' | 'promising' | 'at_risk' | 'lost';
+  label: string;
+  description: string;
+  customers: number;
+  revenue: number;
+  avgOrders: number;
+  avgSpent: number;
+  list: SegmentCustomer[];   // capped per segment
+}
+
+export interface CohortRow {
+  cohort: string;       // "YYYY-MM"
+  customers: number;    // first-time buyers that month
+  retention: number[];  // % active in month+1, +2, ... (capped)
+}
+
+export interface ProductVelocityRow {
+  title: string;
+  unitsLast7: number;
+  dailyAvgLast7: number;
+  dailyAvgPrior28: number;
+  ratio: number;        // last-7 daily rate ÷ prior-28 daily rate
+  status: 'surging' | 'slowing' | 'stalled' | 'steady';
+  lastSoldDate: string | null;
+}
+
+export interface CustomerInsights {
+  segments: CustomerSegment[];
+  cohorts: CohortRow[];
+  velocity: ProductVelocityRow[];
+  totalCustomers: number;
+  rangeDays: number;
+}
+
+const SEGMENT_LIST_CAP = 2000;
+
+export async function getCustomerInsights(
+  config: ShopifyConfig,
+  dateRange: string = '180d'
+): Promise<CustomerInsights> {
+  const { startDate, endDate, days } = parseDateRange(dateRange);
+  const orders = await fetchAllOrders(config, startDate, endDate);
+
+  // ── Group orders by customer ───────────────────────────────────────────────
+  type CustAgg = { orders: number; totalSpent: number; first: string; last: string; orderMonths: Set<string> };
+  const byCustomer = new Map<string, CustAgg>();
+
+  // Product velocity bookkeeping
+  const now = Date.now();
+  const last7Start = now - 7 * 86_400_000;
+  const prior28Start = now - 35 * 86_400_000;
+  type ProdAgg = { unitsLast7: number; unitsPrior28: number; lastSold: string | null };
+  const byProduct = new Map<string, ProdAgg>();
+
+  for (const o of orders) {
+    if (o.cancelledAt) continue;
+    const createdAt = String(o.createdAt ?? '');
+    if (!createdAt) continue;
+    const ts = new Date(createdAt).getTime();
+    const priceSet = o.totalPriceSet as { shopMoney?: { amount?: string } } | undefined;
+    const price = parseFloat(priceSet?.shopMoney?.amount ?? '0') || 0;
+    const customerObj = o.customer as { id?: string } | null | undefined;
+    const key = String(o.email || customerObj?.id || '').toLowerCase().trim();
+
+    if (key) {
+      const agg = byCustomer.get(key) ?? {
+        orders: 0, totalSpent: 0, first: createdAt, last: createdAt, orderMonths: new Set<string>(),
+      };
+      agg.orders++;
+      agg.totalSpent += price;
+      if (createdAt < agg.first) agg.first = createdAt;
+      if (createdAt > agg.last) agg.last = createdAt;
+      agg.orderMonths.add(createdAt.slice(0, 7));
+      byCustomer.set(key, agg);
+    }
+
+    // Velocity: only the last 35 days matter
+    if (ts >= prior28Start) {
+      const lineItems = o.lineItems as { edges?: Array<{ node?: { quantity?: number; product?: { title?: string } | null; title?: string } }> } | undefined;
+      for (const edge of lineItems?.edges ?? []) {
+        const node = edge?.node;
+        if (!node) continue;
+        const title = node.product?.title || node.title || 'Unknown';
+        const qty = Number(node.quantity ?? 0) || 0;
+        const agg = byProduct.get(title) ?? { unitsLast7: 0, unitsPrior28: 0, lastSold: null };
+        if (ts >= last7Start) agg.unitsLast7 += qty;
+        else agg.unitsPrior28 += qty;
+        if (!agg.lastSold || createdAt > agg.lastSold) agg.lastSold = createdAt;
+        byProduct.set(title, agg);
+      }
+    }
+  }
+
+  // ── RFM segmentation ───────────────────────────────────────────────────────
+  const defs: Array<{ key: CustomerSegment['key']; label: string; description: string }> = [
+    { key: 'champions', label: 'Champions',  description: '3+ orders, bought in the last 60 days — protect these at all costs' },
+    { key: 'loyal',     label: 'Loyal',      description: '2+ orders, active in the last 90 days' },
+    { key: 'new',       label: 'New',        description: 'First order within the last 30 days — nurture to a 2nd purchase' },
+    { key: 'promising', label: 'Promising',  description: 'One order, 1–3 months ago — prime for a winback nudge' },
+    { key: 'at_risk',   label: 'At Risk',    description: 'Repeat buyers gone quiet for 3–6 months — winback campaign now' },
+    { key: 'lost',      label: 'Lost',       description: 'No purchase in 6+ months' },
+  ];
+  const segMap = new Map<CustomerSegment['key'], { count: number; customers: SegmentCustomer[]; revenue: number; orderSum: number }>(
+    defs.map(d => [d.key, { count: 0, customers: [], revenue: 0, orderSum: 0 }])
+  );
+
+  for (const [email, c] of byCustomer) {
+    const recencyDays = (now - new Date(c.last).getTime()) / 86_400_000;
+    let key: CustomerSegment['key'];
+    if (recencyDays > 180) key = 'lost';
+    else if (c.orders >= 3 && recencyDays <= 60) key = 'champions';
+    else if (c.orders >= 2 && recencyDays <= 90) key = 'loyal';
+    else if (c.orders >= 2) key = 'at_risk';
+    else if (recencyDays <= 30) key = 'new';
+    else if (recencyDays <= 90) key = 'promising';
+    else key = 'at_risk';
+
+    const bucket = segMap.get(key)!;
+    bucket.count++;
+    bucket.revenue += c.totalSpent;
+    bucket.orderSum += c.orders;
+    if (bucket.customers.length < SEGMENT_LIST_CAP) {
+      bucket.customers.push({
+        email,
+        orders: c.orders,
+        totalSpent: Math.round(c.totalSpent),
+        firstOrderDate: c.first.slice(0, 10),
+        lastOrderDate: c.last.slice(0, 10),
+      });
+    }
+  }
+
+  const segments: CustomerSegment[] = defs.map(d => {
+    const b = segMap.get(d.key)!;
+    return {
+      ...d,
+      customers: b.count,
+      revenue: Math.round(b.revenue),
+      avgOrders: b.count > 0 ? b.orderSum / b.count : 0,
+      avgSpent: b.count > 0 ? b.revenue / b.count : 0,
+      list: b.customers.sort((a, z) => z.totalSpent - a.totalSpent),
+    };
+  });
+
+  // ── Cohort retention ───────────────────────────────────────────────────────
+  const cohortMap = new Map<string, { customers: number; active: Map<number, Set<string>> }>();
+  for (const [email, c] of byCustomer) {
+    const cohort = c.first.slice(0, 7);
+    const entry = cohortMap.get(cohort) ?? { customers: 0, active: new Map() };
+    entry.customers++;
+    const [cy, cm] = cohort.split('-').map(Number);
+    for (const m of c.orderMonths) {
+      const [y, mo] = m.split('-').map(Number);
+      const offset = (y - cy) * 12 + (mo - cm);
+      if (offset >= 1 && offset <= 11) {
+        if (!entry.active.has(offset)) entry.active.set(offset, new Set());
+        entry.active.get(offset)!.add(email);
+      }
+    }
+    cohortMap.set(cohort, entry);
+  }
+
+  const cohortKeys = [...cohortMap.keys()].sort();
+  const maxOffset = Math.min(6, Math.max(1, Math.floor(days / 30) - 1));
+  const cohorts: CohortRow[] = cohortKeys.map(k => {
+    const e = cohortMap.get(k)!;
+    const retention: number[] = [];
+    for (let off = 1; off <= maxOffset; off++) {
+      retention.push(e.customers > 0 ? ((e.active.get(off)?.size ?? 0) / e.customers) * 100 : 0);
+    }
+    return { cohort: k, customers: e.customers, retention };
+  });
+
+  // ── Product velocity ───────────────────────────────────────────────────────
+  const velocity: ProductVelocityRow[] = [...byProduct.entries()]
+    .map(([title, p]) => {
+      const dailyLast7 = p.unitsLast7 / 7;
+      const dailyPrior28 = p.unitsPrior28 / 28;
+      const ratio = dailyPrior28 > 0 ? dailyLast7 / dailyPrior28 : (dailyLast7 > 0 ? Infinity : 0);
+      const daysSinceSold = p.lastSold ? (now - new Date(p.lastSold).getTime()) / 86_400_000 : Infinity;
+      let status: ProductVelocityRow['status'];
+      if (daysSinceSold >= 14) status = 'stalled';
+      else if (ratio >= 1.5 && p.unitsLast7 >= 5) status = 'surging';
+      else if (ratio <= 0.5 && p.unitsPrior28 >= 10) status = 'slowing';
+      else status = 'steady';
+      return {
+        title,
+        unitsLast7: p.unitsLast7,
+        dailyAvgLast7: +dailyLast7.toFixed(2),
+        dailyAvgPrior28: +dailyPrior28.toFixed(2),
+        ratio: Number.isFinite(ratio) ? +ratio.toFixed(2) : 99,
+        status,
+        lastSoldDate: p.lastSold ? p.lastSold.slice(0, 10) : null,
+      };
+    })
+    .filter(v => v.unitsLast7 + v.dailyAvgPrior28 > 0)
+    .sort((a, b) => b.unitsLast7 - a.unitsLast7);
+
+  return {
+    segments,
+    cohorts,
+    velocity,
+    totalCustomers: byCustomer.size,
+    rangeDays: days,
+  };
+}
