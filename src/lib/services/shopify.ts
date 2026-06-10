@@ -2522,10 +2522,12 @@ export async function getInventoryStatus(config: ShopifyConfig): Promise<Invento
   const products: InventoryProduct[] = [];
   let cursor: string | null = null;
 
+  // Fetch ALL products (active + draft) — some stores park reserve stock on
+  // draft "(backup)" duplicates of live products.
   for (let page = 0; page < 10; page++) {  // up to 2,500 products
     const afterClause: string = cursor ? `, after: ${JSON.stringify(cursor)}` : '';
     const gql = `{
-      products(first: 250${afterClause}, query: "status:active") {
+      products(first: 250${afterClause}) {
         pageInfo { hasNextPage endCursor }
         edges {
           node {
@@ -2555,4 +2557,196 @@ export async function getInventoryStatus(config: ShopifyConfig): Promise<Invento
     cursor = data.products.pageInfo.endCursor;
   }
   return products;
+}
+
+// ---------------------------------------------------------------------------
+// Purchase patterns — market-basket pairs (Bundle Builder) and repurchase
+// gaps (Replenishment Clock). Both computed from one order-history pass.
+// ---------------------------------------------------------------------------
+
+export interface ProductPair {
+  a: string;
+  b: string;
+  together: number;        // orders containing both
+  aOrders: number;         // orders containing A
+  bOrders: number;         // orders containing B
+  confidence: number;      // P(B|A) as % — of orders with A, how many also had B
+  lift: number;            // >1 = bought together more than chance
+  avgPairRevenue: number;  // avg order value of orders containing both
+}
+
+export interface ReplenishmentRow {
+  title: string;
+  repurchases: number;     // number of gap samples
+  medianDays: number;
+  p25Days: number;
+  p75Days: number;
+}
+
+export interface PurchasePatterns {
+  pairs: ProductPair[];
+  replenishment: {
+    overallMedianDays: number;
+    overallSamples: number;
+    gapHistogram: Array<{ bucket: string; count: number }>;
+    byProduct: ReplenishmentRow[];
+  };
+  ordersAnalysed: number;
+  multiItemOrderShare: number;  // % of orders with 2+ distinct products
+  rangeDays: number;
+}
+
+function percentile(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
+  return sorted[idx];
+}
+
+export async function getPurchasePatterns(
+  config: ShopifyConfig,
+  dateRange: string = '180d'
+): Promise<PurchasePatterns> {
+  const { startDate, endDate, days } = parseDateRange(dateRange);
+  const orders = await fetchAllOrders(config, startDate, endDate);
+
+  const productOrderCount = new Map<string, number>();
+  const pairCount = new Map<string, { count: number; revenue: number }>();
+  let totalOrders = 0;
+  let multiItemOrders = 0;
+
+  // customer → list of { date, products }
+  const custOrders = new Map<string, Array<{ ts: number; products: string[] }>>();
+
+  for (const o of orders) {
+    if (o.cancelledAt) continue;
+    const createdAt = String(o.createdAt ?? '');
+    if (!createdAt) continue;
+    const priceSet = o.totalPriceSet as { shopMoney?: { amount?: string } } | undefined;
+    const price = parseFloat(priceSet?.shopMoney?.amount ?? '0') || 0;
+
+    const lineItems = o.lineItems as { edges?: Array<{ node?: { product?: { title?: string } | null; title?: string } }> } | undefined;
+    const titles = [...new Set(
+      (lineItems?.edges ?? [])
+        .map(e => e?.node?.product?.title || e?.node?.title || '')
+        .filter(Boolean)
+    )];
+    if (titles.length === 0) continue;
+
+    totalOrders++;
+    if (titles.length >= 2) multiItemOrders++;
+
+    for (const t of titles) {
+      productOrderCount.set(t, (productOrderCount.get(t) ?? 0) + 1);
+    }
+    // All unordered pairs in this basket
+    for (let i = 0; i < titles.length; i++) {
+      for (let j = i + 1; j < titles.length; j++) {
+        const key = [titles[i], titles[j]].sort().join('|||');
+        const p = pairCount.get(key) ?? { count: 0, revenue: 0 };
+        p.count++;
+        p.revenue += price;
+        pairCount.set(key, p);
+      }
+    }
+
+    const customerObj = o.customer as { id?: string } | null | undefined;
+    const custKey = String(o.email || customerObj?.id || '').toLowerCase().trim();
+    if (custKey) {
+      const list = custOrders.get(custKey) ?? [];
+      list.push({ ts: new Date(createdAt).getTime(), products: titles });
+      custOrders.set(custKey, list);
+    }
+  }
+
+  // ── Pairs ──────────────────────────────────────────────────────────────────
+  const pairs: ProductPair[] = [...pairCount.entries()]
+    .filter(([, v]) => v.count >= 5)
+    .map(([key, v]) => {
+      const [a, b] = key.split('|||');
+      const aOrders = productOrderCount.get(a) ?? 1;
+      const bOrders = productOrderCount.get(b) ?? 1;
+      // Confidence from the smaller product's perspective (more actionable)
+      const [small, large] = aOrders <= bOrders ? [a, b] : [b, a];
+      const smallCount = Math.min(aOrders, bOrders);
+      return {
+        a: small,
+        b: large,
+        together: v.count,
+        aOrders: smallCount,
+        bOrders: Math.max(aOrders, bOrders),
+        confidence: +((v.count / smallCount) * 100).toFixed(1),
+        lift: +(((v.count * totalOrders) / (aOrders * bOrders))).toFixed(2),
+        avgPairRevenue: Math.round(v.revenue / v.count),
+      };
+    })
+    .sort((x, y) => y.together - x.together)
+    .slice(0, 60);
+
+  // ── Replenishment gaps ─────────────────────────────────────────────────────
+  const overallGaps: number[] = [];
+  const productGaps = new Map<string, number[]>();
+
+  for (const [, list] of custOrders) {
+    if (list.length < 2) continue;
+    list.sort((x, y) => x.ts - y.ts);
+    for (let i = 1; i < list.length; i++) {
+      const gap = (list[i].ts - list[i - 1].ts) / 86_400_000;
+      if (gap >= 1) overallGaps.push(gap);
+    }
+    // Product-specific: consecutive purchases of the same product
+    const lastSeen = new Map<string, number>();
+    for (const ord of list) {
+      for (const p of ord.products) {
+        const prev = lastSeen.get(p);
+        if (prev !== undefined) {
+          const gap = (ord.ts - prev) / 86_400_000;
+          if (gap >= 1) {
+            const arr = productGaps.get(p) ?? [];
+            arr.push(gap);
+            productGaps.set(p, arr);
+          }
+        }
+        lastSeen.set(p, ord.ts);
+      }
+    }
+  }
+
+  overallGaps.sort((x, y) => x - y);
+  const buckets = [
+    { label: '0–15d', max: 15 }, { label: '16–30d', max: 30 }, { label: '31–45d', max: 45 },
+    { label: '46–60d', max: 60 }, { label: '61–90d', max: 90 }, { label: '91–120d', max: 120 },
+    { label: '120d+', max: Infinity },
+  ];
+  const gapHistogram = buckets.map(b => ({ bucket: b.label, count: 0 }));
+  for (const g of overallGaps) {
+    const idx = buckets.findIndex(b => g <= b.max);
+    gapHistogram[idx === -1 ? buckets.length - 1 : idx].count++;
+  }
+
+  const byProduct: ReplenishmentRow[] = [...productGaps.entries()]
+    .filter(([, gaps]) => gaps.length >= 8)
+    .map(([title, gaps]) => {
+      gaps.sort((x, y) => x - y);
+      return {
+        title,
+        repurchases: gaps.length,
+        medianDays: Math.round(percentile(gaps, 50)),
+        p25Days: Math.round(percentile(gaps, 25)),
+        p75Days: Math.round(percentile(gaps, 75)),
+      };
+    })
+    .sort((x, y) => y.repurchases - x.repurchases);
+
+  return {
+    pairs,
+    replenishment: {
+      overallMedianDays: Math.round(percentile(overallGaps, 50)),
+      overallSamples: overallGaps.length,
+      gapHistogram,
+      byProduct,
+    },
+    ordersAnalysed: totalOrders,
+    multiItemOrderShare: totalOrders > 0 ? +((multiItemOrders / totalOrders) * 100).toFixed(1) : 0,
+    rangeDays: days,
+  };
 }

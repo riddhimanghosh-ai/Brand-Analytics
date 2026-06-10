@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback } from 'react';
 interface RestockRow {
   title: string;
   stock: number;
+  reserveStock: number;
+  listingEmpty: boolean;
   dailyRate: number;
   daysOfCover: number;
   status: 'critical' | 'low' | 'healthy' | 'overstocked' | 'dead';
@@ -186,7 +188,8 @@ export default function RestockPage({ params }: { params: Promise<{ slug: string
                       <tr>
                         <th style={{ textAlign: 'left' }}>Product</th>
                         <th style={{ textAlign: 'center' }}>Status</th>
-                        <th style={{ textAlign: 'right' }}>In Stock</th>
+                        <th style={{ textAlign: 'right' }}>Live Stock</th>
+                        <th style={{ textAlign: 'right' }}>Reserve (drafts)</th>
                         <th style={{ textAlign: 'right' }}>Selling / Day</th>
                         <th style={{ textAlign: 'right' }}>Days of Cover</th>
                         <th style={{ textAlign: 'right' }}>Reorder Qty</th>
@@ -197,8 +200,13 @@ export default function RestockPage({ params }: { params: Promise<{ slug: string
                         const meta = STATUS_META[r.status];
                         return (
                           <tr key={r.title}>
-                            <td style={{ fontWeight: 600, fontSize: '13px', maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {r.title}
+                            <td style={{ fontWeight: 600, fontSize: '13px', maxWidth: '320px' }}>
+                              <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</div>
+                              {r.listingEmpty && (
+                                <div style={{ fontSize: '10px', color: '#f43f5e', fontWeight: 700 }}>
+                                  ⚠️ Live listing at 0 — move reserve stock to the listing!
+                                </div>
+                              )}
                             </td>
                             <td style={{ textAlign: 'center' }}>
                               <span style={{
@@ -210,6 +218,9 @@ export default function RestockPage({ params }: { params: Promise<{ slug: string
                             </td>
                             <td className="mono" style={{ textAlign: 'right', fontWeight: 600, color: r.stock <= 0 ? '#f43f5e' : undefined }}>
                               {r.stock.toLocaleString('en-IN')}
+                            </td>
+                            <td className="mono" style={{ textAlign: 'right', color: r.reserveStock > 0 ? '#3b82f6' : 'var(--text-dim)' }}>
+                              {r.reserveStock > 0 ? r.reserveStock.toLocaleString('en-IN') : '—'}
                             </td>
                             <td className="mono" style={{ textAlign: 'right' }}>{r.dailyRate.toFixed(1)}</td>
                             <td className="mono" style={{ textAlign: 'right' }}>

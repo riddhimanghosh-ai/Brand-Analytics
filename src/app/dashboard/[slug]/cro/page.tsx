@@ -2,6 +2,7 @@ import { getBrand } from '@/lib/mongodb-store';
 import { cacheGet, cacheSet } from '@/lib/analytics-cache';
 import * as shopify from '@/lib/services/shopify';
 import { AlertRules, type AlertRule } from '@/components/AlertRules';
+import { AnomalyWatchdog } from '@/components/AnomalyWatchdog';
 
 export const dynamic = 'force-dynamic';
 
@@ -212,6 +213,9 @@ export default async function CROPage({ params }: { params: Promise<{ slug: stri
       </div>
 
       <div className="page-body">
+
+        {/* ── Anomaly Watchdog ── */}
+        <AnomalyWatchdog slug={slug} />
 
         {/* ── KPI Strip ── */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: '10px', marginBottom: '28px' }}>

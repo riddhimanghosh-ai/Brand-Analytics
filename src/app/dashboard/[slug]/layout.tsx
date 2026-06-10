@@ -103,6 +103,14 @@ export default async function DashboardLayout({
             Budget Moves
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/bundles`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Bundle Builder
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/replenishment`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Replenishment Clock
+          </NavLink>
+
           <div className="nav-section-label">Analytics</div>
 
           <NavLink href={`/dashboard/${slug}`} exact>
@@ -152,6 +160,10 @@ export default async function DashboardLayout({
 
           <NavLink href={`/dashboard/${slug}/velocity`} disabled={!connections.shopify} disabledPlatform="Shopify">
             Product Velocity
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/geo`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Geo Revenue
           </NavLink>
 
           <div className="nav-section-label">Ads & Channels</div>
