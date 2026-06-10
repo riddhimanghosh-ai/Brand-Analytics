@@ -62,6 +62,8 @@ export async function PUT(
       'alertRules',
       'events',
       'trackedWebsites',
+      'trackedStores',
+      'monthlyRevenueTarget',
       'windsorApiKey',
       'synterApiKey',
     ];

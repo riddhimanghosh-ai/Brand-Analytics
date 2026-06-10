@@ -141,6 +141,38 @@ export interface TrackedWebsite {
   tech?: DetectedTech[];
 }
 
+// ── Competitor price tracker ────────────────────────────────────────────────
+
+export interface TrackedProductSnapshot {
+  id: string;          // Shopify product id
+  title: string;
+  handle: string;
+  price: number;       // lowest variant price
+  compareAtPrice: number | null;
+  available: boolean;
+  imageUrl: string | null;
+}
+
+export interface PriceChangeEvent {
+  date: string;        // ISO timestamp of the scan that detected it
+  productId: string;
+  productTitle: string;
+  handle: string;
+  type: 'price_up' | 'price_down' | 'new_product' | 'removed' | 'back_in_stock' | 'out_of_stock';
+  oldPrice: number | null;
+  newPrice: number | null;
+}
+
+export interface TrackedStore {
+  id: string;
+  url: string;          // store origin, e.g. https://www.beardo.in
+  name?: string;
+  addedAt: string;
+  lastScanned?: string;
+  products?: TrackedProductSnapshot[];
+  changes?: PriceChangeEvent[];   // most recent first, capped
+}
+
 export interface BrandEvent {
   id: string;
   title: string;

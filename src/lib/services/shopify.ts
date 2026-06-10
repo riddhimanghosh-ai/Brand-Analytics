@@ -2135,3 +2135,116 @@ export async function getOrderConversionFunnel(
 
   return funnel;
 }
+
+// ---------------------------------------------------------------------------
+// Public: getDiscountCodePerformance — leaderboard of discount codes
+// Aggregates revenue, usage, and discount given per code from raw orders.
+// ---------------------------------------------------------------------------
+
+export interface DiscountCodeStats {
+  code: string;
+  orders: number;
+  revenue: number;
+  totalDiscount: number;
+  aov: number;
+  avgDiscountPct: number;   // discount as % of (revenue + discount)
+  newCustomerOrders: number;
+  newCustomerShare: number; // % of this code's orders from first-time buyers
+}
+
+export interface DiscountPerformance {
+  codes: DiscountCodeStats[];
+  summary: {
+    totalOrders: number;
+    discountedOrders: number;
+    discountedShare: number;      // % of all orders that used a code
+    discountedRevenue: number;
+    nonDiscountedRevenue: number;
+    totalDiscountGiven: number;
+    discountedAov: number;
+    nonDiscountedAov: number;
+  };
+}
+
+export async function getDiscountCodePerformance(
+  config: ShopifyConfig,
+  dateRange: string = '30d'
+): Promise<DiscountPerformance> {
+  const { startDate, endDate } = parseDateRange(dateRange);
+  const orders = await fetchAllOrders(config, startDate, endDate);
+
+  type CodeAgg = {
+    orders: number; revenue: number; totalDiscount: number; newCustomerOrders: number;
+  };
+  const byCode = new Map<string, CodeAgg>();
+
+  let totalOrders = 0;
+  let discountedOrders = 0;
+  let discountedRevenue = 0;
+  let nonDiscountedRevenue = 0;
+  let nonDiscountedOrders = 0;
+  let totalDiscountGiven = 0;
+
+  for (const o of orders) {
+    if (o.cancelledAt) continue;
+    const priceSet = o.totalPriceSet as { shopMoney?: { amount?: string } } | undefined;
+    const discountSet = o.totalDiscountsSet as { shopMoney?: { amount?: string } } | undefined;
+    const price = parseFloat(priceSet?.shopMoney?.amount ?? '0') || 0;
+    const discount = parseFloat(discountSet?.shopMoney?.amount ?? '0') || 0;
+    const codes = (o.discountCodes as string[] | undefined) ?? [];
+    const customer = o.customer as { numberOfOrders?: number | string } | null | undefined;
+    const isNewCustomer = Number(customer?.numberOfOrders ?? 1) <= 1;
+
+    totalOrders++;
+
+    if (codes.length === 0) {
+      nonDiscountedRevenue += price;
+      nonDiscountedOrders++;
+      continue;
+    }
+
+    discountedOrders++;
+    discountedRevenue += price;
+    totalDiscountGiven += discount;
+
+    // If an order used multiple codes, split the discount evenly between them
+    const discountPerCode = discount / codes.length;
+    for (const raw of codes) {
+      const code = String(raw).trim().toUpperCase();
+      if (!code) continue;
+      const agg = byCode.get(code) ?? { orders: 0, revenue: 0, totalDiscount: 0, newCustomerOrders: 0 };
+      agg.orders++;
+      agg.revenue += price;
+      agg.totalDiscount += discountPerCode;
+      if (isNewCustomer) agg.newCustomerOrders++;
+      byCode.set(code, agg);
+    }
+  }
+
+  const codes: DiscountCodeStats[] = [...byCode.entries()]
+    .map(([code, a]) => ({
+      code,
+      orders: a.orders,
+      revenue: a.revenue,
+      totalDiscount: a.totalDiscount,
+      aov: a.orders > 0 ? a.revenue / a.orders : 0,
+      avgDiscountPct: a.revenue + a.totalDiscount > 0 ? (a.totalDiscount / (a.revenue + a.totalDiscount)) * 100 : 0,
+      newCustomerOrders: a.newCustomerOrders,
+      newCustomerShare: a.orders > 0 ? (a.newCustomerOrders / a.orders) * 100 : 0,
+    }))
+    .sort((x, y) => y.revenue - x.revenue);
+
+  return {
+    codes,
+    summary: {
+      totalOrders,
+      discountedOrders,
+      discountedShare: totalOrders > 0 ? (discountedOrders / totalOrders) * 100 : 0,
+      discountedRevenue,
+      nonDiscountedRevenue,
+      totalDiscountGiven,
+      discountedAov: discountedOrders > 0 ? discountedRevenue / discountedOrders : 0,
+      nonDiscountedAov: nonDiscountedOrders > 0 ? nonDiscountedRevenue / nonDiscountedOrders : 0,
+    },
+  };
+}

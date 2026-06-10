@@ -116,6 +116,14 @@ export default async function DashboardLayout({
             Profitability
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/discounts`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Discount Codes
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/goals`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Revenue Goal
+          </NavLink>
+
           <div className="nav-section-label">Ads & Channels</div>
 
           <NavLink
@@ -125,6 +133,14 @@ export default async function DashboardLayout({
           >
             Ads Manager
             {(connections.metaAds || connections.googleAds) && <span className="nav-badge">Live</span>}
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/mer`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Blended ROAS
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/fatigue`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
+            Creative Fatigue
           </NavLink>
 
           {/* Upcoming — non-navigable */}
@@ -144,6 +160,10 @@ export default async function DashboardLayout({
           </span>
 
           <div className="nav-section-label">Competitive Intel</div>
+
+          <NavLink href={`/dashboard/${slug}/price-tracker`}>
+            Price Tracker
+          </NavLink>
 
           <span className="nav-link" style={{ pointerEvents: 'none', cursor: 'default', opacity: 0.55 }}>
             Competitor Ads

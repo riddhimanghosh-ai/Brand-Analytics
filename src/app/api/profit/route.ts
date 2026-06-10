@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { requireBrandAccess } from '@/lib/auth-server';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
+import * as synter from '@/lib/services/synter';
+import * as windsor from '@/lib/services/windsor';
 import * as shopifyService from '@/lib/services/shopify';
 import { cacheGet, cacheSet } from '@/lib/analytics-cache';
 
@@ -67,15 +69,49 @@ export async function GET(request: Request) {
     }
 
     // ── Google Ads spend ───────────────────────────────────────────────────────
+    // Same source-priority chain as the ads API: Synter → Windsor → direct API
     let googleSpend = 0;
     let googleRevenue = 0;
     let googleSpendSeries: { date: string; spend: number }[] = [];
+    let googleFetched = false;
+
+    const synterKey = brand.synterApiKey || process.env.SYNTER_API_KEY;
+    if (synterKey) {
+      try {
+        const [kpis, spendArr] = await Promise.all([
+          synter.getKPIs(synterKey, dateRange),
+          synter.getSpendOverTime(synterKey, dateRange),
+        ]);
+        googleSpend = kpis.spend ?? 0;
+        googleRevenue = kpis.conversionValue ?? 0;
+        googleSpendSeries = spendArr.map((p) => ({ date: p.date, spend: p.spend }));
+        googleFetched = true;
+      } catch (e) {
+        console.warn('[profit] Synter fetch failed:', e);
+      }
+    }
+
+    const windsorKey = brand.windsorApiKey || process.env.WINDSOR_API_KEY;
+    if (!googleFetched && windsorKey) {
+      try {
+        const [kpis, spendArr] = await Promise.all([
+          windsor.getKPIs(windsorKey, dateRange),
+          windsor.getSpendOverTime(windsorKey, dateRange),
+        ]);
+        googleSpend = kpis.spend ?? 0;
+        googleRevenue = kpis.conversionValue ?? 0;
+        googleSpendSeries = spendArr.map((p) => ({ date: p.date, spend: p.spend }));
+        googleFetched = true;
+      } catch (e) {
+        console.warn('[profit] Windsor fetch failed:', e);
+      }
+    }
 
     const devToken = brand.googleAdsDevToken || process.env.GOOGLE_ADS_DEV_TOKEN;
     const clientId = brand.googleAdsClientId || process.env.GOOGLE_CLIENT_ID;
     const clientSecret = brand.googleAdsClientSecret || process.env.GOOGLE_CLIENT_SECRET;
 
-    if (brand.googleAdsRefreshToken && brand.googleAdsCustomerId && devToken && clientId && clientSecret) {
+    if (!googleFetched && brand.googleAdsRefreshToken && brand.googleAdsCustomerId && devToken && clientId && clientSecret) {
       try {
         const config: googleAds.GoogleAdsConfig = {
           devToken, clientId, clientSecret,

@@ -1319,3 +1319,183 @@ export async function getCommentsFromAds(config: MetaConfig, dateRange: string):
     date: comment.createdAt,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Creative Fatigue Detector
+// Compares each ad's current-period performance against the immediately
+// preceding period of equal length. Flags ads where audience saturation
+// signals appear: rising frequency, declining CTR, rising CPM.
+// ---------------------------------------------------------------------------
+
+export interface CreativeFatigueAd {
+  id: string;
+  name: string;
+  campaignName?: string;
+  spend: number;
+  impressions: number;
+  frequency: number;
+  ctr: number;
+  cpm: number;
+  roas: number;
+  purchases: number;
+  prevCtr: number | null;
+  prevCpm: number | null;
+  prevFrequency: number | null;
+  ctrChange: number | null;   // % change vs previous period
+  cpmChange: number | null;   // % change vs previous period
+  status: 'fatigued' | 'warning' | 'healthy' | 'new';
+  reasons: string[];
+  thumbnailUrl?: string;
+}
+
+export interface CreativeFatigueResult {
+  ads: CreativeFatigueAd[];
+  currentPeriod: { since: string; until: string };
+  previousPeriod: { since: string; until: string };
+  summary: {
+    fatigued: number;
+    warning: number;
+    healthy: number;
+    newAds: number;
+    fatiguedSpend: number;   // spend going to fatigued creatives this period
+    totalSpend: number;
+  };
+}
+
+function resolveDateWindow(dateRange: string): { since: string; until: string } {
+  if (/^\d{4}-\d{2}-\d{2}:\d{4}-\d{2}-\d{2}$/.test(dateRange)) {
+    const [since, until] = dateRange.split(':');
+    return { since, until };
+  }
+  const daysMap: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90 };
+  const days = daysMap[dateRange] ?? 30;
+  const now = new Date();
+  const until = now.toISOString().split('T')[0];
+  const since = new Date(now.getTime() - days * 86_400_000).toISOString().split('T')[0];
+  return { since, until };
+}
+
+export async function getCreativeFatigue(
+  config: MetaConfig,
+  dateRange: string,
+): Promise<CreativeFatigueResult> {
+  const acct = accountId(config.adAccountId);
+
+  const current = resolveDateWindow(dateRange);
+  const lengthMs = new Date(current.until).getTime() - new Date(current.since).getTime() + 86_400_000;
+  const prevUntil = new Date(new Date(current.since).getTime() - 86_400_000).toISOString().split('T')[0];
+  const prevSince = new Date(new Date(current.since).getTime() - lengthMs).toISOString().split('T')[0];
+  const previous = { since: prevSince, until: prevUntil };
+
+  type AdRow = Record<string, unknown> & { ad_id: string; ad_name: string; campaign_name?: string };
+
+  const fetchPeriod = (period: { since: string; until: string }) =>
+    fetchMeta<{ data: AdRow[] }>(`${acct}/insights`, {
+      access_token: config.accessToken,
+      time_range: JSON.stringify(period),
+      fields: `ad_id,ad_name,campaign_name,${INSIGHT_FIELDS}`,
+      level: 'ad',
+      limit: '500',
+    });
+
+  const [currData, prevData] = await Promise.all([
+    fetchPeriod(current),
+    fetchPeriod(previous).catch(() => ({ data: [] as AdRow[] })),
+  ]);
+
+  const prevById = new Map<string, MetaKPIs>();
+  for (const row of prevData.data ?? []) {
+    prevById.set(row.ad_id, mapKPIRow(row));
+  }
+
+  const ads: CreativeFatigueAd[] = [];
+
+  for (const row of currData.data ?? []) {
+    const k = mapKPIRow(row);
+    if (k.spend <= 0) continue;
+
+    const prev = prevById.get(row.ad_id) ?? null;
+    const ctrChange = prev && prev.ctr > 0 ? ((k.ctr - prev.ctr) / prev.ctr) * 100 : null;
+    const cpmChange = prev && prev.cpm > 0 ? ((k.cpm - prev.cpm) / prev.cpm) * 100 : null;
+
+    const reasons: string[] = [];
+    if (k.frequency >= 3) reasons.push(`High frequency (${k.frequency.toFixed(1)})`);
+    else if (k.frequency >= 2.2) reasons.push(`Rising frequency (${k.frequency.toFixed(1)})`);
+    if (ctrChange !== null && ctrChange <= -15) reasons.push(`CTR down ${Math.abs(ctrChange).toFixed(0)}%`);
+    if (cpmChange !== null && cpmChange >= 20) reasons.push(`CPM up ${cpmChange.toFixed(0)}%`);
+
+    let status: CreativeFatigueAd['status'];
+    if (!prev) {
+      status = 'new';
+    } else if (
+      (k.frequency >= 2.5 && ctrChange !== null && ctrChange <= -15) ||
+      (ctrChange !== null && ctrChange <= -30) ||
+      (k.frequency >= 3 && cpmChange !== null && cpmChange >= 20)
+    ) {
+      status = 'fatigued';
+    } else if (reasons.length > 0) {
+      status = 'warning';
+    } else {
+      status = 'healthy';
+    }
+
+    ads.push({
+      id: row.ad_id,
+      name: row.ad_name,
+      campaignName: row.campaign_name,
+      spend: k.spend,
+      impressions: k.impressions,
+      frequency: k.frequency,
+      ctr: k.ctr,
+      cpm: k.cpm,
+      roas: k.roas,
+      purchases: k.purchases,
+      prevCtr: prev?.ctr ?? null,
+      prevCpm: prev?.cpm ?? null,
+      prevFrequency: prev?.frequency ?? null,
+      ctrChange,
+      cpmChange,
+      status,
+      reasons,
+    });
+  }
+
+  // Worst first: fatigued by spend, then warnings, then the rest
+  const rank = { fatigued: 0, warning: 1, new: 2, healthy: 3 };
+  ads.sort((a, b) => rank[a.status] - rank[b.status] || b.spend - a.spend);
+
+  // Best-effort creative thumbnails
+  try {
+    const ids = ads.slice(0, 50).map(a => a.id);
+    if (ids.length > 0) {
+      const creativesData = await fetchMeta<{
+        data: Array<{ id: string; creative?: { thumbnail_url?: string } }>;
+      }>(`${acct}/ads`, {
+        access_token: config.accessToken,
+        fields: 'id,creative{thumbnail_url}',
+        filtering: JSON.stringify([{ field: 'ad.id', operator: 'IN', value: ids }]),
+        limit: String(ids.length),
+      });
+      const thumbs = new Map((creativesData.data ?? []).map(a => [a.id, a.creative?.thumbnail_url]));
+      for (const ad of ads) {
+        const t = thumbs.get(ad.id);
+        if (t) ad.thumbnailUrl = t;
+      }
+    }
+  } catch { /* thumbnails are optional */ }
+
+  const fatigued = ads.filter(a => a.status === 'fatigued');
+  return {
+    ads,
+    currentPeriod: current,
+    previousPeriod: previous,
+    summary: {
+      fatigued: fatigued.length,
+      warning: ads.filter(a => a.status === 'warning').length,
+      healthy: ads.filter(a => a.status === 'healthy').length,
+      newAds: ads.filter(a => a.status === 'new').length,
+      fatiguedSpend: fatigued.reduce((s, a) => s + a.spend, 0),
+      totalSpend: ads.reduce((s, a) => s + a.spend, 0),
+    },
+  };
+}
