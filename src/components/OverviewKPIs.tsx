@@ -349,7 +349,7 @@ export function OverviewKPIs({ slug, connections }: Props) {
               <Link href={`/dashboard/${slug}/replenishment`} className="insight-item insight-link">
                 <span className="insight-icon" style={{ background: 'rgba(244,63,94,0.12)' }}>📧</span>
                 <div style={{ flex: 1 }}>
-                  <strong>Low repeat rate ({kpis.repeatCustomerRate.toFixed(0)}%). </strong>Set up post-purchase &amp; winback flows — the Replenishment Clock has the exact send timing.
+                  <strong>Low repeat rate ({kpis.repeatCustomerRate.toFixed(0)}%). </strong>Set up post-purchase &amp; winback flows — the Replenishment page has the exact send timing.
                 </div>
                 <span className="insight-arrow">→</span>
               </Link>

@@ -940,3 +940,30 @@ export async function getItemPurchases(
       avgPrice: metrics[0] > 0 ? metrics[1] / metrics[0] : 0,
     }));
 }
+
+// Site search terms — surfaces what users searched but couldn't find
+export async function getSearchTerms(
+  config: GA4Config,
+  dateRange: string
+): Promise<{ term: string; searches: number }[]> {
+  const accessToken = await getAccessToken(config);
+  const { startDate, endDate } = getDateRange(dateRange);
+
+  const data = await runReport(accessToken, config.propertyId, {
+    dateRanges: [{ startDate, endDate }],
+    dimensions: [{ name: 'searchTerm' }],
+    metrics: [{ name: 'eventCount' }],
+    dimensionFilter: {
+      filter: {
+        fieldName: 'eventName',
+        stringFilter: { matchType: 'EXACT', value: 'view_search_results' },
+      },
+    },
+    orderBys: [{ metric: { metricName: 'eventCount' }, desc: true }],
+    limit: 200,
+  });
+
+  return parseRows(data)
+    .filter(({ dims }) => dims[0] && dims[0] !== '(not set)' && dims[0].trim().length > 0)
+    .map(({ dims, metrics }) => ({ term: dims[0].toLowerCase().trim(), searches: metrics[0] }));
+}

@@ -499,6 +499,15 @@ export async function testConnection(
 // Public: getShopInfo
 // ---------------------------------------------------------------------------
 
+export async function getProductTitles(config: ShopifyConfig): Promise<string[]> {
+  const data = await shopifyGraphQL(config, `{
+    products(first: 250, query: "status:ACTIVE") {
+      edges { node { title } }
+    }
+  }`) as { products?: { edges: Array<{ node: { title: string } }> } };
+  return (data.products?.edges ?? []).map(e => e.node.title.toLowerCase());
+}
+
 export async function getShopInfo(config: ShopifyConfig) {
   const data = await shopifyGraphQL(
     config,

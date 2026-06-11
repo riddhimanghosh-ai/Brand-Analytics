@@ -58,7 +58,7 @@ export default function ReplenishmentPage({ params }: { params: Promise<{ slug: 
         <div className="page-header-row">
           <div>
             <h2 style={{ fontSize: '24px', fontWeight: 800, letterSpacing: '-0.03em' }}>
-              ⏰ Replenishment Clock
+              ⏰ Replenishment
             </h2>
             <p>When repeat buyers actually come back — so your reminder lands before they re-buy elsewhere</p>
           </div>

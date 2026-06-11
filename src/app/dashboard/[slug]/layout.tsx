@@ -108,7 +108,11 @@ export default async function DashboardLayout({
           </NavLink>
 
           <NavLink href={`/dashboard/${slug}/replenishment`} disabled={!connections.shopify} disabledPlatform="Shopify">
-            Replenishment Clock
+            Replenishment
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/coupon-leak`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Coupon Leak Detector
           </NavLink>
 
           <div className="nav-section-label">Analytics</div>
@@ -164,6 +168,14 @@ export default async function DashboardLayout({
 
           <NavLink href={`/dashboard/${slug}/geo`} disabled={!connections.shopify} disabledPlatform="Shopify">
             Geo Revenue
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/search-gaps`} disabled={!connections.ga4} disabledPlatform="Google Analytics">
+            Search Gap Miner
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/code-forensics`} disabled={!connections.shopify} disabledPlatform="Shopify">
+            Code Forensics
           </NavLink>
 
           <div className="nav-section-label">Ads & Channels</div>
