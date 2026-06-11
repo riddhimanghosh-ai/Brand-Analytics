@@ -1109,7 +1109,7 @@ export async function getAdCommentAnalytics(config: MetaConfig, dateRange: strin
   const warnings: string[] = [];
   const engagement = await getAdEngagement(config, dateRange);
   const rankedAds = [...engagement.ads].sort((a, b) => b.comments - a.comments || b.spend - a.spend);
-  const adsForText = rankedAds.slice(0, 25);
+  const adsForText = rankedAds.slice(0, 60);
   const adIds = adsForText.map((ad) => ad.id).filter(Boolean);
   if (rankedAds.length > adsForText.length) {
     warnings.push(`Readable comment text is capped to the top ${adsForText.length} ads by comment activity for this request.`);
@@ -1152,7 +1152,9 @@ export async function getAdCommentAnalytics(config: MetaConfig, dateRange: strin
   const commentIds = new Set<string>();
   const ads: MetaAdCommentRow[] = [];
 
-  for (const ad of adsForText) {
+  // Process ads in parallel batches — serial fetching of 60 ads × multiple
+  // paginated comment calls would blow past the route timeout.
+  const processAd = async (ad: (typeof adsForText)[number]) => {
     const creative = creativeByAdId.get(ad.id);
     const facebookPostId = creative?.effective_object_story_id || creative?.object_story_id;
     const instagramMediaId = creative?.effective_instagram_media_id;
@@ -1164,21 +1166,32 @@ export async function getAdCommentAnalytics(config: MetaConfig, dateRange: strin
       platform = 'facebook';
       contentObjectId = facebookPostId;
       try {
-        const response = await fetchMeta<{
-          data: Array<{
-            id: string;
-            message?: string;
-            from?: { name?: string; id?: string };
-            created_time: string;
-            parent?: { id?: string };
-          }>;
-        }>(`${facebookPostId}/comments`, {
-          access_token: config.accessToken,
-          fields: 'id,message,from,created_time,parent',
-          limit: '50',
-        });
+        // Paginate up to 4 pages × 50 = 200 comments per post
+        type FbComment = {
+          id: string;
+          message?: string;
+          from?: { name?: string; id?: string };
+          created_time: string;
+          parent?: { id?: string };
+        };
+        const fbComments: FbComment[] = [];
+        let after: string | undefined;
+        for (let page = 0; page < 4; page++) {
+          const response = await fetchMeta<{
+            data: FbComment[];
+            paging?: { cursors?: { after?: string }; next?: string };
+          }>(`${facebookPostId}/comments`, {
+            access_token: config.accessToken,
+            fields: 'id,message,from,created_time,parent',
+            limit: '50',
+            ...(after ? { after } : {}),
+          });
+          fbComments.push(...(response.data ?? []));
+          if (!response.paging?.next || !response.paging?.cursors?.after) break;
+          after = response.paging.cursors.after;
+        }
 
-        for (const comment of response.data ?? []) {
+        for (const comment of fbComments) {
           const uniqueId = `ad_comment:${comment.id}`;
           if (commentIds.has(uniqueId)) continue;
           commentIds.add(uniqueId);
@@ -1209,21 +1222,32 @@ export async function getAdCommentAnalytics(config: MetaConfig, dateRange: strin
       platform = 'instagram';
       contentObjectId = instagramMediaId;
       try {
-        const response = await fetchMeta<{
-          data: Array<{
-            id: string;
-            text?: string;
-            username?: string;
-            timestamp: string;
-            replies?: { data?: Array<{ id: string; text?: string; username?: string; timestamp: string }> };
-          }>;
-        }>(`${instagramMediaId}/comments`, {
-          access_token: config.accessToken,
-          fields: 'id,text,username,timestamp,replies{id,text,username,timestamp}',
-          limit: '50',
-        });
+        // Paginate up to 4 pages × 50 = 200 comments per media
+        type IgComment = {
+          id: string;
+          text?: string;
+          username?: string;
+          timestamp: string;
+          replies?: { data?: Array<{ id: string; text?: string; username?: string; timestamp: string }> };
+        };
+        const igComments: IgComment[] = [];
+        let igAfter: string | undefined;
+        for (let page = 0; page < 4; page++) {
+          const response = await fetchMeta<{
+            data: IgComment[];
+            paging?: { cursors?: { after?: string }; next?: string };
+          }>(`${instagramMediaId}/comments`, {
+            access_token: config.accessToken,
+            fields: 'id,text,username,timestamp,replies{id,text,username,timestamp}',
+            limit: '50',
+            ...(igAfter ? { after: igAfter } : {}),
+          });
+          igComments.push(...(response.data ?? []));
+          if (!response.paging?.next || !response.paging?.cursors?.after) break;
+          igAfter = response.paging.cursors.after;
+        }
 
-        for (const comment of response.data ?? []) {
+        for (const comment of igComments) {
           const uniqueId = `ad_comment:${comment.id}`;
           if (!commentIds.has(uniqueId)) {
             commentIds.add(uniqueId);
@@ -1287,6 +1311,11 @@ export async function getAdCommentAnalytics(config: MetaConfig, dateRange: strin
       textAvailable: readableComments > 0 || ad.comments === 0,
       thumbnailUrl: ad.thumbnailUrl,
     });
+  };
+
+  const COMMENT_FETCH_CONCURRENCY = 10;
+  for (let i = 0; i < adsForText.length; i += COMMENT_FETCH_CONCURRENCY) {
+    await Promise.all(adsForText.slice(i, i + COMMENT_FETCH_CONCURRENCY).map(processAd));
   }
 
   const sortedComments = comments.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());

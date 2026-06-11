@@ -212,10 +212,10 @@ export default async function DashboardLayout({
             {soonBadge}
           </span>
 
-          <span className="nav-link" style={{ pointerEvents: 'none', cursor: 'default', opacity: 0.55 }}>
+          <NavLink href={`/dashboard/${slug}/social`} disabled={!connections.metaAds} disabledPlatform="Meta Ads">
             Social Comments
-            {soonBadge}
-          </span>
+            {connections.metaAds && <span className="nav-badge">Live</span>}
+          </NavLink>
 
           <div className="nav-section-label">Competitive Intel</div>
 

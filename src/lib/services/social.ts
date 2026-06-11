@@ -271,47 +271,89 @@ export async function getInstagramInbox(config: MetaConfig): Promise<SocialInbox
   return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 }
 
+interface SentimentVerdict {
+  id: string;
+  sentiment: 'positive' | 'neutral' | 'negative';
+  score: number;
+}
+
+function sentimentPrompt(batch: SocialInboxItem[]): string {
+  return `Analyze the sentiment of each customer comment below (they may be in English, Hindi, or Hinglish). Respond ONLY with a JSON array of objects: [{"id":"...","sentiment":"positive|neutral|negative","score":0.0-1.0}]. Score is confidence 0-1. Sarcasm and mockery count as negative.\n\nComments:\n${batch.map((item) => `{"id":"${item.id}","text":${JSON.stringify(item.message)}}`).join('\n')}`;
+}
+
+function parseVerdicts(text: string): SentimentVerdict[] {
+  const jsonMatch = text.match(/\[[\s\S]*\]/);
+  if (!jsonMatch) return [];
+  try { return JSON.parse(jsonMatch[0]); } catch { return []; }
+}
+
+async function claudeSentimentBatch(batch: SocialInboxItem[], apiKey: string): Promise<SentimentVerdict[]> {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5',
+      max_tokens: 3000,
+      messages: [{ role: 'user', content: sentimentPrompt(batch) }],
+    }),
+  });
+  const data = await res.json();
+  if (data?.error) throw new Error(data.error.message || 'Claude sentiment error');
+  const text = (data?.content ?? []).map((b: { text?: string }) => b.text ?? '').join('');
+  return parseVerdicts(text);
+}
+
+async function geminiSentimentBatch(batch: SocialInboxItem[], apiKey: string): Promise<SentimentVerdict[]> {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: sentimentPrompt(batch) }] }] }),
+  });
+  const data = await res.json();
+  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  return parseVerdicts(text);
+}
+
 export async function analyzeSentiment(
   items: SocialInboxItem[],
-  geminiApiKey: string
+  keys: { anthropicKey?: string; geminiKey?: string } | string
 ): Promise<SocialInboxItem[]> {
-  if (!geminiApiKey || items.length === 0) return items;
+  // Back-compat: a plain string is treated as a Gemini key
+  const { anthropicKey, geminiKey } = typeof keys === 'string'
+    ? { anthropicKey: undefined, geminiKey: keys }
+    : keys;
+  if ((!anthropicKey && !geminiKey) || items.length === 0) return items;
 
-  const batchSize = 15;
+  const batchSize = 25;
   const result = [...items];
+  const byId = new Map(result.map((item, i) => [item.id, i]));
 
+  const batches: SocialInboxItem[][] = [];
   for (let i = 0; i < result.length; i += batchSize) {
-    const batch = result.slice(i, i + batchSize);
-    const prompt = `Analyze the sentiment of each comment below. Respond ONLY with a JSON array of objects: [{"id":"...","sentiment":"positive|neutral|negative","score":0.0-1.0}]. Score is confidence 0-1.\n\nComments:\n${batch.map((item) => `{"id":"${item.id}","text":${JSON.stringify(item.message)}}`).join('\n')}`;
-
-    try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      });
-
-      const data = await res.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const jsonMatch = text.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) continue;
-
-      const sentiments: Array<{
-        id: string;
-        sentiment: 'positive' | 'neutral' | 'negative';
-        score: number;
-      }> = JSON.parse(jsonMatch[0]);
-
-      for (const sentiment of sentiments) {
-        const index = result.findIndex((item) => item.id === sentiment.id);
-        if (index === -1) continue;
-        result[index].sentiment = sentiment.sentiment;
-        result[index].sentimentScore = sentiment.score;
-      }
-    } catch {
-      // Leave batch without sentiment if Gemini fails.
-    }
+    batches.push(result.slice(i, i + batchSize));
   }
+
+  await Promise.all(batches.map(async (batch) => {
+    let verdicts: SentimentVerdict[] = [];
+    if (anthropicKey) {
+      try { verdicts = await claudeSentimentBatch(batch, anthropicKey); }
+      catch (e) { console.warn('[social] Claude sentiment failed:', (e as Error).message); }
+    }
+    if (verdicts.length === 0 && geminiKey) {
+      try { verdicts = await geminiSentimentBatch(batch, geminiKey); }
+      catch (e) { console.warn('[social] Gemini sentiment failed:', (e as Error).message); }
+    }
+    for (const v of verdicts) {
+      const index = byId.get(v.id);
+      if (index === undefined) continue;
+      result[index].sentiment = v.sentiment;
+      result[index].sentimentScore = v.score;
+    }
+  }));
 
   return result;
 }

@@ -5,7 +5,7 @@ import { NextResponse } from 'next/server';
 import { requireBrandAccess } from '@/lib/auth-server';
 import { demoSocialComments, demoSocialStats } from '@/lib/demo-data';
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
@@ -91,7 +91,7 @@ export async function GET(request: Request) {
       brand.metaAdAccountId
         ? withTimeout(
             getAdCommentAnalytics({ accessToken: brand.metaAccessToken, adAccountId: brand.metaAdAccountId }, range),
-            15_000,
+            60_000,
             'Meta ad comments'
           )
         : Promise.resolve(null),
@@ -140,10 +140,10 @@ export async function GET(request: Request) {
     comments = Array.from(deduped.values()).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
     if (withSentiment && comments.length > 0) {
-      const geminiKey = brand.geminiApiKey || process.env.GEMINI_API_KEY || '';
-      if (geminiKey) {
-        comments = await analyzeSentiment(comments, geminiKey);
-      }
+      comments = await analyzeSentiment(comments, {
+        anthropicKey: process.env.ANTHROPIC_API_KEY || '',
+        geminiKey: brand.geminiApiKey || process.env.GEMINI_API_KEY || '',
+      });
     }
 
     const stats = {
