@@ -223,6 +223,18 @@ export default async function DashboardLayout({
             Price Tracker
           </NavLink>
 
+          <NavLink href={`/dashboard/${slug}/launches`}>
+            New Launch Detector
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/stockout-sniper`}>
+            Stockout Sniper
+          </NavLink>
+
+          <NavLink href={`/dashboard/${slug}/campaign-watch`}>
+            Campaign Watch
+          </NavLink>
+
           <span className="nav-link" style={{ pointerEvents: 'none', cursor: 'default', opacity: 0.55 }}>
             Competitor Ads
             {soonBadge}

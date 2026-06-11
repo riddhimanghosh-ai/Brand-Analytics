@@ -151,6 +151,22 @@ export interface TrackedProductSnapshot {
   compareAtPrice: number | null;
   available: boolean;
   imageUrl: string | null;
+  publishedAt?: string | null;  // from products.json — powers New Launch Detector
+}
+
+// ── Competitor watch (sitemap diff) ─────────────────────────────────────────
+
+export interface SitemapEntry {
+  loc: string;
+  lastmod: string | null;
+  kind: 'page' | 'collection' | 'blog';
+}
+
+export interface SitemapChangeEvent {
+  date: string;            // ISO timestamp of the scan that detected it
+  loc: string;
+  kind: SitemapEntry['kind'];
+  type: 'added' | 'removed';
 }
 
 export interface PriceChangeEvent {
@@ -171,6 +187,9 @@ export interface TrackedStore {
   lastScanned?: string;
   products?: TrackedProductSnapshot[];
   changes?: PriceChangeEvent[];   // most recent first, capped
+  sitemap?: SitemapEntry[];               // last sitemap scan (pages/collections/blogs)
+  sitemapScannedAt?: string;
+  sitemapChanges?: SitemapChangeEvent[];  // most recent first, capped
 }
 
 export interface BrandEvent {
