@@ -71,10 +71,11 @@ export function useDateRangeLabel(): string {
   const { from, to } = useGlobalDateRange();
   const today = todayISO();
   const diff = Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000);
-  if (to === today) {
-    if (diff === 6  || diff === 7)  return 'Last 7 days';
-    if (diff === 29 || diff === 30) return 'Last 30 days';
-    if (diff === 89 || diff === 90) return 'Last 90 days';
+  if (from === today && to === today) return 'Today';
+  if (from === daysAgoISO(1) && to === daysAgoISO(1)) return 'Yesterday';
+  if (to === today && diff >= 1) {
+    if (diff === 364 || diff === 365) return 'Last 12 months';
+    return `Last ${diff} days`;
   }
   const fmt = (d: string) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   return `${fmt(from)} – ${fmt(to)}`;

@@ -12,11 +12,15 @@ function daysAgoISO(n: number) {
   return d.toISOString().split('T')[0];
 }
 
-const PRESETS = [
-  { label: 'Last 7 days',  days: 7 },
-  { label: 'Last 30 days', days: 30 },
-  { label: 'Last 90 days', days: 90 },
-  { label: 'Last 12 months', days: 365 },
+// days = N → from N days ago to today.
+// 'today' / 'yesterday' are single-day ranges.
+const PRESETS: Array<{ label: string; preset: 'today' | 'yesterday' | number }> = [
+  { label: 'Today',          preset: 'today' },
+  { label: 'Yesterday',      preset: 'yesterday' },
+  { label: 'Last 7 days',    preset: 7 },
+  { label: 'Last 30 days',   preset: 30 },
+  { label: 'Last 90 days',   preset: 90 },
+  { label: 'Last 12 months', preset: 365 },
 ];
 
 export function DateRangeDropdown() {
@@ -25,6 +29,7 @@ export function DateRangeDropdown() {
   const [open, setOpen] = useState(false);
   const [from, setFrom] = useState(globalFrom);
   const [to,   setTo]   = useState(globalTo);
+  const [lastX, setLastX] = useState('');
   const [mounted, setMounted] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -50,9 +55,14 @@ export function DateRangeDropdown() {
 
   const today = todayISO();
 
-  function applyPreset(days: number) {
-    const range = { from: daysAgoISO(days), to: today };
-    setGlobalDateRange(range);
+  function presetRange(preset: 'today' | 'yesterday' | number) {
+    if (preset === 'today') return { from: today, to: today };
+    if (preset === 'yesterday') return { from: daysAgoISO(1), to: daysAgoISO(1) };
+    return { from: daysAgoISO(preset), to: today };
+  }
+
+  function applyPreset(preset: 'today' | 'yesterday' | number) {
+    setGlobalDateRange(presetRange(preset));
     setOpen(false);
   }
 
@@ -62,8 +72,16 @@ export function DateRangeDropdown() {
     setOpen(false);
   }
 
-  function isActivePreset(days: number) {
-    return globalTo === today && globalFrom === daysAgoISO(days);
+  function applyLastX() {
+    const n = parseInt(lastX, 10);
+    if (!n || n < 1 || n > 730) return;
+    setGlobalDateRange({ from: daysAgoISO(n), to: today });
+    setOpen(false);
+  }
+
+  function isActivePreset(preset: 'today' | 'yesterday' | number) {
+    const r = presetRange(preset);
+    return globalFrom === r.from && globalTo === r.to;
   }
 
   return (
@@ -117,18 +135,18 @@ export function DateRangeDropdown() {
               Quick select
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              {PRESETS.map(({ label: pLabel, days }) => (
+              {PRESETS.map(({ label: pLabel, preset }) => (
                 <button
-                  key={days}
-                  onClick={() => applyPreset(days)}
+                  key={pLabel}
+                  onClick={() => applyPreset(preset)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     padding: '7px 10px',
                     fontSize: '13px',
-                    fontWeight: isActivePreset(days) ? 600 : 400,
-                    background: isActivePreset(days) ? 'rgba(99,102,241,0.12)' : 'transparent',
-                    color: isActivePreset(days) ? 'var(--accent-blue)' : 'var(--text-primary)',
+                    fontWeight: isActivePreset(preset) ? 600 : 400,
+                    background: isActivePreset(preset) ? 'rgba(99,102,241,0.12)' : 'transparent',
+                    color: isActivePreset(preset) ? 'var(--accent-blue)' : 'var(--text-primary)',
                     border: 'none',
                     borderRadius: '6px',
                     cursor: 'pointer',
@@ -137,17 +155,61 @@ export function DateRangeDropdown() {
                     transition: 'background 0.12s ease',
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActivePreset(days)) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
+                    if (!isActivePreset(preset)) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)';
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActivePreset(days)) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+                    if (!isActivePreset(preset)) (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
                   }}
                 >
-                  {isActivePreset(days) && <span style={{ marginRight: '8px', fontSize: '12px' }}>✓</span>}
-                  {!isActivePreset(days) && <span style={{ marginRight: '8px', fontSize: '12px', opacity: 0 }}>✓</span>}
+                  {isActivePreset(preset) && <span style={{ marginRight: '8px', fontSize: '12px' }}>✓</span>}
+                  {!isActivePreset(preset) && <span style={{ marginRight: '8px', fontSize: '12px', opacity: 0 }}>✓</span>}
                   {pLabel}
                 </button>
               ))}
+            </div>
+
+            {/* Last X days */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 10px 4px' }}>
+              <span style={{ fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>Last</span>
+              <input
+                type="number"
+                min={1}
+                max={730}
+                value={lastX}
+                placeholder="X"
+                onChange={(e) => setLastX(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') applyLastX(); }}
+                style={{
+                  width: '56px',
+                  padding: '5px 8px',
+                  fontSize: '13px',
+                  background: 'var(--bg-secondary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: '6px',
+                  outline: 'none',
+                  textAlign: 'center',
+                }}
+              />
+              <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>days</span>
+              <button
+                onClick={applyLastX}
+                disabled={!parseInt(lastX, 10) || parseInt(lastX, 10) < 1}
+                style={{
+                  marginLeft: 'auto',
+                  padding: '5px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  background: 'var(--accent-blue)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: parseInt(lastX, 10) >= 1 ? 'pointer' : 'not-allowed',
+                  opacity: parseInt(lastX, 10) >= 1 ? 1 : 0.4,
+                }}
+              >
+                Go
+              </button>
             </div>
           </div>
 
