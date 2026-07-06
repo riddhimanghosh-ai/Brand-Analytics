@@ -4,6 +4,7 @@ import { requireBrandAccess } from '@/lib/auth-server';
 import { getSearchTerms } from '@/lib/services/ga4';
 import { getProductTitles } from '@/lib/services/shopify';
 import { cacheGet, cacheSet } from '@/lib/analytics-cache';
+import { demoSearchGaps } from '@/lib/demo-data';
 
 export const maxDuration = 60;
 
@@ -22,6 +23,8 @@ export async function GET(request: Request) {
 
     const { denied } = await requireBrandAccess(slug);
     if (denied) return denied;
+
+    if (slug === 'demo') return NextResponse.json(demoSearchGaps);
 
     const brand = await getBrand(slug!);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });

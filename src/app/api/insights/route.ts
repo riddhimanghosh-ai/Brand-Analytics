@@ -2,6 +2,7 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import { requireBrandAccess } from '@/lib/auth-server';
 import { getCustomerInsights } from '@/lib/services/shopify';
+import { demoInsights } from '@/lib/demo-data';
 import { cacheGet, cacheSet } from '@/lib/analytics-cache';
 
 export const maxDuration = 300;
@@ -17,6 +18,8 @@ export async function GET(request: Request) {
 
     const { denied } = await requireBrandAccess(slug);
     if (denied) return denied;
+
+    if (slug === 'demo') return NextResponse.json(demoInsights);
 
     const brand = await getBrand(slug!);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });

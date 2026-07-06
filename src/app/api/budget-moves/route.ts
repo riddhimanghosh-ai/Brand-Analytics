@@ -2,6 +2,7 @@ import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import { requireBrandAccess } from '@/lib/auth-server';
 import * as meta from '@/lib/services/meta';
+import { demoBudgetMoves } from '@/lib/demo-data';
 
 export const maxDuration = 120;
 
@@ -29,6 +30,8 @@ export async function GET(request: Request) {
 
     const { denied } = await requireBrandAccess(slug);
     if (denied) return denied;
+
+    if (slug === 'demo') return NextResponse.json(demoBudgetMoves);
 
     const brand = await getBrand(slug!);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });

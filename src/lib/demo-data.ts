@@ -1042,6 +1042,575 @@ export const demoSocialStats = {
   instagram: 10,
 };
 
+// ─── Action Center ────────────────────────────────────────────────────────────
+
+export const demoActions = {
+  actions: [
+    {
+      id: 'act_01',
+      severity: 'critical',
+      title: 'Earbuds stock critically low — 3 days of cover',
+      detail: 'Premium Wireless Earbuds has only 12 units left. At current velocity (4 units/day) you have ~3 days before stockout.',
+      impact: '~₹18,500 revenue at risk',
+      href: '/dashboard/demo/restock',
+      source: 'inventory',
+    },
+    {
+      id: 'act_02',
+      severity: 'critical',
+      title: '80% of ad comments are negative on BOGO campaign',
+      detail: 'Summer Sale — FB Carousel has 14 negative comments in last 7 days. Customers reporting slow delivery and damaged packaging.',
+      impact: 'Ad credibility and conversion rate dropping',
+      href: '/dashboard/demo/social',
+      source: 'meta',
+    },
+    {
+      id: 'act_03',
+      severity: 'high',
+      title: 'SUMMER20 coupon found on 3 public sites',
+      detail: 'Your 20% off code is listed on GrabOn, CouponDunia, and CupoNation. 34% of orders using it are from repeat buyers — probable deal hunters.',
+      impact: '₹12,400 in unnecessary discounts last 30d',
+      href: '/dashboard/demo/coupon-leak',
+      source: 'shopify',
+    },
+    {
+      id: 'act_04',
+      severity: 'high',
+      title: 'Move ₹4,200/day from Summer Sale to Earbuds Reel',
+      detail: 'Earbuds Feature Reel ROAS is 4.8x vs Summer Sale at 1.9x. Reallocating budget could add ₹38,000/month.',
+      impact: '+₹38,000 est. monthly revenue',
+      href: '/dashboard/demo/budget',
+      source: 'meta',
+    },
+    {
+      id: 'act_05',
+      severity: 'medium',
+      title: '22 search queries found with no matching product',
+      detail: 'Top unmatched searches: "wireless gaming headset" (89 searches), "noise cancelling earphones under 2000" (67), "sports earbuds waterproof" (54).',
+      impact: 'Potential new product or collection opportunity',
+      href: '/dashboard/demo/search-gaps',
+      source: 'google',
+    },
+    {
+      id: 'act_06',
+      severity: 'medium',
+      title: 'UGC Testimonial creative showing fatigue signals',
+      detail: 'Frequency at 4.2, CTR dropped 38% vs prior period. Creative has been running 47 days — consider refreshing.',
+      impact: 'CPM up 22%, conversion declining',
+      href: '/dashboard/demo/fatigue',
+      source: 'meta',
+    },
+    {
+      id: 'act_07',
+      severity: 'opportunity',
+      title: '312 "At Risk" customers haven\'t bought in 90+ days',
+      detail: 'These repeat buyers are lapsing. A targeted winback email with 10% off could recover ₹45,000+ in revenue.',
+      impact: '₹45,000 winback opportunity',
+      href: '/dashboard/demo/segments',
+      source: 'insights',
+    },
+    {
+      id: 'act_08',
+      severity: 'opportunity',
+      title: 'Earbuds + USB-C Hub bought together 34% of the time',
+      detail: 'High affinity pair. Add a bundle offer or cross-sell widget on product pages to capture this naturally.',
+      impact: 'AOV lift opportunity',
+      href: '/dashboard/demo/bundles',
+      source: 'shopify',
+    },
+  ],
+  generatedAt: new Date().toISOString(),
+  sources: { shopify: true, meta: true, google: true, fatigue: true, insights: true, inventory: true, campaigns: true },
+};
+
+// ─── Restock Advisor ──────────────────────────────────────────────────────────
+
+export const demoRestock = {
+  rows: [
+    { title: 'Premium Wireless Earbuds', stock: 12, reserveStock: 0, listingEmpty: false, dailyRate: 4.1, daysOfCover: 3, status: 'critical', suggestedReorder: 200 },
+    { title: 'Smart Watch Series 5 — Black', stock: 28, reserveStock: 0, listingEmpty: false, dailyRate: 3.4, daysOfCover: 8, status: 'low', suggestedReorder: 120 },
+    { title: 'Smart Watch Series 5 — Silver', stock: 45, reserveStock: 10, listingEmpty: false, dailyRate: 2.8, daysOfCover: 16, status: 'healthy', suggestedReorder: 80 },
+    { title: 'Bluetooth Speaker Mini', stock: 67, reserveStock: 0, listingEmpty: false, dailyRate: 1.9, daysOfCover: 35, status: 'healthy', suggestedReorder: 50 },
+    { title: 'Phone Case Pro — iPhone 15', stock: 142, reserveStock: 0, listingEmpty: false, dailyRate: 2.1, daysOfCover: 68, status: 'overstocked', suggestedReorder: 0 },
+    { title: 'Phone Case Pro — iPhone 14', stock: 8, reserveStock: 0, listingEmpty: false, dailyRate: 0.4, daysOfCover: 20, status: 'low', suggestedReorder: 30 },
+    { title: 'USB-C Hub 7-in-1', stock: 34, reserveStock: 0, listingEmpty: false, dailyRate: 1.2, daysOfCover: 28, status: 'healthy', suggestedReorder: 40 },
+    { title: 'Wireless Charging Pad', stock: 0, reserveStock: 0, listingEmpty: true, dailyRate: 0.6, daysOfCover: 0, status: 'critical', suggestedReorder: 60 },
+    { title: 'Earbuds Carry Case', stock: 5, reserveStock: 0, listingEmpty: false, dailyRate: 1.8, daysOfCover: 3, status: 'critical', suggestedReorder: 80 },
+    { title: 'Cable Organizer Pack', stock: 210, reserveStock: 0, listingEmpty: false, dailyRate: 0.3, daysOfCover: 700, status: 'dead', suggestedReorder: 0 },
+  ],
+  leadTimeDays: 14,
+  bufferDays: 7,
+};
+
+// ─── Budget Moves ─────────────────────────────────────────────────────────────
+
+export const demoBudgetMoves = {
+  breakEvenRoas: 2.8,
+  breakEvenSource: 'cogs' as const,
+  blendedRoas: 3.1,
+  totalSpend: 42000,
+  totalRevenue: 130200,
+  winnerThreshold: 3.5,
+  loserThreshold: 2.0,
+  marginalFactor: 0.7,
+  campaigns: [
+    { name: 'Earbuds — Feature Reel (IG)', status: 'ACTIVE', spend: 14200, revenue: 68160, roas: 4.8, purchases: 287, bucket: 'winner' as const },
+    { name: 'UGC Testimonial — FB', status: 'ACTIVE', spend: 9800, revenue: 34300, roas: 3.5, purchases: 189, bucket: 'winner' as const },
+    { name: 'Smart Watch — Launch Ad (IG)', status: 'ACTIVE', spend: 11400, revenue: 22800, roas: 2.0, purchases: 134, bucket: 'loser' as const },
+    { name: 'Summer Sale — FB Carousel', status: 'ACTIVE', spend: 6600, revenue: 12540, roas: 1.9, purchases: 98, bucket: 'loser' as const },
+  ],
+  moves: [
+    { fromCampaign: 'Smart Watch — Launch Ad (IG)', fromRoas: 2.0, fromSpend: 11400, toCampaign: 'Earbuds — Feature Reel (IG)', toRoas: 4.8, amount: 4000, estMonthlyGain: 38400 },
+    { fromCampaign: 'Summer Sale — FB Carousel', fromRoas: 1.9, fromSpend: 6600, toCampaign: 'UGC Testimonial — FB', toRoas: 3.5, amount: 2200, estMonthlyGain: 12100 },
+  ],
+  totalEstMonthlyGain: 50500,
+};
+
+// ─── Purchase Patterns ────────────────────────────────────────────────────────
+
+export const demoPurchasePatterns = {
+  pairs: [
+    { a: 'Premium Wireless Earbuds', b: 'USB-C Hub 7-in-1', together: 187, aOrders: 548, bOrders: 312, confidence: 34.1, lift: 2.4, avgPairRevenue: 2340 },
+    { a: 'Smart Watch Series 5 — Black', b: 'Wireless Charging Pad', together: 142, aOrders: 398, bOrders: 198, confidence: 35.7, lift: 3.1, avgPairRevenue: 3180 },
+    { a: 'Premium Wireless Earbuds', b: 'Earbuds Carry Case', together: 134, aOrders: 548, bOrders: 287, confidence: 24.5, lift: 1.9, avgPairRevenue: 1760 },
+    { a: 'Phone Case Pro — iPhone 15', b: 'USB-C Hub 7-in-1', together: 98, aOrders: 312, bOrders: 312, confidence: 31.4, lift: 2.2, avgPairRevenue: 1890 },
+    { a: 'Smart Watch Series 5 — Silver', b: 'USB-C Hub 7-in-1', together: 76, aOrders: 287, bOrders: 312, confidence: 26.5, lift: 1.9, avgPairRevenue: 2780 },
+    { a: 'Bluetooth Speaker Mini', b: 'Cable Organizer Pack', together: 54, aOrders: 223, bOrders: 189, confidence: 24.2, lift: 2.9, avgPairRevenue: 1340 },
+  ],
+  replenishment: {
+    overallMedianDays: 47,
+    overallSamples: 624,
+    gapHistogram: [
+      { bucket: '0-14', count: 45 },
+      { bucket: '15-30', count: 89 },
+      { bucket: '31-45', count: 134 },
+      { bucket: '46-60', count: 198 },
+      { bucket: '61-90', count: 112 },
+      { bucket: '91+', count: 46 },
+    ],
+    byProduct: [
+      { title: 'Premium Wireless Earbuds', repurchases: 187, medianDays: 42, p25Days: 28, p75Days: 62 },
+      { title: 'Earbuds Carry Case', repurchases: 98, medianDays: 38, p25Days: 22, p75Days: 55 },
+      { title: 'Phone Case Pro — iPhone 15', repurchases: 134, medianDays: 56, p25Days: 38, p75Days: 78 },
+      { title: 'USB-C Hub 7-in-1', repurchases: 76, medianDays: 61, p25Days: 42, p75Days: 88 },
+      { title: 'Cable Organizer Pack', repurchases: 65, medianDays: 35, p25Days: 24, p75Days: 48 },
+    ],
+  },
+  ordersAnalysed: 1847,
+  multiItemOrderShare: 28.4,
+  rangeDays: 90,
+};
+
+// ─── Profit ───────────────────────────────────────────────────────────────────
+
+export const demoProfit = {
+  shopifyRevenue: 284750,
+  shopifyOrders: 1847,
+  metaSpend: 42000,
+  metaRevenue: 130200,
+  googleSpend: 8400,
+  googleRevenue: 24360,
+  totalAdSpend: 50400,
+  cogsCost: 99662,
+  shippingCost: 18508,
+  returnCost: 8543,
+  netRevenue: 276207,
+  grossProfit: 149085,
+  contributionMargin: 98085,
+  mer: 5.65,
+  grossMarginPct: 52.4,
+  netMarginPct: 34.5,
+  breakEvenRoas: 2.8,
+  cogsPercent: 35,
+  avgShippingCost: 100,
+  avgReturnRate: 3,
+  dailySeries: Array.from({ length: 30 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (29 - i));
+    const date = d.toISOString().split('T')[0];
+    const revenue = 8000 + Math.round(Math.sin(i * 0.4) * 2000 + Math.random() * 1500);
+    const adSpend = 1400 + Math.round(Math.random() * 600);
+    const cogs = Math.round(revenue * 0.35);
+    const profit = revenue - adSpend - cogs - 617;
+    return { date, revenue, adSpend, cogs, profit };
+  }),
+};
+
+// ─── Customer Insights ────────────────────────────────────────────────────────
+
+export const demoInsights = {
+  segments: [
+    {
+      key: 'champions',
+      label: 'Champions',
+      description: '3+ orders, bought in the last 60 days — protect these at all costs',
+      customers: 187,
+      revenue: 98400,
+      avgOrders: 4.2,
+      avgSpent: 526,
+      list: [],
+    },
+    {
+      key: 'loyal',
+      label: 'Loyal',
+      description: '2+ orders, active in the last 90 days',
+      customers: 342,
+      revenue: 74800,
+      avgOrders: 2.6,
+      avgSpent: 219,
+      list: [],
+    },
+    {
+      key: 'new',
+      label: 'New',
+      description: 'First order within the last 30 days — nurture to a 2nd purchase',
+      customers: 489,
+      revenue: 56700,
+      avgOrders: 1.0,
+      avgSpent: 116,
+      list: [],
+    },
+    {
+      key: 'promising',
+      label: 'Promising',
+      description: 'One order, 1–3 months ago — prime for a winback nudge',
+      customers: 298,
+      revenue: 31200,
+      avgOrders: 1.0,
+      avgSpent: 105,
+      list: [],
+    },
+    {
+      key: 'at_risk',
+      label: 'At Risk',
+      description: 'Repeat buyers gone quiet for 3–6 months — winback campaign now',
+      customers: 312,
+      revenue: 18900,
+      avgOrders: 2.1,
+      avgSpent: 61,
+      list: [],
+    },
+    {
+      key: 'lost',
+      label: 'Lost',
+      description: 'No purchase in 6+ months',
+      customers: 534,
+      revenue: 4750,
+      avgOrders: 1.2,
+      avgSpent: 9,
+      list: [],
+    },
+  ],
+  cohorts: [
+    { cohort: '2025-07', customers: 312, retention: [100, 22, 14, 9, 6, 4] },
+    { cohort: '2025-08', customers: 287, retention: [100, 24, 15, 10, 7] },
+    { cohort: '2025-09', customers: 334, retention: [100, 21, 13, 8] },
+    { cohort: '2025-10', customers: 298, retention: [100, 25, 16] },
+    { cohort: '2025-11', customers: 321, retention: [100, 23] },
+    { cohort: '2025-12', customers: 356, retention: [100] },
+  ],
+  cohortLtv: [
+    { cohort: '2025-07', customers: 312, cumRevenuePerCustomer: [142, 198, 234, 256, 271, 280] },
+    { cohort: '2025-08', customers: 287, cumRevenuePerCustomer: [148, 210, 248, 268, 281] },
+    { cohort: '2025-09', customers: 334, cumRevenuePerCustomer: [136, 195, 228, 244] },
+    { cohort: '2025-10', customers: 298, cumRevenuePerCustomer: [154, 214, 251] },
+    { cohort: '2025-11', customers: 321, cumRevenuePerCustomer: [144, 201] },
+    { cohort: '2025-12', customers: 356, cumRevenuePerCustomer: [138] },
+  ],
+  velocity: [
+    { title: 'Premium Wireless Earbuds', unitsLast7: 29, dailyAvgLast7: 4.1, dailyAvgPrior28: 2.8, ratio: 1.47, status: 'surging', lastSoldDate: daysAgo(0) },
+    { title: 'Smart Watch Series 5 — Black', unitsLast7: 24, dailyAvgLast7: 3.4, dailyAvgPrior28: 3.6, ratio: 0.94, status: 'steady', lastSoldDate: daysAgo(0) },
+    { title: 'Phone Case Pro — iPhone 15', unitsLast7: 15, dailyAvgLast7: 2.1, dailyAvgPrior28: 2.9, ratio: 0.72, status: 'slowing', lastSoldDate: daysAgo(1) },
+    { title: 'USB-C Hub 7-in-1', unitsLast7: 8, dailyAvgLast7: 1.2, dailyAvgPrior28: 1.1, ratio: 1.09, status: 'steady', lastSoldDate: daysAgo(1) },
+    { title: 'Bluetooth Speaker Mini', unitsLast7: 13, dailyAvgLast7: 1.9, dailyAvgPrior28: 2.2, ratio: 0.86, status: 'slowing', lastSoldDate: daysAgo(2) },
+    { title: 'Earbuds Carry Case', unitsLast7: 12, dailyAvgLast7: 1.8, dailyAvgPrior28: 2.1, ratio: 0.86, status: 'slowing', lastSoldDate: daysAgo(2) },
+    { title: 'Wireless Charging Pad', unitsLast7: 0, dailyAvgLast7: 0.0, dailyAvgPrior28: 0.6, ratio: 0.0, status: 'stalled', lastSoldDate: daysAgo(14) },
+    { title: 'Cable Organizer Pack', unitsLast7: 2, dailyAvgLast7: 0.3, dailyAvgPrior28: 0.4, ratio: 0.75, status: 'slowing', lastSoldDate: daysAgo(3) },
+  ],
+  totalCustomers: 2162,
+  rangeDays: 180,
+};
+
+// ─── Goals ────────────────────────────────────────────────────────────────────
+
+export function getDemoGoals() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const dayOfMonth = now.getDate();
+  const daysRemaining = daysInMonth - dayOfMonth;
+  const target = 320000;
+  const dailyRunRate = 9200;
+  const mtdRevenue = dailyRunRate * dayOfMonth * (0.9 + Math.random() * 0.2);
+  const projectedRevenue = mtdRevenue + dailyRunRate * daysRemaining;
+  const neededPerDay = daysRemaining > 0 ? (target - mtdRevenue) / daysRemaining : 0;
+  const cumulativeSeries = Array.from({ length: dayOfMonth }, (_, i) => {
+    const d = new Date(year, month, i + 1);
+    const revenue = dailyRunRate * (0.85 + Math.random() * 0.3);
+    return {
+      date: d.toISOString().split('T')[0],
+      revenue: Math.round(revenue),
+      cumulative: Math.round(dailyRunRate * (i + 1) * 0.97),
+    };
+  });
+  return {
+    target,
+    monthLabel: now.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }),
+    daysInMonth,
+    dayOfMonth,
+    daysRemaining,
+    mtdRevenue: Math.round(mtdRevenue),
+    mtdOrders: Math.round(mtdRevenue / 154),
+    dailyRunRate: Math.round(dailyRunRate),
+    projectedRevenue: Math.round(projectedRevenue),
+    neededPerDay: Math.round(neededPerDay),
+    prevMonthRevenue: 241200,
+    cumulativeSeries,
+  };
+}
+
+// ─── CAC Payback ──────────────────────────────────────────────────────────────
+
+export const demoPayback = {
+  cohorts: [
+    { cohort: '2025-07', newCustomers: 312, adSpend: 12400, cac: 39.7, cumRevenuePerCustomer: [142, 198, 234, 256, 271, 280], cumGrossPerCustomer: [50, 69, 82, 90, 95, 98], paybackMonth: 2 },
+    { cohort: '2025-08', newCustomers: 287, adSpend: 11800, cac: 41.1, cumRevenuePerCustomer: [148, 210, 248, 268, 281], cumGrossPerCustomer: [52, 74, 87, 94, 98], paybackMonth: 2 },
+    { cohort: '2025-09', newCustomers: 334, adSpend: 13200, cac: 39.5, cumRevenuePerCustomer: [136, 195, 228, 244], cumGrossPerCustomer: [48, 68, 80, 85], paybackMonth: 2 },
+    { cohort: '2025-10', newCustomers: 298, adSpend: 12100, cac: 40.6, cumRevenuePerCustomer: [154, 214, 251], cumGrossPerCustomer: [54, 75, 88], paybackMonth: 2 },
+    { cohort: '2025-11', newCustomers: 321, adSpend: 12900, cac: 40.2, cumRevenuePerCustomer: [144, 201], cumGrossPerCustomer: [50, 70], paybackMonth: null },
+    { cohort: '2025-12', newCustomers: 356, adSpend: 13800, cac: 38.8, cumRevenuePerCustomer: [138], cumGrossPerCustomer: [48], paybackMonth: null },
+  ],
+  avgCac: 40.0,
+  m0RecoveryPct: 122,
+  paidBackCohorts: 4,
+  matureCohorts: 4,
+  grossMarginUsed: 35,
+  cogsConfigured: true,
+  spendSource: 'meta' as const,
+  rangeDays: 180,
+};
+
+// ─── Creative Fatigue ─────────────────────────────────────────────────────────
+
+export const demoFatigue = {
+  ads: [
+    {
+      id: 'demo_ad_04',
+      name: 'UGC Testimonial — FB',
+      campaignName: 'UGC Testimonial — FB',
+      spend: 9800,
+      impressions: 312000,
+      frequency: 4.2,
+      ctr: 0.84,
+      cpm: 31.4,
+      roas: 3.5,
+      purchases: 189,
+      prevCtr: 1.36,
+      prevCpm: 25.7,
+      prevFrequency: 2.8,
+      ctrChange: -38.2,
+      cpmChange: 22.2,
+      status: 'fatigued' as const,
+      reasons: ['Frequency >4', 'CTR dropped 38%', 'CPM up 22%'],
+      thumbnailUrl: null,
+    },
+    {
+      id: 'demo_ad_03',
+      name: 'Smart Watch — Launch Ad (IG)',
+      campaignName: 'Smart Watch — Launch Ad (IG)',
+      spend: 11400,
+      impressions: 289000,
+      frequency: 3.1,
+      ctr: 1.12,
+      cpm: 39.4,
+      roas: 2.0,
+      purchases: 134,
+      prevCtr: 1.48,
+      prevCpm: 33.2,
+      prevFrequency: 2.1,
+      ctrChange: -24.3,
+      cpmChange: 18.7,
+      status: 'warning' as const,
+      reasons: ['CTR dropped 24%', 'CPM rising'],
+      thumbnailUrl: null,
+    },
+    {
+      id: 'demo_ad_02',
+      name: 'Summer Sale — FB Carousel',
+      campaignName: 'Summer Sale — FB Carousel',
+      spend: 6600,
+      impressions: 198000,
+      frequency: 2.4,
+      ctr: 1.89,
+      cpm: 33.3,
+      roas: 1.9,
+      purchases: 98,
+      prevCtr: 2.1,
+      prevCpm: 30.1,
+      prevFrequency: 1.9,
+      ctrChange: -10.0,
+      cpmChange: 10.6,
+      status: 'warning' as const,
+      reasons: ['Low ROAS approaching break-even'],
+      thumbnailUrl: null,
+    },
+    {
+      id: 'demo_ad_01',
+      name: 'Earbuds — Feature Reel (IG)',
+      campaignName: 'Earbuds — Feature Reel (IG)',
+      spend: 14200,
+      impressions: 412000,
+      frequency: 1.8,
+      ctr: 2.46,
+      cpm: 34.5,
+      roas: 4.8,
+      purchases: 287,
+      prevCtr: 2.31,
+      prevCpm: 35.2,
+      prevFrequency: 1.4,
+      ctrChange: 6.5,
+      cpmChange: -2.0,
+      status: 'healthy' as const,
+      reasons: [],
+      thumbnailUrl: null,
+    },
+  ],
+  currentPeriod: { since: daysAgo(30), until: daysAgo(0) },
+  previousPeriod: { since: daysAgo(60), until: daysAgo(31) },
+  summary: {
+    fatigued: 1,
+    warning: 2,
+    healthy: 1,
+    newAds: 0,
+    fatiguedSpend: 9800,
+    totalSpend: 42000,
+  },
+};
+
+// ─── Creative Themes ──────────────────────────────────────────────────────────
+
+export const demoCreativeThemes = {
+  themes: [
+    { key: 'ugc', label: 'UGC / Testimonial', icon: '🎥', ads: 8, spend: 18400, revenue: 72400, roas: 3.93, ctr: 1.64, purchases: 412, spendShare: 43.8, revenueShare: 47.1, topAds: [{ name: 'UGC Testimonial — FB', spend: 9800, roas: 3.5 }, { name: 'Customer Review Reel', spend: 5200, roas: 4.6 }] },
+    { key: 'product', label: 'Product Feature', icon: '📦', ads: 6, spend: 14200, revenue: 68160, roas: 4.80, ctr: 2.46, purchases: 287, spendShare: 33.8, revenueShare: 44.3, topAds: [{ name: 'Earbuds — Feature Reel (IG)', spend: 14200, roas: 4.8 }] },
+    { key: 'sale', label: 'Promotion / Sale', icon: '🏷️', ads: 4, spend: 6600, revenue: 12540, roas: 1.90, ctr: 1.89, purchases: 98, spendShare: 15.7, revenueShare: 8.2, topAds: [{ name: 'Summer Sale — FB Carousel', spend: 6600, roas: 1.9 }] },
+    { key: 'launch', label: 'New Launch', icon: '🚀', ads: 2, spend: 2800, revenue: 5040, roas: 1.80, ctr: 1.12, purchases: 42, spendShare: 6.7, revenueShare: 3.3, topAds: [{ name: 'Smart Watch — Launch Ad (IG)', spend: 2800, roas: 1.8 }] },
+  ],
+  totalAds: 20,
+  totalSpend: 42000,
+  totalRevenue: 153700,
+  note: 'UGC and Product Feature themes drive 91% of revenue despite only 67% of spend — strong signal to double down.',
+};
+
+// ─── Event ROI ────────────────────────────────────────────────────────────────
+
+export const demoEventRoi = {
+  events: [
+    { id: 'ev_01', title: 'Diwali Flash Sale', type: 'sale', startDate: daysAgo(45), endDate: daysAgo(40), status: 'ended' as const, days: 6, revenueDuring: 87400, ordersDuring: 412, dailyDuring: 14567, dailyBaseline: 9200, liftPct: 58.3, revenueTarget: 90000, targetAchievedPct: 97.1 },
+    { id: 'ev_02', title: 'Influencer Keshav Campaign', type: 'campaign', startDate: daysAgo(30), endDate: daysAgo(23), status: 'ended' as const, days: 8, revenueDuring: 64800, ordersDuring: 321, dailyDuring: 8100, dailyBaseline: 9200, liftPct: -12.0, revenueTarget: 80000, targetAchievedPct: 81.0 },
+    { id: 'ev_03', title: 'Black Friday Weekend', type: 'sale', startDate: daysAgo(15), endDate: daysAgo(12), status: 'ended' as const, days: 4, revenueDuring: 112000, ordersDuring: 687, dailyDuring: 28000, dailyBaseline: 9200, liftPct: 204.3, revenueTarget: 100000, targetAchievedPct: 112.0 },
+    { id: 'ev_04', title: 'Christmas Campaign', type: 'campaign', startDate: daysAgo(7), endDate: daysAgo(0), status: 'ongoing' as const, days: 7, revenueDuring: 58400, ordersDuring: 312, dailyDuring: 8343, dailyBaseline: 9200, liftPct: -9.3, revenueTarget: 75000, targetAchievedPct: 77.9 },
+    { id: 'ev_05', title: 'New Year Countdown', type: 'sale', startDate: daysAgo(-7), endDate: daysAgo(-3), status: 'upcoming' as const, days: 5, revenueDuring: 0, ordersDuring: 0, dailyDuring: 0, dailyBaseline: 9200, liftPct: null, revenueTarget: 120000, targetAchievedPct: null },
+  ],
+  byType: [
+    { type: 'sale', count: 3, avgLiftPct: 87.5, totalRevenue: 199400 },
+    { type: 'campaign', count: 2, avgLiftPct: -10.6, totalRevenue: 123200 },
+  ],
+};
+
+// ─── Discount Codes ───────────────────────────────────────────────────────────
+
+export const demoDiscounts = {
+  codes: [
+    { code: 'SUMMER20', orders: 287, revenue: 42800, totalDiscount: 10700, aov: 149.1, avgDiscountPct: 20.0, newCustomerOrders: 189, newCustomerShare: 65.9 },
+    { code: 'WELCOME10', orders: 198, revenue: 28600, totalDiscount: 3178, aov: 144.4, avgDiscountPct: 10.0, newCustomerOrders: 187, newCustomerShare: 94.4 },
+    { code: 'FLAT200', orders: 134, revenue: 24600, totalDiscount: 26800, aov: 183.6, avgDiscountPct: 52.1, newCustomerOrders: 54, newCustomerShare: 40.3 },
+    { code: 'BOGO', orders: 89, revenue: 18900, totalDiscount: 9450, aov: 212.4, avgDiscountPct: 33.3, newCustomerOrders: 41, newCustomerShare: 46.1 },
+    { code: 'DIWALI30', orders: 312, revenue: 54600, totalDiscount: 23400, aov: 175.0, avgDiscountPct: 30.0, newCustomerOrders: 221, newCustomerShare: 70.8 },
+    { code: 'REFER15', orders: 67, revenue: 9600, totalDiscount: 1694, aov: 143.3, avgDiscountPct: 15.0, newCustomerOrders: 58, newCustomerShare: 86.6 },
+  ],
+  summary: {
+    totalOrders: 1847,
+    discountedOrders: 1087,
+    discountedShare: 58.8,
+    discountedRevenue: 179100,
+    nonDiscountedRevenue: 105650,
+    totalDiscountGiven: 75222,
+    discountedAov: 164.8,
+    nonDiscountedAov: 139.7,
+  },
+};
+
+// ─── Coupon Leak ──────────────────────────────────────────────────────────────
+
+export const demoCouponLeak = {
+  leaks: [
+    { code: 'SUMMER20', sites: ['GrabOn', 'CouponDunia', 'CupoNation'], orders: 287, revenue: 42800, totalDiscount: 10700, newCustomerShare: 65.9, aov: 149.1 },
+    { code: 'FLAT200', sites: ['CouponMoto'], orders: 134, revenue: 24600, totalDiscount: 26800, newCustomerShare: 40.3, aov: 183.6 },
+    { code: 'BOGO', sites: ['GrabOn', 'Savyour'], orders: 89, revenue: 18900, totalDiscount: 9450, newCustomerShare: 46.1, aov: 212.4 },
+  ],
+  allCodes: [
+    { code: 'SUMMER20', orders: 287, revenue: 42800 },
+    { code: 'WELCOME10', orders: 198, revenue: 28600 },
+    { code: 'FLAT200', orders: 134, revenue: 24600 },
+    { code: 'BOGO', orders: 89, revenue: 18900 },
+    { code: 'DIWALI30', orders: 312, revenue: 54600 },
+    { code: 'REFER15', orders: 67, revenue: 9600 },
+  ],
+  siteScans: [
+    { site: 'GrabOn', codesFound: 2 },
+    { site: 'CouponDunia', codesFound: 1 },
+    { site: 'CouponMoto', codesFound: 1 },
+    { site: 'Savyour', codesFound: 1 },
+    { site: 'CupoNation', codesFound: 1 },
+  ],
+  scannedAt: new Date().toISOString(),
+};
+
+// ─── Search Gap Miner ─────────────────────────────────────────────────────────
+
+export const demoSearchGaps = {
+  hasGA4: true,
+  hasSearchData: true,
+  totalSearches: 1847,
+  terms: [
+    { term: 'wireless gaming headset', searches: 89, share: 4.8, hasProductMatch: false },
+    { term: 'noise cancelling earphones under 2000', searches: 67, share: 3.6, hasProductMatch: false },
+    { term: 'sports earbuds waterproof', searches: 54, share: 2.9, hasProductMatch: false },
+    { term: 'premium wireless earbuds', searches: 212, share: 11.5, hasProductMatch: true },
+    { term: 'smart watch series 5', searches: 187, share: 10.1, hasProductMatch: true },
+    { term: 'apple watch alternative india', searches: 43, share: 2.3, hasProductMatch: false },
+    { term: 'bluetooth speaker outdoor', searches: 38, share: 2.1, hasProductMatch: false },
+    { term: 'earbuds for gym', searches: 31, share: 1.7, hasProductMatch: false },
+    { term: 'phone case iphone 16', searches: 29, share: 1.6, hasProductMatch: false },
+    { term: 'usb c hub for macbook', searches: 98, share: 5.3, hasProductMatch: true },
+    { term: 'anc headphones comparison', searches: 24, share: 1.3, hasProductMatch: false },
+    { term: 'wireless charger fast charging', searches: 19, share: 1.0, hasProductMatch: false },
+  ],
+};
+
+// ─── Code Forensics ───────────────────────────────────────────────────────────
+
+export const demoCodeForensics = {
+  rows: [
+    { code: 'WELCOME10', orders: 198, revenue: 28600, aov: 144.4, newCustomerShare: 94.4, totalDiscount: 3178, avgDiscountPct: 10.0, repeatCustomerShare: 5.6, dealHunterScore: 22, verdict: 'growth_driver' as const, verdictReason: '94% new customers, light 10% discount — classic acquisition code' },
+    { code: 'REFER15', orders: 67, revenue: 9600, aov: 143.3, newCustomerShare: 86.6, totalDiscount: 1694, avgDiscountPct: 15.0, repeatCustomerShare: 13.4, dealHunterScore: 30, verdict: 'growth_driver' as const, verdictReason: '87% new customers, referral code working as intended' },
+    { code: 'DIWALI30', orders: 312, revenue: 54600, aov: 175.0, newCustomerShare: 70.8, totalDiscount: 23400, avgDiscountPct: 30.0, repeatCustomerShare: 29.2, dealHunterScore: 54, verdict: 'mixed' as const, verdictReason: '71% new customers but heavy 30% discount reduces margin significantly' },
+    { code: 'SUMMER20', orders: 287, revenue: 42800, aov: 149.1, newCustomerShare: 65.9, totalDiscount: 10700, avgDiscountPct: 20.0, repeatCustomerShare: 34.1, dealHunterScore: 57, verdict: 'mixed' as const, verdictReason: '34% repeat buyers using a public code — leaked to coupon sites' },
+    { code: 'BOGO', orders: 89, revenue: 18900, aov: 212.4, newCustomerShare: 46.1, totalDiscount: 9450, avgDiscountPct: 33.3, repeatCustomerShare: 53.9, dealHunterScore: 71, verdict: 'deal_hunters' as const, verdictReason: '54% repeat buyers + 33% discount = discount-seeking behavior, not acquisition' },
+    { code: 'FLAT200', orders: 134, revenue: 24600, aov: 183.6, newCustomerShare: 40.3, totalDiscount: 26800, avgDiscountPct: 52.1, repeatCustomerShare: 59.7, dealHunterScore: 84, verdict: 'deal_hunters' as const, verdictReason: '60% repeat buyers + 52% discount — this code is heavily abused, consider retiring' },
+  ],
+  summary: {
+    growth_driver: 2,
+    mixed: 2,
+    deal_hunters: 2,
+    low_volume: 0,
+    totalCodes: 6,
+  },
+  dateRange: '90d',
+};
+
 // ─── Chat (Demo AI responses) ─────────────────────────────────────────────────
 
 export const demoChatResponses: Record<string, string> = {

@@ -1,6 +1,7 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { NextResponse } from 'next/server';
 import { requireBrandAccess } from '@/lib/auth-server';
+import { demoProfit } from '@/lib/demo-data';
 import * as meta from '@/lib/services/meta';
 import * as googleAds from '@/lib/services/google-ads';
 import * as synter from '@/lib/services/synter';
@@ -20,6 +21,8 @@ export async function GET(request: Request) {
 
     const { denied } = await requireBrandAccess(slug);
     if (denied) return denied;
+
+    if (slug === 'demo') return NextResponse.json(demoProfit);
 
     const brand = await getBrand(slug!);
     if (!brand) return NextResponse.json({ error: 'Brand not found' }, { status: 404 });
