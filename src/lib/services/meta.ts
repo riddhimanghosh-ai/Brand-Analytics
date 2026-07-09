@@ -1109,12 +1109,27 @@ export async function getAdCommentAnalytics(config: MetaConfig, dateRange: strin
   const warnings: string[] = [];
   const engagement = await getAdEngagement(config, dateRange);
   const rankedAds = [...engagement.ads].sort((a, b) => b.comments - a.comments || b.spend - a.spend);
-  const adsForText = rankedAds.slice(0, 60);
+
+  // Supplement with all-time ad list so comments on older ads (outside the date
+  // range window) are not missed — engagement ranking only covers ads that ran
+  // within the requested window.
+  const allTimeAds = await fetchMeta<{
+    data: Array<{ id: string; name: string }>;
+  }>(`${acct}/ads`, {
+    access_token: config.accessToken,
+    fields: 'id,name',
+    limit: '200',
+  }).catch(() => ({ data: [] }));
+
+  const engagedIds = new Set(rankedAds.map((a) => a.id));
+  const supplementary = (allTimeAds.data ?? [])
+    .filter((a) => !engagedIds.has(a.id))
+    .map((a): AdEngagementRow => ({ id: a.id, name: a.name, spend: 0, impressions: 0, reach: 0, clicks: 0, comments: 0, reactions: 0, shares: 0, saves: 0, postEngagement: 0, pageEngagement: 0, videoViews: 0, engagementRate: 0, commentRate: 0 }));
+
+  const adsForText = [...rankedAds, ...supplementary].slice(0, 60);
   const adIds = adsForText.map((ad) => ad.id).filter(Boolean);
-  if (rankedAds.length > adsForText.length) {
-    warnings.push(`Readable comment text is capped to the top ${adsForText.length} ads by comment activity for this request.`);
-  }
-  if (rankedAds.length === 0) {
+
+  if (rankedAds.length === 0 && supplementary.length === 0) {
     return {
       summary: {
         totalAds: 0,
