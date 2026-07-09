@@ -8,17 +8,21 @@ export default async function OverviewPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const brand = await getBrand(slug);
+
+  const isDemoMode = slug === 'demo';
+  const brand = isDemoMode ? { name: 'Demo Store', slug: 'demo' } : await getBrand(slug);
 
   if (!brand) return null;
 
-  const connections = {
-    shopify: !!(brand.shopifyStoreUrl && brand.shopifyAccessToken),
-    ga4: !!brand.ga4PropertyId,
-    metaAds: !!brand.metaAccessToken,
-    googleAds: !!brand.googleAdsCustomerId,
-    ai: !!(process.env.ANTHROPIC_API_KEY),
-  };
+  const connections = isDemoMode
+    ? { shopify: true, ga4: true, metaAds: true, googleAds: true, ai: true }
+    : {
+        shopify: !!(( brand as Record<string,unknown>).shopifyStoreUrl && (brand as Record<string,unknown>).shopifyAccessToken),
+        ga4: !!(brand as Record<string,unknown>).ga4PropertyId,
+        metaAds: !!(brand as Record<string,unknown>).metaAccessToken,
+        googleAds: !!(brand as Record<string,unknown>).googleAdsCustomerId,
+        ai: !!(process.env.ANTHROPIC_API_KEY),
+      };
 
   const connectedCount = Object.values(connections).filter(Boolean).length;
 
