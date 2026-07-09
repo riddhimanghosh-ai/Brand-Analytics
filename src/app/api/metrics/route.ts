@@ -192,6 +192,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing slug or query' }, { status: 400 });
     }
 
+    if (slug === 'demo') {
+      return NextResponse.json({ columns: [], rows: [], source: 'demo' });
+    }
+
     const brand = await getBrand(slug);
     if (!brand?.shopifyStoreUrl || !brand?.shopifyAccessToken) {
       return NextResponse.json({ error: 'Shopify not connected' }, { status: 400 });

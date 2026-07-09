@@ -119,7 +119,10 @@ function generateInsights(params: {
 
 export default async function CROPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const brand = await getBrand(slug);
+
+  const brand = slug === 'demo'
+    ? { name: 'Demo Brand', shopifyStoreUrl: 'demo', shopifyAccessToken: 'demo', alertRules: [] }
+    : await getBrand(slug);
   if (!brand) return <div>Brand not found</div>;
 
   const noShopify = !brand.shopifyStoreUrl || !brand.shopifyAccessToken;
@@ -127,7 +130,10 @@ export default async function CROPage({ params }: { params: Promise<{ slug: stri
   type CombinedData = Awaited<ReturnType<typeof shopify.getAllAnalytics>>;
   let combined: CombinedData | null = null;
 
-  if (!noShopify) {
+  if (slug === 'demo') {
+    const { demoCROCombined } = await import('@/lib/demo-data');
+    combined = demoCROCombined as unknown as CombinedData;
+  } else if (!noShopify) {
     const config = { storeUrl: brand.shopifyStoreUrl!, accessToken: brand.shopifyAccessToken! };
     try {
       const cached = await cacheGet(slug, 'combined', '30d');

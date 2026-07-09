@@ -1,6 +1,7 @@
 import { getBrand } from '@/lib/mongodb-store';
 import { PriceTrackerManager } from '@/components/PriceTrackerManager';
 import type { TrackedStore } from '@/types';
+import { demoTrackedStores } from '@/lib/demo-data';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -8,6 +9,24 @@ interface PageProps {
 
 export default async function PriceTrackerPage({ params }: PageProps) {
   const { slug } = await params;
+
+  if (slug === 'demo') {
+    return (
+      <>
+        <div className="page-header">
+          <div className="page-header-row">
+            <div>
+              <h2>Competitor Price Tracker</h2>
+              <p>Track competitor Shopify catalogs — price moves, new launches, and stock-outs</p>
+            </div>
+          </div>
+        </div>
+        <div className="page-body">
+          <PriceTrackerManager slug={slug} initialStores={demoTrackedStores as unknown as TrackedStore[]} />
+        </div>
+      </>
+    );
+  }
 
   const brand = await getBrand(slug);
   if (!brand) return <div className="page-body">Brand not found</div>;

@@ -1611,6 +1611,143 @@ export const demoCodeForensics = {
   dateRange: '90d',
 };
 
+// ─── Competitor Stores (demo) ────────────────────────────────────────────────
+export const demoTrackedStores = [
+  {
+    id: 'demo-store-1',
+    url: 'https://boatlifestyle.com',
+    name: 'boAt Lifestyle',
+    addedAt: isoAgo(30, 0),
+    lastScanned: isoAgo(2, 0),
+    products: [
+      { id: 'boat-1', title: 'Airdopes 141', handle: 'airdopes-141', price: 1299, compareAtPrice: 2990, available: true, imageUrl: null, publishedAt: isoAgo(60, 0) },
+      { id: 'boat-2', title: 'Rockerz 450', handle: 'rockerz-450', price: 1499, compareAtPrice: 3490, available: true, imageUrl: null, publishedAt: isoAgo(90, 0) },
+      { id: 'boat-3', title: 'Wave Pro Smartwatch', handle: 'wave-pro', price: 2499, compareAtPrice: 4990, available: false, imageUrl: null, publishedAt: isoAgo(45, 0) },
+      { id: 'boat-4', title: 'Bassheads 100', handle: 'bassheads-100', price: 449, compareAtPrice: 999, available: true, imageUrl: null, publishedAt: isoAgo(120, 0) },
+      { id: 'boat-5', title: 'Airdopes 441', handle: 'airdopes-441', price: 1799, compareAtPrice: 3490, available: true, imageUrl: null, publishedAt: isoAgo(3, 0) },
+    ],
+    sitemapChanges: [
+      { date: isoAgo(3, 0), loc: 'https://boatlifestyle.com/collections/new-arrivals-2026', kind: 'collection' as const, type: 'added' as const },
+      { date: isoAgo(5, 0), loc: 'https://boatlifestyle.com/blogs/news/summer-sale-2026', kind: 'blog' as const, type: 'added' as const },
+    ],
+    sitemap: [
+      { loc: 'https://boatlifestyle.com/collections/all', lastmod: isoAgo(1, 0), kind: 'collection' as const },
+      { loc: 'https://boatlifestyle.com/collections/new-arrivals-2026', lastmod: isoAgo(3, 0), kind: 'collection' as const },
+    ],
+    sitemapScannedAt: isoAgo(2, 0),
+    changes: [],
+  },
+  {
+    id: 'demo-store-2',
+    url: 'https://noisestudios.com',
+    name: 'Noise',
+    addedAt: isoAgo(30, 0),
+    lastScanned: isoAgo(2, 0),
+    products: [
+      { id: 'noise-1', title: 'Buds VS104', handle: 'buds-vs104', price: 1999, compareAtPrice: 3999, available: true, imageUrl: null, publishedAt: isoAgo(80, 0) },
+      { id: 'noise-2', title: 'ColorFit Ultra 3', handle: 'colorfit-ultra-3', price: 3499, compareAtPrice: 6999, available: true, imageUrl: null, publishedAt: isoAgo(30, 0) },
+      { id: 'noise-3', title: 'Shots Ace', handle: 'shots-ace', price: 999, compareAtPrice: 1999, available: false, imageUrl: null, publishedAt: isoAgo(100, 0) },
+      { id: 'noise-4', title: 'ColorFit Pro 5', handle: 'colorfit-pro-5', price: 2799, compareAtPrice: 5499, available: true, imageUrl: null, publishedAt: isoAgo(7, 0) },
+    ],
+    sitemapChanges: [
+      { date: isoAgo(7, 0), loc: 'https://noisestudios.com/collections/smartwatch-2026', kind: 'collection' as const, type: 'added' as const },
+    ],
+    sitemap: [
+      { loc: 'https://noisestudios.com/collections/all', lastmod: isoAgo(1, 0), kind: 'collection' as const },
+      { loc: 'https://noisestudios.com/collections/smartwatch-2026', lastmod: isoAgo(7, 0), kind: 'collection' as const },
+    ],
+    sitemapScannedAt: isoAgo(2, 0),
+    changes: [],
+  },
+  {
+    id: 'demo-store-3',
+    url: 'https://fireboltindia.com',
+    name: 'Fire-Boltt',
+    addedAt: isoAgo(30, 0),
+    lastScanned: isoAgo(2, 0),
+    products: [
+      { id: 'fb-1', title: 'Ninja Call Pro Plus', handle: 'ninja-call-pro-plus', price: 1799, compareAtPrice: 4999, available: true, imageUrl: null, publishedAt: isoAgo(14, 0) },
+      { id: 'fb-2', title: 'Ring 3 Smartwatch', handle: 'ring-3', price: 2199, compareAtPrice: 5999, available: true, imageUrl: null, publishedAt: isoAgo(50, 0) },
+      { id: 'fb-3', title: 'Visionary Smartwatch', handle: 'visionary', price: 3999, compareAtPrice: 7999, available: false, imageUrl: null, publishedAt: isoAgo(21, 0) },
+    ],
+    sitemapChanges: [
+      { date: isoAgo(14, 0), loc: 'https://fireboltindia.com/products/ninja-call-pro-plus', kind: 'page' as const, type: 'added' as const },
+      { date: isoAgo(21, 0), loc: 'https://fireboltindia.com/collections/calling-watches', kind: 'collection' as const, type: 'added' as const },
+    ],
+    sitemap: [
+      { loc: 'https://fireboltindia.com/collections/all', lastmod: isoAgo(1, 0), kind: 'collection' as const },
+      { loc: 'https://fireboltindia.com/collections/calling-watches', lastmod: isoAgo(21, 0), kind: 'collection' as const },
+    ],
+    sitemapScannedAt: isoAgo(2, 0),
+    changes: [],
+  },
+];
+
+// ─── CRO Optimization (demo) ──────────────────────────────────────────────────
+export const demoCROCombined = {
+  kpis: {
+    totalRevenue: 284750,
+    totalOrders: 1847,
+    averageOrderValue: 154,
+    totalCustomers: 1423,
+    repeatCustomerRate: 34.2,
+    newCustomerRevenue: 187367,
+    returningCustomerRevenue: 97383,
+    refundRate: 3.1,
+    conversionRate: 3.8,
+    cartAbandonmentRate: 67.4,
+    averageItemsPerOrder: 2.3,
+    totalDiscountsGiven: 0,
+    topSellingProduct: 'Premium Wireless Earbuds',
+    averageFulfillmentDays: 2.1,
+    prevTotalRevenue: 241200,
+    prevTotalOrders: 1612,
+    prevAverageOrderValue: 149,
+    prevTotalCustomers: 1287,
+  },
+  conversionFunnel: {
+    steps: [
+      { name: 'Sessions', value: 48200 },
+      { name: 'Product Views', value: 18700 },
+      { name: 'Add to Cart', value: 5840 },
+      { name: 'Checkout Started', value: 3210 },
+      { name: 'Orders', value: 1847 },
+    ],
+  },
+  revenue: [],
+  products: [],
+  customers: [],
+};
+
+// ─── Anomalies (demo) ─────────────────────────────────────────────────────────
+export const demoAnomalies = {
+  anomalies: [
+    {
+      metric: 'aov',
+      severity: 'warning' as const,
+      title: 'AOV dipped below 7-day average',
+      detail: 'Today\'s AOV is ₹131 vs 7-day avg of ₹154. Possible cause: higher share of low-ticket SKUs or a discount code spike.',
+      changePct: -14.9,
+    },
+    {
+      metric: 'orders',
+      severity: 'good' as const,
+      title: 'Orders up 22% vs same day last week',
+      detail: '224 orders today vs 184 last Tuesday. The Earbuds Reel campaign launched yesterday — early signal of strong response.',
+      changePct: 21.7,
+    },
+    {
+      metric: 'refund_rate',
+      severity: 'warning' as const,
+      title: 'Refund rate elevated on Smart Watch',
+      detail: 'Smart Watch Series 5 — Black has a 6.2% refund rate this week, up from 2.1% baseline. Check for sizing or quality complaints in social comments.',
+      changePct: 195.2,
+    },
+  ],
+  allClear: false,
+  checkedAt: new Date().toISOString(),
+};
+
 // ─── Chat (Demo AI responses) ─────────────────────────────────────────────────
 
 export const demoChatResponses: Record<string, string> = {
