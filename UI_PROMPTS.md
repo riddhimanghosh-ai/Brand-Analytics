@@ -346,6 +346,56 @@ Log your first sale or campaign to start measuring real lift.
 
 ---
 
+## 7. Tech Stack Detector (Tech Spy)
+
+**Page title**: `🕵️ Tech Spy`
+**Subtitle**: `See exactly what Shopify apps, analytics tools, and ad pixels any competitor is running`
+
+### Input row (top of page)
+
+Three elements in a flex row:
+- URL input (flex-grow, monospace font, placeholder `https://competitor.com`)
+- Label input (fixed ~160px, placeholder `Label (optional)`)
+- `+ Add & Scan` primary button — disabled while empty or scanning; label swaps to `Scanning…` during a scan
+
+Enter key in the URL input triggers Add & Scan. Scan takes 5–15s — the new card appears immediately with a spinner, results fill in when done.
+
+---
+
+### Website cards (vertical stack, one per tracked site)
+
+Card header:
+- Site name (display font, semibold) + URL below it as a small monospace external link
+- `Last scanned: 2h ago` relative timestamp in faint grey
+- Right side: `↻ Rescan` ghost button + `✕` delete button (delete asks confirm on first click)
+
+Card body — detected tech grouped by category, in this fixed order:
+
+| Category | Chip colour |
+|----------|-------------|
+| Platform | indigo `#6366f1` |
+| Analytics | blue `#3b82f6` |
+| Ad Pixels | amber `#f59e0b` |
+| Shopify Apps | green `#22c55e` |
+| Chat / Support | cyan `#06b6d4` |
+| Payment | pink `#ec4899` |
+| JS / UI / CDN | grey `#6b7280` |
+
+Each category renders as: small uppercase category label (10px mono, in the category colour), then a wrap-row of tech chips. A chip = emoji icon + tech name, pill-shaped, tinted background of the category colour at ~8% opacity with a matching border. Categories with zero detections are hidden entirely.
+
+**Shopify Apps is the hero category** — it typically has the most chips (10–25 on a real store) and is what users scan for. Medium-confidence detections (from snippet-comment heuristics) can show a subtle dotted border or `~` prefix to signal lower certainty.
+
+---
+
+### States
+
+- **Scanning**: card shows a pulsing `Scanning…` line where chips will appear
+- **Bot-blocked site**: amber warning banner inside the card — `Site has bot protection — results may be incomplete.` Chips found from headers still render below it.
+- **Scan error**: red error strip above the card list with the raw message (timeout, unreachable), the site stays in the list with no tech so Rescan can retry
+- **Empty state**: dashed-border card, 🔍 emoji, `ADD A WEBSITE TO DETECT ITS TECH STACK` in mono caps, sub-line `Discover what Shopify apps, analytics tools, and ad pixels your competitors use`
+
+---
+
 ## General UI Rules Across All Pages
 
 1. **Loading state**: Skeleton cards with animated shimmer. Match the approximate shape of the real content (e.g., skeleton rows in a table, skeleton KPI cards in a strip).

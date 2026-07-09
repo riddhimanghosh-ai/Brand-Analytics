@@ -400,6 +400,65 @@ interface SitemapEntry {
 
 ---
 
+## Feature 7: Tech Stack Detector (Tech Spy)
+
+### What it does
+Given any competitor URL, detects the full tech stack from a single server-side scan: platform (Shopify/WordPress/Next.js…), analytics tools, ad pixels, chat widgets, payment gateways, and — most valuably — **which Shopify apps the store runs**. No headless browser, no third-party API (no Wappalyzer/BuiltWith): everything is regex fingerprinting over fetched HTML/JS text.
+
+### API: `GET /api/tech-spy?url=<competitor-url>`
+Returns `{ tech: DetectedTech[] }`.
+
+```typescript
+interface DetectedTech {
+  name: string;
+  category: 'platform' | 'analytics' | 'ads' | 'shopify_app' | 'chat' | 'payment' | 'other';
+  icon: string;        // emoji
+  confidence: 'high' | 'medium' | 'low';
+}
+```
+
+### Detection pipeline — 4 phases
+
+**Phase 1 — Fetch the homepage.** Plain `fetch()` with a real Chrome User-Agent (many stores 403 default fetch UAs), 12s timeout, follow redirects. Keep both the HTML body AND the response headers (stringified) — headers reveal Cloudflare (`cf-ray`), Vercel (`x-vercel-id`), etc. Detect bot walls (`<title>Just a moment`, 403 + tiny body): if blocked, still run fingerprints on whatever came back and return with a warning rather than failing.
+
+**Phase 2 — Expand the search surface with parallel secondary fetches.** The homepage HTML alone misses a lot. Fetch in parallel (`Promise.allSettled`, individual 6–8s timeouts, failures ignored):
+- **GTM containers**: extract every `GTM-XXXXXXX` ID from the HTML and fetch `https://www.googletagmanager.com/gtm.js?id=GTM-XXXXXXX`. The container JS reveals every tag configured inside GTM (Meta Pixel, TikTok, Hotjar…) even when they're not in the page source.
+- **Shopify theme JS bundle** (only if Shopify detected): find the biggest theme .js URL in the HTML (match `cdn.shopify.com/s/files/...js`, `/cdn/shop/...js` absolute + relative forms), fetch it, keep first 300KB. App integrations often live here.
+- **`/collections/all`** (only if Shopify): collection pages load different app scripts than the homepage (filters, wishlist, reviews grids).
+
+Concatenate: `searchTarget = html + headers + scriptSrcUrls + preconnectUrls + all secondary bodies`.
+
+**Phase 3 — Run the fingerprint registry.** ~80 regexes, each `{ pattern, name, category, icon, confidence }`, tested against `searchTarget`. First match wins per name (dedupe with a Set). Categories: platform (Shopify, Next.js, WordPress, Webflow…), analytics (GA4, GTM, Hotjar, Clarity, Mixpanel, PostHog…), ad pixels (Meta, Google Ads, TikTok, Snap, Pinterest, Criteo…), chat (Gorgias, Intercom, Tidio, tawk.to…), payment (Razorpay, Stripe, GoKwik, PayU, Cashfree…), other (React, jQuery, Tailwind, Cloudflare, Swiper, GSAP…). Fingerprint tips: match CDN hostnames (`clarity.ms`), global JS objects (`window.hj=`), AND init calls (`fbq('init'`) — any one hits.
+
+**Phase 4 — Shopify app detection (the key part), 3 independent methods:**
+
+**4a. Known app CDN domains** (~30 hardcoded majors). Big apps load from their own domains, which appear in script srcs/preconnects: `klaviyo.com`, `yotpo.com`, `loox.io`, `okendo.io`, `stamped.io`, `rechargeapps.com`, `smile.io`, `loyaltylion.com`, `aftership.com`, `triplewhale.com`, `gokwik.co`, `pushowl.com`, `privy.com`, `pagefly.io`, `gempages.net`, etc. High confidence.
+
+**4b. Shopify Extension CDN URLs — fully automatic, zero hardcoding.** Every app built on Shopify's theme-extension framework serves assets from:
+```
+cdn.shopify.com/extensions/{uuid}/{app-handle}-{version}/assets/...
+```
+Regex: `/cdn\.shopify\.com\/extensions\/[0-9a-f-]+\/([a-z0-9]+(?:-[a-z0-9]+)*?)-(\d+)\/assets/gi`
+The captured `app-handle` is the app's App Store slug (`judgeme`, `kwikpass`, `reel-shopable`). Title-case the handle for display (`judgeme` → `Judgeme`). This catches apps nobody has ever heard of. High confidence.
+
+**4c. App snippet comments — fully automatic.** Shopify theme app blocks inject HTML comments:
+```html
+<!-- BEGIN app snippet: nector_auth -->
+```
+Regex: `/<!--\s*(?:BEGIN\s+)?app snippet[:\s]+([a-z0-9_-]+)\s*(?:-->|$)/gi`
+Cleanup needed: skip generic names (`base`, `analytics`, `header`, `cart`…), skip theme-prefixed snippets (`theme_`, `custom_`), strip role suffixes (`_auth`, `_widget`, `_loader`) → `nector_auth` → `Nector`. Medium confidence (snippet names are dev-chosen).
+
+Dedupe across all methods with a shared lowercase-handle Set — also skip a 4b/4c handle if its first segment already matched (e.g. skip `webengage-app-production` if `webengage` is already detected via fingerprint).
+
+### Hardening
+- **SSRF guard**: reject localhost, 127.x, 10.x, 192.168.x, 172.16-31.x, ::1 before fetching. Only http/https.
+- All secondary fetches are best-effort — swallow errors, never let one hang the request. `maxDuration = 60`.
+
+### Storage & rescan
+`TrackedWebsite { id, url, name, addedAt, lastScanned?, tech?: DetectedTech[] }` — array persisted on the brand document (`trackedWebsites` via the same `/api/brands/[slug]` PUT merge). Scans run only on Add or explicit Rescan click — no cron.
+
+---
+
 ## Shared: Adding a new competitor store
 
 All 4 competitor pages share the same add/remove UI (in Price Tracker page):
