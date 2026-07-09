@@ -20,14 +20,18 @@ export default async function DashboardLayout({
   const user = await verifySession(cookieStore.get(COOKIE_NAME)?.value);
   if (!canAccessBrand(user, slug)) redirect('/');
 
-  const brand = await getBrand(slug);
+  const isDemoMode = slug === 'demo';
+
+  // Skip MongoDB entirely for demo — no round-trips, instant page navigation
+  const brand = isDemoMode ? { name: 'Demo Store', slug: 'demo' } : await getBrand(slug);
   if (!brand) redirect('/');
 
-  const allBrandsData = await getBrands();
-  const visibleBrands = filterBrandsForUser(allBrandsData, user);
+  const allBrandsData = isDemoMode ? [] : await getBrands();
+  const visibleBrands = isDemoMode
+    ? [{ name: 'Demo Store', slug: 'demo' }]
+    : filterBrandsForUser(allBrandsData, user);
   const allBrands = visibleBrands.map((b) => ({ name: b.name, slug: b.slug }));
 
-  const isDemoMode = slug === 'demo';
   const connections = isDemoMode
     ? { shopify: true, ga4: true, metaAds: true, googleAds: true, ai: true, tiktok: true, klaviyo: true }
     : {
